@@ -10,93 +10,105 @@ tools.py — 工具定义 + 工具实现
 import sympy as sp
 
 # ─────────────────────────────────────────
-# 1. Tool schemas（Claude 的 tool_use 协议）
+# 1. Tool schemas（OpenAI / Ollama 格式）
+#    与 Anthropic 格式的区别：
+#      Anthropic: {"name": ..., "input_schema": {...}}
+#      Ollama:    {"type": "function", "function": {"name": ..., "parameters": {...}}}
 # ─────────────────────────────────────────
 
 TOOL_DEFINITIONS = [
     {
-        "name": "calculator",
-        "description": (
-            "Perform symbolic or numeric math using SymPy. "
-            "Supports: evaluate, solve (equations), differentiate, integrate, simplify. "
-            "Always use this for any computation — never calculate mentally."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "expression": {
-                    "type": "string",
-                    "description": (
-                        "Math expression or equation in Python/SymPy syntax. "
-                        "Examples: '2*x**2 + 3*x - 5', 'sin(x) + cos(x)', 'x**2 - 4 = 0'"
-                    ),
+        "type": "function",
+        "function": {
+            "name": "calculator",
+            "description": (
+                "Perform symbolic or numeric math using SymPy. "
+                "Supports: evaluate, solve (equations), differentiate, integrate, simplify. "
+                "Always use this for any computation — never calculate mentally."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": (
+                            "Math expression or equation in Python/SymPy syntax. "
+                            "Examples: '2*x**2 + 3*x - 5', 'sin(x) + cos(x)', 'x**2 - 4 = 0'"
+                        ),
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": ["evaluate", "solve", "differentiate", "integrate", "simplify"],
+                        "description": (
+                            "evaluate — compute/simplify value; "
+                            "solve — find roots or solutions; "
+                            "differentiate — compute derivative; "
+                            "integrate — compute indefinite integral; "
+                            "simplify — algebraic simplification"
+                        ),
+                    },
+                    "variable": {
+                        "type": "string",
+                        "description": "Variable symbol for solve/differentiate/integrate. Default: 'x'.",
+                    },
                 },
-                "operation": {
-                    "type": "string",
-                    "enum": ["evaluate", "solve", "differentiate", "integrate", "simplify"],
-                    "description": (
-                        "evaluate — compute/simplify value; "
-                        "solve — find roots or solutions; "
-                        "differentiate — compute derivative; "
-                        "integrate — compute indefinite integral; "
-                        "simplify — algebraic simplification"
-                    ),
-                },
-                "variable": {
-                    "type": "string",
-                    "description": "Variable symbol for solve/differentiate/integrate. Default: 'x'.",
-                },
+                "required": ["expression", "operation"],
             },
-            "required": ["expression", "operation"],
         },
     },
     {
-        "name": "formula_lookup",
-        "description": (
-            "Retrieve relevant formulas and identities for a math topic. "
-            "Call this before solving to confirm which formulas apply."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "topic": {
-                    "type": "string",
-                    "enum": [
-                        "algebra",
-                        "geometry",
-                        "calculus",
-                        "trigonometry",
-                        "statistics",
-                        "number_theory",
-                    ],
-                    "description": "Math topic to look up.",
-                }
+        "type": "function",
+        "function": {
+            "name": "formula_lookup",
+            "description": (
+                "Retrieve relevant formulas and identities for a math topic. "
+                "Call this before solving to confirm which formulas apply."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "enum": [
+                            "algebra",
+                            "geometry",
+                            "calculus",
+                            "trigonometry",
+                            "statistics",
+                            "number_theory",
+                        ],
+                        "description": "Math topic to look up.",
+                    }
+                },
+                "required": ["topic"],
             },
-            "required": ["topic"],
         },
     },
     {
-        "name": "step_decomposer",
-        "description": (
-            "Analyze a math problem and produce a structured solution roadmap. "
-            "Call this first to plan the approach before computing."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "problem_type": {
-                    "type": "string",
-                    "description": (
-                        "Problem category, e.g. 'quadratic equation', 'definite integral', "
-                        "'Pythagorean theorem', 'conditional probability'."
-                    ),
+        "type": "function",
+        "function": {
+            "name": "step_decomposer",
+            "description": (
+                "Analyze a math problem and produce a structured solution roadmap. "
+                "Call this first to plan the approach before computing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "problem_type": {
+                        "type": "string",
+                        "description": (
+                            "Problem category, e.g. 'quadratic equation', 'definite integral', "
+                            "'Pythagorean theorem', 'conditional probability'."
+                        ),
+                    },
+                    "problem": {
+                        "type": "string",
+                        "description": "The original problem statement.",
+                    },
                 },
-                "problem": {
-                    "type": "string",
-                    "description": "The original problem statement.",
-                },
+                "required": ["problem_type", "problem"],
             },
-            "required": ["problem_type", "problem"],
         },
     },
 ]
