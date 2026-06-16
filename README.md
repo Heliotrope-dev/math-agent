@@ -100,4 +100,4 @@ x = 1/2  或  x = -3
 
 ---
 
-*Built with Claude Code · 蒋天奇 · 2025*
+*Built with Claude Code · 蒋天奇 · 2026*
