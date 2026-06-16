@@ -1,8 +1,8 @@
 # 🧮 Math Solver Agent
 
-> A Python CLI agent that solves math problems step-by-step using **Gemini 2.0 Flash** and the **Google Function Calling API**.
+> A Python CLI agent that solves math problems step-by-step using **DeepSeek** and the **OpenAI-compatible Tool Use API**.
 >
-> 基于 Gemini 2.0 Flash + Function Calling 构建的数学解题 Agent，展示 AI Agent 架构核心能力。
+> 基于 DeepSeek + Tool Use 构建的数学解题 Agent，展示 AI Agent 架构核心能力。
 
 ---
 
@@ -25,7 +25,7 @@ tools.py         ← 工具定义（JSON Schema）+ 工具实现（SymPy）
 **Agent loop 流程：**
 ```
 用户输入
-  → Gemini 2.0 Flash (Function Calling)
+  → DeepSeek Chat (Tool Use)
   → stop_reason == "tool_use"  → 执行工具 → 把结果塞回对话 → 继续
   → stop_reason == "end_turn"  → 输出最终解答
 ```
@@ -49,6 +49,18 @@ export GOOGLE_API_KEY="AIza..."   # macOS/Linux
 # 4. 运行
 python main.py
 ```
+
+---
+
+## Demo / 演示
+
+**Agentic Loop 运行过程**（三个工具依次调用）：
+
+![demo-start](assets/demo-start.png)
+
+**最终输出**（牛顿-莱布尼兹公式完整推导）：
+
+![demo-output](assets/demo-output.png)
 
 ---
 
@@ -81,8 +93,8 @@ x = 1/2  或  x = -3
 
 ## Key Design Decisions / 设计要点
 
-- **`gemini-2.0-flash`** — 速度快、支持 Function Calling，适合 agentic 场景
-- **chat session 管理对话历史**（vs Anthropic/Ollama 手动维护 messages 列表）— Gemini 自动追加
+- **`deepseek-chat`** — 速度快、支持 Tool Use，兼容 OpenAI SDK，适合 agentic 场景
+- **手动维护 messages 列表**，每轮把 assistant 消息和 tool result 追加进去，循环直到 finish_reason != tool_calls
 - **SymPy** 做符号计算 — 精确，无浮点误差，支持代数化简
 - **公式库 + 步骤分解** — 让模型输出有结构的教学式解答，而不只是答案
 

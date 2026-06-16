@@ -2,7 +2,7 @@
 main.py — CLI 入口
 
 运行方式：
-  export ANTHROPIC_API_KEY="sk-ant-..."
+  export DEEPSEEK_API_KEY="sk-..."
   python main.py
 """
 
@@ -12,7 +12,7 @@ from agent import MathAgent
 _BANNER = """
 ╔══════════════════════════════════════════════════╗
 ║           🧮  Math Solver Agent                  ║
-║   Powered by Claude claude-opus-4-8 + Tool Use            ║
+║      Powered by DeepSeek + Tool Use              ║
 ╚══════════════════════════════════════════════════╝
 支持题型：代数 · 几何 · 微积分 · 三角 · 概率统计
 
