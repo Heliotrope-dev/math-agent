@@ -1,8 +1,8 @@
 # 🧮 Math Solver Agent
 
-> A Python CLI agent that solves math problems step-by-step using **Claude claude-opus-4-8** and the **Anthropic Tool Use API**.
+> A Python CLI agent that solves math problems step-by-step using **Gemini 2.0 Flash** and the **Google Function Calling API**.
 >
-> 基于 Claude claude-opus-4-8 + Tool Use 构建的数学解题 Agent，展示 AI Agent 架构核心能力。
+> 基于 Gemini 2.0 Flash + Function Calling 构建的数学解题 Agent，展示 AI Agent 架构核心能力。
 
 ---
 
@@ -25,7 +25,7 @@ tools.py         ← 工具定义（JSON Schema）+ 工具实现（SymPy）
 **Agent loop 流程：**
 ```
 用户输入
-  → Claude claude-opus-4-8 (adaptive thinking)
+  → Gemini 2.0 Flash (Function Calling)
   → stop_reason == "tool_use"  → 执行工具 → 把结果塞回对话 → 继续
   → stop_reason == "end_turn"  → 输出最终解答
 ```
@@ -40,11 +40,11 @@ git clone https://github.com/Heliotrope-dev/math-agent.git
 cd math-agent
 
 # 2. 安装依赖
-pip install anthropic sympy
+pip install google-generativeai sympy
 
-# 3. 设置 API Key
-export ANTHROPIC_API_KEY="sk-ant-..."   # macOS/Linux
-# 或 Windows: set ANTHROPIC_API_KEY=sk-ant-...
+# 3. 设置 API Key（从 https://aistudio.google.com/app/apikey 获取）
+export GOOGLE_API_KEY="AIza..."   # macOS/Linux
+# 或 Windows: set GOOGLE_API_KEY=AIza...
 
 # 4. 运行
 python main.py
@@ -81,8 +81,8 @@ x = 1/2  或  x = -3
 
 ## Key Design Decisions / 设计要点
 
-- **`claude-opus-4-8` + `thinking: {type: "adaptive"}`** — 让模型自行决定是否开启深度推理
-- **手动 agentic loop**（非 tool runner）— 更直观，每个环节可加日志/审批/条件判断
+- **`gemini-2.0-flash`** — 速度快、支持 Function Calling，适合 agentic 场景
+- **chat session 管理对话历史**（vs Anthropic/Ollama 手动维护 messages 列表）— Gemini 自动追加
 - **SymPy** 做符号计算 — 精确，无浮点误差，支持代数化简
 - **公式库 + 步骤分解** — 让模型输出有结构的教学式解答，而不只是答案
 
