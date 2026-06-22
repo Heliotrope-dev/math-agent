@@ -3,6 +3,8 @@
 > A Python CLI agent that solves math problems step-by-step using **DeepSeek** and the **OpenAI-compatible Tool Use API**.
 >
 > 基于 DeepSeek + Tool Use 构建的数学解题 Agent，展示 AI Agent 架构核心能力。
+>
+> 独立设计并实现，无框架依赖，手动实现完整 Agentic Loop。
 
 ---
 
@@ -40,11 +42,11 @@ git clone https://github.com/Heliotrope-dev/math-agent.git
 cd math-agent
 
 # 2. 安装依赖
-pip install google-generativeai sympy
+pip install openai sympy
 
-# 3. 设置 API Key（从 https://aistudio.google.com/app/apikey 获取）
-export GOOGLE_API_KEY="AIza..."   # macOS/Linux
-# 或 Windows: set GOOGLE_API_KEY=AIza...
+# 3. 设置 API Key（从 https://platform.deepseek.com 获取）
+export DEEPSEEK_API_KEY="sk-..."   # macOS/Linux
+# 或 Windows: set DEEPSEEK_API_KEY=sk-...
 
 # 4. 运行
 python main.py

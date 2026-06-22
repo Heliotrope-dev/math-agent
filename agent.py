@@ -1,28 +1,36 @@
 """
-agent.py — 核心 Agent 循环（Ollama 版）
+agent.py — 核心 Agent 循环（DeepSeek 版）
 
-与 Anthropic 版的区别（面试对比讲解用）：
-  Anthropic: stop_reason == "tool_use" / "end_turn"
-  Ollama:    response.message.tool_calls 有值 / 为空
+DeepSeek 兼容 OpenAI 接口，只需把 base_url 指向 DeepSeek，其余与 OpenAI 完全一致。
 
-其他架构完全一致：手动 agentic loop，工具分发，对话历史追加。
+与 Ollama 版的区别：
+  Ollama:   response.message.tool_calls        arguments 是 dict
+  DeepSeek: response.choices[0].message.tool_calls  arguments 是 JSON 字符串，需 json.loads
+            tool_result 消息必须带 tool_call_id
 """
 
-import ollama
+import os
+import json
+from openai import OpenAI
 from tools import TOOL_DEFINITIONS, execute_tool
 
-MODEL = "qwen3:14b"
+MODEL = "deepseek-chat"
+
+# DeepSeek 兼容 OpenAI SDK，只改 base_url 和 api_key
+client = OpenAI(
+    api_key=os.environ["DEEPSEEK_API_KEY"],
+    base_url="https://api.deepseek.com",
+)
 
 _SYSTEM = """You are an expert mathematics tutor. When given a problem:
 
-1. Call `step_decomposer` first to plan the solution approach.
-2. Call `formula_lookup` to retrieve relevant formulas when needed.
-3. Use `calculator` for ALL numeric and symbolic computation — never compute mentally.
-4. Present a clear step-by-step solution that is educational and easy to follow.
-5. End with a clearly marked final answer.
+- For simple arithmetic (e.g. 1+1, 3×4), just use `calculator` once and give the answer directly.
+- For complex problems (equations, calculus, geometry), first call `step_decomposer` to plan,
+  then `formula_lookup` if needed, then `calculator` to compute.
+- Always use `calculator` for computation — never calculate mentally.
+- End with a clearly marked final answer.
 
-Explain reasoning in Chinese; keep mathematical notation in standard form.
-/no_think"""
+Explain reasoning in Chinese; keep mathematical notation in standard form."""
 
 
 class MathAgent:
@@ -37,26 +45,27 @@ class MathAgent:
 
         # ── Agentic loop ────────────────────────────────────────────────
         while True:
-            response = ollama.chat(
+            response = client.chat.completions.create(
                 model=MODEL,
                 tools=TOOL_DEFINITIONS,
                 messages=messages,
             )
 
-            msg = response.message
+            msg = response.choices[0].message
+            finish_reason = response.choices[0].finish_reason
 
-            # ── 分支 1：没有工具调用 → 模型完成，返回最终答案 ──────────
-            if not msg.tool_calls:
+            # ── 分支 1：没有工具调用 → 返回最终答案 ────────────────────
+            if finish_reason != "tool_calls":
                 return msg.content
 
             # ── 分支 2：模型请求调用工具 ─────────────────────────────────
             # 把 assistant 这一轮（含 tool_calls）写入历史
             messages.append(msg)
 
-            # 执行每个工具，逐条追加 tool 消息
-            for call in msg.tool_calls:
-                name = call.function.name
-                args = call.function.arguments   # dict，Ollama 已自动解析 JSON
+            for tc in msg.tool_calls:
+                name = tc.function.name
+                # OpenAI 格式：arguments 是 JSON 字符串，需要解析成 dict
+                args = json.loads(tc.function.arguments)
 
                 print(f"🔧 调用工具：{name}")
                 print(f"   参数：{args}")
@@ -65,9 +74,9 @@ class MathAgent:
                 preview = result[:120] + ("…" if len(result) > 120 else "")
                 print(f"   结果：{preview}\n")
 
+                # OpenAI 格式要求带 tool_call_id，用于对应是哪次调用的结果
                 messages.append({
-                    "role":    "tool",
-                    "name":    name,
-                    "content": result,
+                    "role":         "tool",
+                    "tool_call_id": tc.id,
+                    "content":      result,
                 })
-            # 继续循环，把工具结果交还给模型

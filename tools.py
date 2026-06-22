@@ -264,6 +264,12 @@ def _run_calculator(expression: str, operation: str, variable: str = "x") -> str
 
 def _run_formula_lookup(topic: str) -> str:
     """从公式库中检索指定主题的公式。"""
+    _zh_map = {
+        "代数": "algebra", "几何": "geometry", "微积分": "calculus",
+        "三角": "trigonometry", "三角函数": "trigonometry",
+        "统计": "statistics", "概率": "statistics", "数论": "number_theory",
+    }
+    topic = _zh_map.get(topic, topic)
     formulas = _FORMULAS.get(topic, {})
     if not formulas:
         return f"未找到主题 '{topic}' 的公式。"
