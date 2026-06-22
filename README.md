@@ -11,9 +11,12 @@
 ## Architecture / 架构
 
 ```
-main.py          ← CLI 入口，对话循环
-agent.py         ← Agentic Loop（核心）：调 API → 执行工具 → 循环
-tools.py         ← 工具定义（JSON Schema）+ 工具实现（SymPy）
+main.py               ← CLI 入口，对话循环
+agent.py              ← Agentic Loop（核心）：调 API → 执行工具 → 循环
+tools.py              ← 工具定义（JSON Schema）+ 工具实现（SymPy）
+mcp_server.py         ← 把三个工具包装成标准 MCP Server（见下方 MCP 一节）
+test_mcp_client.py    ← 用 MCP 官方 client SDK 验证 mcp_server.py
+rag_formula_lookup.py ← formula_lookup 的 RAG 版本（见下方 RAG 一节）
 ```
 
 **Three tools / 三个工具：**
@@ -28,8 +31,8 @@ tools.py         ← 工具定义（JSON Schema）+ 工具实现（SymPy）
 ```
 用户输入
   → DeepSeek Chat (Tool Use)
-  → stop_reason == "tool_use"  → 执行工具 → 把结果塞回对话 → 继续
-  → stop_reason == "end_turn"  → 输出最终解答
+  → finish_reason == "tool_calls"  → 执行工具 → 把结果塞回对话 → 继续
+  → finish_reason != "tool_calls"  → 输出最终解答
 ```
 
 ---
@@ -89,6 +92,49 @@ python main.py
 
 **最终答案**
 x = 1/2  或  x = -3
+```
+
+---
+
+## MCP Server / 标准协议化改造
+
+`tools.py` 里的工具是手写的 OpenAI 格式 JSON Schema，只能被这一个 agent 用。
+`mcp_server.py` 用 [FastMCP](https://github.com/modelcontextprotocol/python-sdk) 把
+同样的三个工具包装成标准 MCP Server —— schema 直接从 Python 类型注解 + docstring
+自动生成，任何 MCP host（Claude Code / Claude Desktop / Cursor）都能直接发现并调用，
+不需要为每个 host 各写一套接入代码。
+
+```bash
+pip install "mcp[cli]"
+mcp dev mcp_server.py              # 用 MCP Inspector 调试
+# 或注册进 Claude Code：
+claude mcp add math-agent -- python mcp_server.py
+```
+
+`test_mcp_client.py` 用官方 client SDK 连接 server、list tools 并实际调用一次，
+用来验证 server 本身没问题。
+
+---
+
+## RAG / 语义检索版 formula_lookup
+
+`tools.py` 里的 `formula_lookup` 必须先知道 `topic`（固定 enum：algebra / calculus / ...）
+才能查到公式，题目原文用不上。`rag_formula_lookup.py` 用本地 Ollama
+（`nomic-embed-text` 做 embedding，`qwen3.5` 做生成）重做了一版：
+
+```
+公式库 → 按条切块 + 中文语义描述 → embedding → 向量索引
+用户题目（纯自然语言，不需要 topic）→ embedding → 余弦相似度检索 top-k → 拼进 prompt → 生成解题思路
+```
+
+调试时发现一个有意思的点：直接把公式 notation 和中文描述混在一起做 embedding，
+中文 query 检索效果很差（跨语言匹配被符号稀释）；把"用于检索的文本"（纯中文语义描述）
+和"返回内容"（完整公式）分开存之后，检索准确率明显提升。
+
+```bash
+pip install requests
+ollama pull nomic-embed-text
+python rag_formula_lookup.py
 ```
 
 ---
