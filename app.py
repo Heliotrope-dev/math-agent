@@ -26,10 +26,112 @@ for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
 from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
 
 st.set_page_config(
-    page_title="🧮 Math Solver Agent",
+    page_title="Math Solver Agent",
     page_icon="🧮",
     layout="wide",
 )
+
+st.markdown("""
+<style>
+/* ── 全局字体 ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+/* ── 隐藏默认顶栏和底部 ── */
+#MainMenu, footer, header { visibility: hidden; }
+
+/* ── 侧边栏 ── */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
+    border-right: 1px solid #2d2d4e;
+}
+[data-testid="stSidebar"] * { color: #e0e0f0 !important; }
+[data-testid="stSidebar"] .stButton button {
+    background: #1e1e3a !important;
+    border: 1px solid #3d3d6e !important;
+    color: #b0b0d0 !important;
+    border-radius: 8px !important;
+    font-size: 0.82rem !important;
+    transition: all 0.2s;
+}
+[data-testid="stSidebar"] .stButton button:hover {
+    background: #2d2d5e !important;
+    border-color: #6c6ccc !important;
+    color: #fff !important;
+}
+
+/* ── 主标题渐变 ── */
+.hero-title {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2.4rem;
+    font-weight: 700;
+    margin-bottom: 0;
+    line-height: 1.2;
+}
+.hero-sub {
+    color: #888;
+    font-size: 0.85rem;
+    margin-top: 4px;
+    margin-bottom: 1.2rem;
+}
+
+/* ── 标签页 ── */
+[data-testid="stTabs"] button {
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: #764ba2 !important;
+    border-bottom: 2px solid #764ba2 !important;
+}
+
+/* ── 聊天气泡 ── */
+[data-testid="stChatMessage"] {
+    border-radius: 16px !important;
+    padding: 12px 16px !important;
+    margin-bottom: 8px !important;
+}
+
+/* ── 主按钮 ── */
+.stButton button[kind="primary"] {
+    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    color: white !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1.5rem !important;
+    transition: opacity 0.2s !important;
+}
+.stButton button[kind="primary"]:hover { opacity: 0.88 !important; }
+
+/* ── 输入框 ── */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+    border-radius: 10px !important;
+    border: 1px solid #3d3d6e !important;
+    background: #12121f !important;
+    color: #e0e0f0 !important;
+}
+[data-testid="stTextInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus {
+    border-color: #764ba2 !important;
+    box-shadow: 0 0 0 2px rgba(118,75,162,0.2) !important;
+}
+
+/* ── expander ── */
+[data-testid="stExpander"] {
+    border: 1px solid #2d2d4e !important;
+    border-radius: 10px !important;
+    background: #0f0f1a !important;
+}
+
+/* ── success/info/warning 卡片 ── */
+[data-testid="stAlert"] { border-radius: 10px !important; }
+</style>
+""", unsafe_allow_html=True)
 
 _USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
 
@@ -105,7 +207,7 @@ def ocr_math_image(image_bytes: bytes) -> str:
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("⚙️ 设置")
+    st.markdown("### ⚙️ 设置")
 
     use_local = st.checkbox(
         "🖥️ 本地 Ollama 模式（离线）",
@@ -151,8 +253,10 @@ with st.sidebar:
         st.rerun()
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-st.title("🧮 Math Solver Agent")
-st.caption("完全离线的 AI 数学解题系统 — ReAct Agentic Loop · Tool Use · RAG · SymPy")
+st.markdown("""
+<div class="hero-title">🧮 Math Solver Agent</div>
+<div class="hero-sub">AI 数学解题助手 · 支持拍题 · ReAct Agentic Loop · Tool Use · SymPy</div>
+""", unsafe_allow_html=True)
 
 # 手机端模型快速切换（桌面端用侧边栏，手机端用这里）
 with st.expander("⚙️ 切换模型", expanded=False):
