@@ -12,7 +12,7 @@ from io import StringIO
 
 import streamlit as st
 
-from agent import MathAgent
+from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL
 
 st.set_page_config(
     page_title="🧮 Math Solver Agent",
@@ -35,8 +35,8 @@ EXAMPLES = [
 
 
 @st.cache_resource
-def get_agent(use_local: bool) -> MathAgent:
-    return MathAgent(use_local=use_local)
+def get_agent(use_local: bool, model: str) -> MathAgent:
+    return MathAgent(use_local=use_local, model=model)
 
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
@@ -46,12 +46,20 @@ with st.sidebar:
     use_local = st.checkbox(
         "🖥️ 本地 Ollama 模式（离线）",
         value=_USE_LOCAL,
-        help="使用本地 qwen3.5:9b，无需 API Key",
+        help="使用本地模型，无需 API Key",
     )
 
     if use_local:
-        st.success("使用本地 qwen3.5:9b（完全离线）")
+        selected_model = st.selectbox(
+            "选择模型",
+            options=LOCAL_MODELS,
+            index=LOCAL_MODELS.index(DEFAULT_LOCAL_MODEL),
+            help="phi4-mini 最快；phi4 最准",
+        )
+        speed = {"phi4-mini": "⚡ 极快", "phi4": "🐢 较慢但准"}.get(selected_model, "⚡")
+        st.success(f"{speed} · 本地离线 · {selected_model}")
     else:
+        selected_model = None
         st.info("使用 DeepSeek API（需要 DEEPSEEK_API_KEY）")
 
     st.divider()
@@ -107,7 +115,7 @@ if user_input:
 
     # 运行 Agent
     with st.chat_message("assistant", avatar="🤖"):
-        agent = get_agent(use_local)
+        agent = get_agent(use_local, selected_model or "phi4-mini")
         history = [
             {"role": m["role"], "content": m["content"]}
             for m in st.session_state.messages[:-1]

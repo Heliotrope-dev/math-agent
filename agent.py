@@ -32,8 +32,12 @@ _SYSTEM = """You are an expert mathematics tutor. When given a problem:
 Explain reasoning in Chinese; keep mathematical notation in standard form."""
 
 
+LOCAL_MODELS = ["phi4-mini", "phi4", "qwen2.5:7b", "qwen2.5:14b", "gemma3:12b"]
+DEFAULT_LOCAL_MODEL = "phi4-mini"
+
+
 class MathAgent:
-    def __init__(self, use_local: bool = _USE_LOCAL):
+    def __init__(self, use_local: bool = _USE_LOCAL, model: str = None):
         self.use_local = use_local
         if use_local:
             self.client = OpenAI(
@@ -41,7 +45,7 @@ class MathAgent:
                 base_url="http://localhost:11434/v1",
                 http_client=_NO_PROXY_CLIENT,
             )
-            self.model = "qwen3.5:9b"
+            self.model = model or DEFAULT_LOCAL_MODEL
         else:
             self.client = OpenAI(
                 api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
