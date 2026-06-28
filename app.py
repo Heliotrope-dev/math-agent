@@ -197,11 +197,34 @@ with tab_photo:
     if photo_file:
         img_bytes = photo_file.read()
         st.image(img_bytes, width=360)
-        with st.spinner("🔍 Gemini 识别题目中..."):
-            extracted = ocr_math_image(img_bytes)
-        st.info(f"**识别结果：** {extracted}")
-        if st.button("✅ 解这道题", key="photo_confirm", type="primary"):
-            user_input = extracted
+
+        has_gemini = bool(_secret("GEMINI_API_KEY"))
+        if has_gemini:
+            with st.spinner("🔍 识别题目中..."):
+                ocr_result = ocr_math_image(img_bytes)
+            if ocr_result.startswith("识别失败"):
+                ocr_result = ""
+                st.warning("自动识别失败，请手动输入题目")
+        else:
+            ocr_result = ""
+
+        # 可编辑的识别结果 / 手动输入框
+        photo_question = st.text_area(
+            "题目内容（可编辑或手动输入）",
+            value=ocr_result,
+            height=120,
+            placeholder="在此输入或修改题目内容...",
+            key="photo_question",
+        )
+        # 补充说明
+        photo_note = st.text_input(
+            "补充说明（可选）",
+            placeholder="例如：只解第3题 / 用矩阵方法 / 写出详细步骤",
+            key="photo_note",
+        )
+        final_question = (photo_question.strip() + ("\n" + photo_note.strip() if photo_note.strip() else "")).strip()
+        if st.button("✅ 解这道题", key="photo_confirm", type="primary", disabled=not final_question):
+            user_input = final_question
 
 # ── Agent 解题 ─────────────────────────────────────────────────────────────────
 if user_input:
