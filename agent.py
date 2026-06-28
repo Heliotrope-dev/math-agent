@@ -87,20 +87,21 @@ class MathAgent:
         if history:
             messages.extend(history)
 
-        # 如果有图片且模型支持视觉，把图片直接传给模型
+        # 视觉模式：单次直接调用，不走 tool loop，速度快
         if image_bytes and self.supports_vision:
             b64 = base64.b64encode(image_bytes).decode()
-            user_content = [
-                {"type": "text", "text": f"请解答图片中的数学题。{problem}" if problem else "请识别并解答图片中所有数学题，给出完整解题过程。"},
+            prompt = f"请解答图片中的数学题。{problem}" if problem else "请识别并解答图片中所有数学题，给出完整解题过程。"
+            messages.append({"role": "user", "content": [
+                {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-            ]
-            messages.append({"role": "user", "content": user_content})
-        else:
-            messages.append({"role": "user", "content": f"请解题：{problem}"})
+            ]})
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+            )
+            return response.choices[0].message.content or "（无输出）"
 
-        mode_label = self.model if self.use_local else self.model
-        print(f"\n🤔 Agent 思考中...（{mode_label}）\n")
-
+        messages.append({"role": "user", "content": f"请解题：{problem}"})
         extra = {"think": False} if self.use_local else {}
 
         for iteration in range(MAX_ITERATIONS):
