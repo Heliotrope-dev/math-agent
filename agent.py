@@ -49,8 +49,11 @@ class MathAgent:
             )
             self.model = "deepseek-chat"
 
-    def solve(self, problem: str, history: list = None) -> str:
-        """运行完整的 agentic loop，支持多轮对话历史。"""
+    def solve(self, problem: str, history: list = None, on_tool_call=None) -> str:
+        """运行完整的 agentic loop，支持多轮对话历史。
+
+        on_tool_call(name, args, result): 每次工具调用后回调，result=None 表示调用前。
+        """
         messages = [{"role": "system", "content": _SYSTEM}]
         if history:
             messages.extend(history)
@@ -59,11 +62,14 @@ class MathAgent:
         mode_label = "本地 qwen3.5:9b" if self.use_local else "DeepSeek"
         print(f"\n🤔 Agent 思考中...（{mode_label}）\n")
 
+        extra = {"think": False} if self.use_local else {}
+
         for iteration in range(MAX_ITERATIONS):
             response = self.client.chat.completions.create(
                 model=self.model,
                 tools=TOOL_DEFINITIONS,
                 messages=messages,
+                extra_body=extra,
             )
 
             msg = response.choices[0].message
@@ -81,9 +87,15 @@ class MathAgent:
                 print(f"🔧 调用工具：{name}")
                 print(f"   参数：{args}")
 
+                if on_tool_call:
+                    on_tool_call(name, args, None)
+
                 result = execute_tool(name, args)
                 preview = result[:120] + ("…" if len(result) > 120 else "")
                 print(f"   结果：{preview}\n")
+
+                if on_tool_call:
+                    on_tool_call(name, args, result)
 
                 messages.append({
                     "role":         "tool",

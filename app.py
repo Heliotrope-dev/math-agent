@@ -107,31 +107,49 @@ if user_input:
 
     # 运行 Agent
     with st.chat_message("assistant", avatar="🤖"):
-        with st.spinner("🤔 Agent 思考中..."):
-            agent = get_agent(use_local)
+        agent = get_agent(use_local)
+        history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in st.session_state.messages[:-1]
+        ]
 
-            # 构建历史
-            history = [
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages[:-1]
-            ]
+        trace_lines: list[str] = []
 
-            # 捕获工具调用日志
+        _TOOL_LABELS = {
+            "step_decomposer": "📋 规划解题步骤",
+            "formula_lookup":  "📐 检索公式",
+            "calculator":      "🔢 符号计算",
+        }
+
+        with st.status("🤔 思考中...", expanded=True) as status:
+            answer_placeholder = st.empty()
+
+            def on_tool_call(name, args, result):
+                label = _TOOL_LABELS.get(name, f"🔧 {name}")
+                if result is None:
+                    status.update(label=f"{label}...")
+                    trace_lines.append(f"{label}")
+                    trace_lines.append(f"   参数: {args}")
+                else:
+                    preview = str(result)[:100] + ("…" if len(str(result)) > 100 else "")
+                    trace_lines.append(f"   → {preview}\n")
+
             buf = StringIO()
             old_stdout = sys.stdout
             sys.stdout = buf
             try:
-                answer = agent.solve(user_input, history=history)
+                answer = agent.solve(user_input, history=history, on_tool_call=on_tool_call)
             except Exception as exc:
                 answer = f"❌ 出错：{exc}"
             finally:
                 sys.stdout = old_stdout
 
-            trace = buf.getvalue().strip()
+            status.update(label="✅ 完成", state="complete", expanded=False)
 
+        trace = "\n".join(trace_lines) or buf.getvalue().strip()
         st.markdown(answer)
         if trace:
-            with st.expander("🔧 工具调用追踪", expanded=True):
+            with st.expander("🔧 工具调用追踪", expanded=False):
                 st.code(trace, language="text")
 
     st.session_state.messages.append({
