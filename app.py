@@ -196,7 +196,7 @@ with tab_text:
         user_input = typed
 
 with tab_photo:
-    st.caption("手机用户：点击下方按钮可直接拍照或从相册选择")
+    st.caption("拍照或上传图片后，手动输入题目内容发给 AI 解题")
     photo_file = st.file_uploader(
         "选择或拍摄题目图片",
         type=["jpg", "jpeg", "png"],
@@ -204,36 +204,24 @@ with tab_photo:
         label_visibility="collapsed",
     )
     if photo_file:
-        img_bytes = photo_file.read()
-        st.image(img_bytes, width=360)
+        st.image(photo_file.read(), width=360)
 
-        has_gemini = bool(_secret("GEMINI_API_KEY"))
-        if has_gemini:
-            with st.spinner("🔍 识别题目中..."):
-                ocr_result = ocr_math_image(img_bytes)
-            if ocr_result.startswith("识别失败"):
-                ocr_result = ""
-                st.warning("自动识别失败，请手动输入题目")
-        else:
-            ocr_result = ""
-
-        # 可编辑的识别结果 / 手动输入框
         photo_question = st.text_area(
-            "题目内容（可编辑或手动输入）",
-            value=ocr_result,
-            height=120,
-            placeholder="在此输入或修改题目内容...",
+            "输入题目内容",
+            height=100,
+            placeholder="对照图片输入题目，例如：第6题，求曲面 z=a(x²+y²) 的第一基本形式",
             key="photo_question",
         )
-        # 补充说明
         photo_note = st.text_input(
             "补充说明（可选）",
-            placeholder="例如：只解第3题 / 用矩阵方法 / 写出详细步骤",
+            placeholder="例如：只解第6题 / 用矩阵方法 / 写出详细步骤",
             key="photo_note",
         )
-        final_question = (photo_question.strip() + ("\n" + photo_note.strip() if photo_note.strip() else "")).strip()
-        if st.button("✅ 解这道题", key="photo_confirm", type="primary", disabled=not final_question):
-            user_input = final_question
+        final_q = photo_question.strip()
+        if photo_note.strip():
+            final_q += "\n" + photo_note.strip()
+        if st.button("✅ 解这道题", key="photo_confirm", type="primary", disabled=not final_q):
+            user_input = final_q
 
 # ── Agent 解题 ─────────────────────────────────────────────────────────────────
 if user_input:
@@ -266,10 +254,13 @@ if user_input:
                     preview = str(result)[:100] + ("…" if len(str(result)) > 100 else "")
                     trace_lines.append(f"   → {preview}\n")
 
+            # 取出图片（如果是拍题模式）
+            _img = st.session_state.pop("pending_image", None)
+
             buf = StringIO()
             sys.stdout = buf
             try:
-                stream = agent.solve_stream(user_input, history=history, on_tool_call=on_tool_call)
+                stream = agent.solve_stream(user_input, history=history, on_tool_call=on_tool_call, image_bytes=_img)
                 err = None
             except Exception as exc:
                 stream = None

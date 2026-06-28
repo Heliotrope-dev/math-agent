@@ -8,6 +8,7 @@ agent.py — 核心 Agent 循环
 
 import os
 import json
+import base64
 import httpx
 from openai import OpenAI
 from tools import TOOL_DEFINITIONS, execute_tool
@@ -34,6 +35,8 @@ When given a problem:
 
 Respond in Chinese. Use LaTeX for ALL mathematical notation."""
 
+
+VISION_MODELS = {"gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"}
 
 LOCAL_MODELS = ["phi4-mini", "phi4", "qwen2.5:7b", "qwen2.5:14b", "gemma3:12b"]
 DEFAULT_LOCAL_MODEL = "phi4-mini"
@@ -64,7 +67,11 @@ class MathAgent:
                 base_url=base_url,
             )
 
-    def solve(self, problem: str, history: list = None, on_tool_call=None) -> str:
+    @property
+    def supports_vision(self) -> bool:
+        return self.model in VISION_MODELS
+
+    def solve(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None) -> str:
         """运行完整的 agentic loop，支持多轮对话历史。
 
         on_tool_call(name, args, result): 每次工具调用后回调，result=None 表示调用前。
@@ -72,10 +79,20 @@ class MathAgent:
         messages = [{"role": "system", "content": _SYSTEM}]
         if history:
             messages.extend(history)
-        messages.append({"role": "user", "content": f"请解题：{problem}"})
 
-        mode_label = self.model if self.use_local else "DeepSeek"
-        print(f"\n🤔 Agent 思考中...（本地 {mode_label}）\n")
+        # 如果有图片且模型支持视觉，把图片直接传给模型
+        if image_bytes and self.supports_vision:
+            b64 = base64.b64encode(image_bytes).decode()
+            user_content = [
+                {"type": "text", "text": f"请解答图片中的数学题。{problem}" if problem else "请识别并解答图片中所有数学题，给出完整解题过程。"},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+            ]
+            messages.append({"role": "user", "content": user_content})
+        else:
+            messages.append({"role": "user", "content": f"请解题：{problem}"})
+
+        mode_label = self.model if self.use_local else self.model
+        print(f"\n🤔 Agent 思考中...（{mode_label}）\n")
 
         extra = {"think": False} if self.use_local else {}
 
@@ -120,9 +137,9 @@ class MathAgent:
 
         return "⚠️ 达到最大迭代次数，请尝试更简单的描述方式。"
 
-    def solve_stream(self, problem: str, history: list = None, on_tool_call=None):
+    def solve_stream(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None):
         """Run full agentic loop, return a fake stream of the complete answer."""
-        answer = self.solve(problem, history=history, on_tool_call=on_tool_call)
+        answer = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
         return _fake_stream(answer)
 
 
