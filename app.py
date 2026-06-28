@@ -381,7 +381,7 @@ if user_input:
             _img = st.session_state.pop("pending_image", None)
             _solve_model = selected_model
             if _img and _secret("SILICONFLOW_API_KEY"):
-                _solve_model = "Qwen/Qwen3-VL-32B-Instruct"
+                _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
                 status.update(label="📷 切换视觉模型中...")
             _agent = get_agent(use_local, _solve_model)
 

@@ -40,6 +40,7 @@ Respond in Chinese. Use LaTeX for ALL mathematical notation."""
 VISION_MODELS = {
     "gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro",
     "Qwen/Qwen3-VL-32B-Instruct", "Qwen/Qwen3-VL-32B-Thinking",
+    "Qwen/Qwen3-VL-30B-A3B-Instruct",
     "Qwen/Qwen3-VL-8B-Instruct",
 }
 
@@ -48,9 +49,10 @@ DEFAULT_LOCAL_MODEL = "phi4-mini"
 
 CLOUD_PROVIDERS = {
     # 硅基流动视觉模型（拍题用）
-    "Qwen/Qwen3-VL-32B-Instruct":   ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
-    "Qwen/Qwen3-VL-32B-Thinking":   ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
-    "Qwen/Qwen3-VL-8B-Instruct":    ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
+    "Qwen/Qwen3-VL-30B-A3B-Instruct": ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
+    "Qwen/Qwen3-VL-32B-Instruct":     ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
+    "Qwen/Qwen3-VL-32B-Thinking":     ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
+    "Qwen/Qwen3-VL-8B-Instruct":      ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
     # DeepSeek（文字解题）
     "deepseek-chat":                 ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
     # Gemini（备用）
@@ -90,9 +92,9 @@ class MathAgent:
         if history:
             messages.extend(history)
 
-        # 视觉模式：压缩图片 + 单次直接调用
+        # 视觉模式：压缩图片（减少 token）+ 单次直接调用
         if image_bytes and self.supports_vision:
-            image_bytes = _compress_image(image_bytes)
+            image_bytes = _compress_image(image_bytes, max_size=768)
             b64 = base64.b64encode(image_bytes).decode()
             prompt = f"请解答图片中的数学题。{problem}" if problem else "请识别并解答图片中所有数学题，给出完整解题过程。"
             messages.append({"role": "user", "content": [
@@ -158,8 +160,8 @@ class MathAgent:
         return result
 
 
-def _compress_image(image_bytes: bytes, max_size: int = 1024) -> bytes:
-    """压缩图片，减少 base64 体积。"""
+def _compress_image(image_bytes: bytes, max_size: int = 768) -> bytes:
+    """压缩图片，减少图片 token 数量。"""
     try:
         from PIL import Image
         img = Image.open(BytesIO(image_bytes)).convert("RGB")
@@ -168,7 +170,7 @@ def _compress_image(image_bytes: bytes, max_size: int = 1024) -> bytes:
             r = max_size / max(w, h)
             img = img.resize((int(w * r), int(h * r)), Image.LANCZOS)
         buf = BytesIO()
-        img.save(buf, format="JPEG", quality=85)
+        img.save(buf, format="JPEG", quality=80)
         return buf.getvalue()
     except Exception:
         return image_bytes
