@@ -1,3 +1,15 @@
+---
+title: Math Solver Agent
+emoji: 🧮
+colorFrom: purple
+colorTo: indigo
+sdk: streamlit
+sdk_version: 1.50.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 🧮 Math Solver Agent
 
 > 完全离线的 AI 数学解题系统 — 无需 OpenAI / DeepSeek API，本地运行。
