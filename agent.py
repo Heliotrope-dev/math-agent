@@ -105,6 +105,7 @@ class MathAgent:
                 model=self.model,
                 messages=messages,
                 stream=True,
+                max_tokens=4096,
             )
 
         messages.append({"role": "user", "content": f"请解题：{problem}"})
