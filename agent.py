@@ -35,6 +35,13 @@ Explain reasoning in Chinese; keep mathematical notation in standard form."""
 LOCAL_MODELS = ["phi4-mini", "phi4", "qwen2.5:7b", "qwen2.5:14b", "gemma3:12b"]
 DEFAULT_LOCAL_MODEL = "phi4-mini"
 
+CLOUD_PROVIDERS = {
+    "gemini-2.0-flash":              ("google", "https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
+    "gemini-2.5-flash":              ("google", "https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
+    "gemini-2.5-pro":                ("google", "https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
+    "deepseek-chat":                 ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
+}
+
 
 class MathAgent:
     def __init__(self, use_local: bool = _USE_LOCAL, model: str = None):
@@ -47,11 +54,12 @@ class MathAgent:
             )
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
+            self.model = model or "gemini-2.0-flash"
+            _, base_url, env_key = CLOUD_PROVIDERS.get(self.model, ("", "https://api.deepseek.com", "DEEPSEEK_API_KEY"))
             self.client = OpenAI(
-                api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
-                base_url="https://api.deepseek.com",
+                api_key=os.environ.get(env_key, ""),
+                base_url=base_url,
             )
-            self.model = "deepseek-chat"
 
     def solve(self, problem: str, history: list = None, on_tool_call=None) -> str:
         """运行完整的 agentic loop，支持多轮对话历史。

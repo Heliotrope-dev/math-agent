@@ -12,7 +12,7 @@ from io import StringIO
 
 import streamlit as st
 
-from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL
+from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
 
 st.set_page_config(
     page_title="🧮 Math Solver Agent",
@@ -59,8 +59,19 @@ with st.sidebar:
         speed = {"phi4-mini": "⚡ 极快", "phi4": "🐢 较慢但准"}.get(selected_model, "⚡")
         st.success(f"{speed} · 本地离线 · {selected_model}")
     else:
-        selected_model = None
-        st.info("使用 DeepSeek API（需要 DEEPSEEK_API_KEY）")
+        cloud_options = list(CLOUD_PROVIDERS.keys())
+        selected_model = st.selectbox(
+            "选择云端模型",
+            options=cloud_options,
+            index=0,
+        )
+        labels = {
+            "gemini-2.0-flash": "⚡ 快速，免费额度大",
+            "gemini-2.5-flash": "🔥 更强，支持推理",
+            "gemini-2.5-pro":   "💎 最强，复杂题首选",
+            "deepseek-chat":    "💰 便宜，中文好",
+        }
+        st.info(labels.get(selected_model, "☁️ 云端模式"))
 
     st.divider()
     st.markdown("**📝 示例题目**")
