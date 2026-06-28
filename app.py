@@ -208,36 +208,37 @@ with tab_photo:
         img_bytes = photo_file.read()
         st.image(img_bytes, width=360)
 
-        _agent_tmp = get_agent(use_local, selected_model)
-        _vision = _agent_tmp.supports_vision
-
-        if _vision:
-            st.success("📷 视觉模式：AI 直接看图解题")
-            photo_note = st.text_input(
-                "说明（可选）",
-                placeholder="例如：只解第3题 / 第6题用行列式方法",
-                key="photo_note",
-            )
-            if st.button("✅ 解这道题", key="photo_confirm", type="primary"):
-                st.session_state["pending_image"] = img_bytes
-                user_input = photo_note.strip() or "请解答图片中的数学题"
+        _has_vision_key = bool(_secret("SILICONFLOW_API_KEY"))
+        if _has_vision_key:
+            st.success("📷 自动切换视觉模型解题")
         else:
-            st.info("💬 当前模型不支持看图，请手动输入题目（或切换到 Qwen2.5-VL 视觉模型）")
+            st.info("请手动输入题目（未配置视觉模型 Key）")
+
+        photo_note = st.text_input(
+            "说明（可选）",
+            placeholder="例如：只解第3题 / 第6题用行列式方法",
+            key="photo_note",
+        )
+
+        if not _has_vision_key:
             photo_question = st.text_area(
-                "输入题目内容",
+                "题目内容",
                 height=100,
-                placeholder="对照图片输入题目，例如：第6题，求曲面 z=a(x²+y²) 的第一基本形式",
+                placeholder="对照图片手动输入题目内容",
                 key="photo_question",
             )
-            photo_note = st.text_input(
-                "补充说明（可选）",
-                placeholder="例如：只解第6题 / 用矩阵方法",
-                key="photo_note",
-            )
-            final_q = photo_question.strip()
-            if photo_note.strip():
-                final_q += "\n" + photo_note.strip()
-            if st.button("✅ 解这道题", key="photo_confirm", type="primary", disabled=not final_q):
+        else:
+            photo_question = ""
+
+        _can_submit = _has_vision_key or bool(photo_question.strip() if not _has_vision_key else True)
+        if st.button("✅ 解这道题", key="photo_confirm", type="primary", disabled=not _can_submit):
+            if _has_vision_key:
+                st.session_state["pending_image"] = img_bytes
+                user_input = photo_note.strip() or "请解答图片中的数学题"
+            else:
+                final_q = photo_question.strip()
+                if photo_note.strip():
+                    final_q += "\n" + photo_note.strip()
                 user_input = final_q
 
 # ── Agent 解题 ─────────────────────────────────────────────────────────────────
@@ -247,6 +248,7 @@ if user_input:
         st.markdown(user_input)
 
     with st.chat_message("assistant", avatar="🤖"):
+        # agent 先用 selected_model 初始化，拍题时会在下面覆盖为视觉模型
         agent = get_agent(use_local, selected_model)
         history = [
             {"role": m["role"], "content": m["content"]}
@@ -271,13 +273,18 @@ if user_input:
                     preview = str(result)[:100] + ("…" if len(str(result)) > 100 else "")
                     trace_lines.append(f"   → {preview}\n")
 
-            # 取出图片（如果是拍题模式）
+            # 取出图片（如果是拍题模式，自动切换视觉模型）
             _img = st.session_state.pop("pending_image", None)
+            _solve_model = selected_model
+            if _img and _secret("SILICONFLOW_API_KEY"):
+                _solve_model = "Qwen/Qwen3-VL-32B-Instruct"
+                status.update(label="📷 切换视觉模型中...")
+            _agent = get_agent(use_local, _solve_model)
 
             buf = StringIO()
             sys.stdout = buf
             try:
-                stream = agent.solve_stream(user_input, history=history, on_tool_call=on_tool_call, image_bytes=_img)
+                stream = _agent.solve_stream(user_input, history=history, on_tool_call=on_tool_call, image_bytes=_img)
                 err = None
             except Exception as exc:
                 stream = None
