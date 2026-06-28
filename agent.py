@@ -8,8 +8,12 @@ agent.py — 核心 Agent 循环
 
 import os
 import json
+import httpx
 from openai import OpenAI
 from tools import TOOL_DEFINITIONS, execute_tool
+
+# macOS 系统代理会被 httpx 自动读取并拦截 localhost 请求，需要显式禁用
+_NO_PROXY_CLIENT = httpx.Client(trust_env=False)
 
 MAX_ITERATIONS = 12
 
@@ -32,7 +36,11 @@ class MathAgent:
     def __init__(self, use_local: bool = _USE_LOCAL):
         self.use_local = use_local
         if use_local:
-            self.client = OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
+            self.client = OpenAI(
+                api_key="ollama",
+                base_url="http://localhost:11434/v1",
+                http_client=_NO_PROXY_CLIENT,
+            )
             self.model = "qwen3.5:9b"
         else:
             self.client = OpenAI(
