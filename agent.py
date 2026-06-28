@@ -63,8 +63,8 @@ class MathAgent:
             messages.extend(history)
         messages.append({"role": "user", "content": f"请解题：{problem}"})
 
-        mode_label = "本地 qwen3.5:9b" if self.use_local else "DeepSeek"
-        print(f"\n🤔 Agent 思考中...（{mode_label}）\n")
+        mode_label = self.model if self.use_local else "DeepSeek"
+        print(f"\n🤔 Agent 思考中...（本地 {mode_label}）\n")
 
         extra = {"think": False} if self.use_local else {}
 
