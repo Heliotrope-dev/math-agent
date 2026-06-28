@@ -115,7 +115,7 @@ with st.sidebar:
         st.success(f"{speed} · 本地离线 · {selected_model}")
     else:
         cloud_options = list(CLOUD_PROVIDERS.keys())
-        selected_model = st.selectbox("云端模型", options=cloud_options, index=0)
+        selected_model = st.selectbox("云端模型", options=cloud_options, index=cloud_options.index("deepseek-chat"))
         labels = {
             "gemini-2.0-flash": "⚡ 快速，免费额度大",
             "gemini-2.5-flash": "🔥 更强，支持推理",

@@ -57,7 +57,7 @@ class MathAgent:
             )
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
-            self.model = model or "gemini-2.0-flash"
+            self.model = model or "deepseek-chat"
             _, base_url, env_key = CLOUD_PROVIDERS.get(self.model, ("", "https://api.deepseek.com", "DEEPSEEK_API_KEY"))
             self.client = OpenAI(
                 api_key=os.environ.get(env_key, ""),
