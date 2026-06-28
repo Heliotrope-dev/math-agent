@@ -23,6 +23,9 @@ for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
         except Exception:
             pass
 
+import re
+from datetime import datetime
+
 from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
 
 st.set_page_config(
@@ -69,12 +72,14 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     font-weight: 700;
     margin-bottom: 0;
     line-height: 1.2;
+    text-align: center;
 }
 .hero-sub {
     color: #888;
     font-size: 0.85rem;
     margin-top: 4px;
     margin-bottom: 1.2rem;
+    text-align: center;
 }
 
 /* ── 标签页 ── */
@@ -156,16 +161,41 @@ EXAMPLES = [
 
 
 @st.cache_resource
-def get_agent(use_local: bool, model: str) -> MathAgent:
-    return MathAgent(use_local=use_local, model=model)
+def get_agent(use_local: bool, model: str, guide_mode: bool = False) -> MathAgent:
+    return MathAgent(use_local=use_local, model=model, guide_mode=guide_mode)
 
 
 def fix_latex(text: str) -> str:
-    """把 DeepSeek/Gemini 输出的 \\[...\\] 和 \\(...\\) 转成 Streamlit 能渲染的 $$...$$ 和 $...$。"""
-    import re
+    """把 \\[...\\] 和 \\(...\\) 转成 Streamlit 能渲染的 $$...$$ 和 $...$。"""
     text = re.sub(r'\\\[\s*(.*?)\s*\\\]', r'\n$$\1$$\n', text, flags=re.DOTALL)
     text = re.sub(r'\\\(\s*(.*?)\s*\\\)', r'$\1$', text, flags=re.DOTALL)
     return text
+
+
+def extract_tags(text: str) -> tuple[str, list[str]]:
+    """从回答末尾提取知识点标签行，返回 (去掉标签行的文本, 标签列表)。"""
+    match = re.search(r'📚\s*\*{0,2}知识点\*{0,2}\s*[：:](.*?)$', text, re.MULTILINE)
+    if not match:
+        return text, []
+    tags_str = match.group(1).strip()
+    tags = [t.strip() for t in re.split(r'[·・,，、]+', tags_str) if t.strip()]
+    clean = text[:match.start()].rstrip()
+    return clean, tags
+
+
+def render_tags(tags: list[str], prefix: str = ""):
+    if not tags:
+        return
+    pills = "".join(
+        f'<span style="display:inline-block;background:#667eea33;'
+        f'border:1px solid #667eea88;color:#6060cc;padding:2px 10px;border-radius:12px;'
+        f'font-size:0.78rem;margin:2px 4px 2px 0;font-weight:500;">{t}</span>'
+        for t in tags
+    )
+    st.markdown(
+        f'<div style="margin-top:6px;line-height:2.2;">📚 {pills}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _compress_image(image_bytes: bytes, max_size: int = 800) -> bytes:
@@ -205,6 +235,12 @@ def ocr_math_image(image_bytes: bytes) -> str:
         return f"识别失败：{e}"
 
 
+# ── Session state 初始化（必须在 sidebar 之前）────────────────────────────────
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "wrong_book" not in st.session_state:
+    st.session_state.wrong_book = []
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### ⚙️ 设置")
@@ -241,12 +277,47 @@ with st.sidebar:
         st.warning("未配置 GEMINI_API_KEY，拍题识别不可用")
 
     st.divider()
+    st.markdown("**🎓 解题模式**")
+    guide_mode = st.toggle(
+        "引导解题（苏格拉底式）",
+        value=False,
+        help="开启后 AI 不直接给答案，而是逐步引导你思考",
+    )
+    if guide_mode:
+        st.info("💡 引导模式：AI 会给提示，引导你自主解题")
+    else:
+        st.caption("直接模式：给出完整解题过程")
+
+    st.divider()
     st.markdown("**📝 示例题目**")
     for ex in EXAMPLES:
         if st.button(ex, use_container_width=True, key=ex):
             st.session_state["prefill"] = ex
 
     st.divider()
+    # 错题本
+    wrong_book = st.session_state.get("wrong_book", [])
+    wb_label = f"📓 错题本（{len(wrong_book)} 题）" if wrong_book else "📓 错题本（空）"
+    with st.expander(wb_label, expanded=False):
+        if not wrong_book:
+            st.caption("解完题后点「加入错题本」保存")
+        else:
+            for wi, wp in enumerate(wrong_book):
+                st.markdown(f"**{wi+1}.** {wp['question'][:60]}{'…' if len(wp['question']) > 60 else ''}")
+                if wp.get("tags"):
+                    render_tags(wp["tags"])
+                st.caption(wp.get("saved_at", ""))
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("重新解题", key=f"wb_redo_{wi}", use_container_width=True):
+                        st.session_state["prefill"] = wp["question"]
+                        st.rerun()
+                with c2:
+                    if st.button("删除", key=f"wb_del_{wi}", use_container_width=True):
+                        st.session_state["wrong_book"].pop(wi)
+                        st.rerun()
+                st.divider()
+
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
         st.session_state.pop("prefill", None)
@@ -278,16 +349,41 @@ with st.expander("⚙️ 切换模型", expanded=False):
     if not use_local:
         selected_model = _mobile_model
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-for msg in st.session_state.messages:
+for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
         content = fix_latex(msg["content"]) if msg["role"] == "assistant" else msg["content"]
         st.markdown(content)
-        if msg.get("trace"):
+        if msg["role"] == "assistant":
+            if msg.get("tags"):
+                render_tags(msg["tags"])
+            if msg.get("trace"):
+                with st.expander("🔧 工具调用追踪", expanded=False):
+                    st.code(msg["trace"], language="text")
+            # 操作按钮（只对已有内容的历史消息显示）
+            prev_q = st.session_state.messages[i - 1]["content"] if i > 0 else ""
+            bcol1, bcol2, _ = st.columns([1, 1, 3])
+            with bcol1:
+                if st.button("🎯 举一反三", key=f"similar_{i}", use_container_width=True):
+                    st.session_state["_similar"] = {"question": prev_q, "answer": msg["content"][:400]}
+            with bcol2:
+                already_saved = any(
+                    wp["question"] == prev_q for wp in st.session_state.wrong_book
+                )
+                btn_label = "✅ 已加入" if already_saved else "📖 加入错题本"
+                if st.button(btn_label, key=f"wrongbook_{i}", use_container_width=True, disabled=already_saved):
+                    st.session_state.wrong_book.append({
+                        "question": prev_q,
+                        "answer": msg["content"],
+                        "tags": msg.get("tags", []),
+                        "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    })
+                    st.rerun()
+        elif msg.get("trace"):
             with st.expander("🔧 工具调用追踪", expanded=False):
                 st.code(msg["trace"], language="text")
+
+# ── 举一反三触发 ────────────────────────────────────────────────────────────────
+_similar_ctx = st.session_state.pop("_similar", None)
 
 # ── 输入区：两 Tab ─────────────────────────────────────────────────────────────
 tab_text, tab_photo = st.tabs(["✏️ 文字输入", "📷 拍题 / 上传图片"])
@@ -299,6 +395,11 @@ with tab_text:
     typed = st.chat_input("输入数学题，例如：解方程 x² - 5x + 6 = 0") or prefill
     if typed:
         user_input = typed
+
+# 举一反三作为新一轮对话触发
+if _similar_ctx and not user_input:
+    user_input = "🎯 举一反三"
+    st.session_state["_similar_ctx_data"] = _similar_ctx
 
 with tab_photo:
     st.caption("拍照或上传图片后，手动输入题目内容发给 AI 解题")
@@ -352,8 +453,6 @@ if user_input:
         st.markdown(user_input)
 
     with st.chat_message("assistant", avatar="🤖"):
-        # agent 先用 selected_model 初始化，拍题时会在下面覆盖为视觉模型
-        agent = get_agent(use_local, selected_model)
         history = [
             {"role": m["role"], "content": m["content"]}
             for m in st.session_state.messages[:-1]
@@ -366,7 +465,21 @@ if user_input:
             "calculator":      "🔢 符号计算",
         }
 
+        # 举一反三：构造特殊提示，不使用历史（避免混入当前对话）
+        _sim_data = st.session_state.pop("_similar_ctx_data", None)
+        if _sim_data:
+            solve_input = (
+                f"上一道题目是：{_sim_data['question']}\n\n"
+                "请出一道与上题类似但不同的练习题，标注题型和难度，只出题，不要给解答。"
+            )
+            solve_history = []
+        else:
+            solve_input = user_input
+            solve_history = history
+
         with st.status("🤔 思考中...", expanded=True) as status:
+            if guide_mode:
+                status.update(label="💡 引导模式 - 组织提示...")
 
             def on_tool_call(name, args, result):
                 label = _TOOL_LABELS.get(name, f"🔧 {name}")
@@ -377,18 +490,27 @@ if user_input:
                     preview = str(result)[:100] + ("…" if len(str(result)) > 100 else "")
                     trace_lines.append(f"   → {preview}\n")
 
-            # 取出图片（如果是拍题模式，自动切换视觉模型）
+            # 取出图片（拍题模式自动切换视觉模型）
             _img = st.session_state.pop("pending_image", None)
             _solve_model = selected_model
+            _use_guide = guide_mode and not _img  # 视觉模式不走引导流程
             if _img and _secret("SILICONFLOW_API_KEY"):
                 _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
                 status.update(label="📷 切换视觉模型中...")
-            _agent = get_agent(use_local, _solve_model)
+            # 举一反三也不需要引导模式（直接出题）
+            if _sim_data:
+                _use_guide = False
+            _agent = get_agent(use_local, _solve_model, guide_mode=_use_guide)
 
             buf = StringIO()
             sys.stdout = buf
             try:
-                stream = _agent.solve_stream(user_input, history=history, on_tool_call=on_tool_call, image_bytes=_img)
+                stream = _agent.solve_stream(
+                    solve_input,
+                    history=solve_history,
+                    on_tool_call=on_tool_call,
+                    image_bytes=_img,
+                )
                 err = None
             except Exception as exc:
                 stream = None
@@ -407,13 +529,18 @@ if user_input:
                     if delta:
                         collected.append(delta)
                         answer_placeholder.markdown(fix_latex("".join(collected)) + "▌")
-                answer = fix_latex("".join(collected))
+                raw_answer = "".join(collected)
+                clean_answer, tags = extract_tags(raw_answer)
+                answer = fix_latex(clean_answer)
                 answer_placeholder.markdown(answer)
+                render_tags(tags)
             except Exception as e:
                 answer = f"❌ 流式输出出错：{e}"
+                tags = []
                 answer_placeholder.markdown(answer)
         else:
             answer = f"❌ 出错：{err}"
+            tags = []
             st.markdown(answer)
 
         trace = "\n".join(trace_lines) or buf.getvalue().strip()
@@ -421,8 +548,26 @@ if user_input:
             with st.expander("🔧 工具调用追踪", expanded=False):
                 st.code(trace, language="text")
 
+        # 操作按钮（当前回答）
+        prev_q = st.session_state.messages[-1]["content"] if st.session_state.messages else ""
+        bcol1, bcol2, _ = st.columns([1, 1, 3])
+        with bcol1:
+            if st.button("🎯 举一反三", key="similar_new", use_container_width=True):
+                st.session_state["_similar"] = {"question": prev_q, "answer": answer[:400]}
+                st.rerun()
+        with bcol2:
+            if st.button("📖 加入错题本", key="wrongbook_new", use_container_width=True):
+                st.session_state.wrong_book.append({
+                    "question": prev_q,
+                    "answer": answer,
+                    "tags": tags,
+                    "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                })
+                st.rerun()
+
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer,
+        "tags": tags,
         "trace": trace,
     })

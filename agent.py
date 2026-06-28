@@ -21,20 +21,39 @@ MAX_ITERATIONS = 12
 
 _USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
 
-_SYSTEM = """You are an expert mathematics tutor. Always format math using LaTeX:
-- Inline math: $x^2 + 1$
-- Display math (centered): $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
-- Always use $$ for final answers
+_SYSTEM = """你是一位专业的数学教师。
 
-When given a problem:
-- Simple arithmetic: use `calculator` once, answer directly.
-- Complex problems: call `step_decomposer` to plan, then `formula_lookup` if needed, then `calculator`.
-- For limits: calculator with operation="limit", variable="x->0" format.
-- For definite integrals: calculator with operation="definite_integral", expression="f(x), a, b".
-- Never calculate mentally — always use calculator tool.
-- End response with a clearly marked final answer using $$ $$.
+解题规则：
+- 简单算术：直接调用 calculator 工具，给出答案
+- 复杂题：先 step_decomposer 规划，再 formula_lookup 查公式，最后 calculator 计算
+- 极限：calculator 的 operation="limit"，variable="x->0"
+- 定积分：calculator 的 operation="definite_integral"，expression="f(x), a, b"
+- 绝不心算，必须调用工具
+- 最后用 $$ ... $$ 标注最终答案
 
-Respond in Chinese. Use LaTeX for ALL mathematical notation."""
+格式要求：
+- 行内公式：$...$
+- 独立公式：$$ ... $$
+- 回复中文
+
+解题完成后，最后单独一行写（不超过5个知识点）：
+📚 知识点：知识点1 · 知识点2 · 知识点3"""
+
+_GUIDE_SYSTEM = """你是一位耐心的数学家教，使用苏格拉底式引导法。
+
+教学方式：
+- 先识别题型，指出解题方向（不直接给完整答案）
+- 给出第一个提示，引导学生自己思考
+- 根据学生的回应，逐步揭示下一步
+- 最终当学生理解后，给出完整总结
+
+格式要求：
+- 行内公式：$...$
+- 独立公式：$$ ... $$
+- 回复中文
+
+每次回复最后单独一行写：
+📚 知识点：知识点1 · 知识点2 · 知识点3"""
 
 
 VISION_MODELS = {
@@ -62,8 +81,9 @@ CLOUD_PROVIDERS = {
 
 
 class MathAgent:
-    def __init__(self, use_local: bool = _USE_LOCAL, model: str = None):
+    def __init__(self, use_local: bool = _USE_LOCAL, model: str = None, guide_mode: bool = False):
         self.use_local = use_local
+        self.guide_mode = guide_mode
         if use_local:
             self.client = OpenAI(
                 api_key="ollama",
@@ -88,7 +108,8 @@ class MathAgent:
 
         on_tool_call(name, args, result): 每次工具调用后回调，result=None 表示调用前。
         """
-        messages = [{"role": "system", "content": _SYSTEM}]
+        system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
+        messages = [{"role": "system", "content": system}]
         if history:
             messages.extend(history)
 
@@ -108,6 +129,16 @@ class MathAgent:
                 max_tokens=4096,
             )
 
+        # 引导模式：无工具调用，直接流式对话
+        if self.guide_mode:
+            messages.append({"role": "user", "content": problem})
+            return self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                stream=True,
+                max_tokens=2048,
+            )
+
         messages.append({"role": "user", "content": f"请解题：{problem}"})
         extra = {"think": False} if self.use_local else {}
 
@@ -116,6 +147,7 @@ class MathAgent:
                 model=self.model,
                 tools=TOOL_DEFINITIONS,
                 messages=messages,
+                max_tokens=4096,
                 extra_body=extra,
             )
 
