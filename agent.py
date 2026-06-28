@@ -88,7 +88,12 @@ class MathAgent:
             self.client = OpenAI(
                 api_key="ollama",
                 base_url="http://localhost:11434/v1",
-                http_client=httpx.Client(trust_env=False),
+                # trust_env=False 绕过 macOS 系统代理
+                # max_keepalive_connections=0 禁用连接复用，避免 Ollama 关闭连接后再请求报错
+                http_client=httpx.Client(
+                    trust_env=False,
+                    limits=httpx.Limits(max_keepalive_connections=0, max_connections=100),
+                ),
             )
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
