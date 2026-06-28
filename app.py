@@ -14,6 +14,14 @@ from io import StringIO
 
 import streamlit as st
 
+# 把 Streamlit Cloud secrets 注入环境变量，让 agent.py 正常读取
+for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY"):
+    if _k not in os.environ:
+        try:
+            os.environ[_k] = st.secrets[_k]
+        except Exception:
+            pass
+
 from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
 
 st.set_page_config(
@@ -23,7 +31,15 @@ st.set_page_config(
 )
 
 _USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
-_GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+
+def _secret(key: str) -> str:
+    """从 st.secrets（Streamlit Cloud）或环境变量读取密钥。"""
+    try:
+        return st.secrets[key]
+    except Exception:
+        return os.environ.get(key, "")
+
+_GEMINI_KEY = _secret("GEMINI_API_KEY")
 
 EXAMPLES = [
     "解方程：2x² + 5x - 3 = 0",
@@ -90,6 +106,11 @@ with st.sidebar:
         }
         st.info(labels.get(selected_model, "☁️ 云端模式"))
 
+    # 动态读取（支持 Streamlit Cloud secrets 热更新）
+    gemini_ok = bool(_secret("GEMINI_API_KEY"))
+    if not gemini_ok:
+        st.warning("未配置 GEMINI_API_KEY，拍题识别不可用")
+
     st.divider()
     st.markdown("**📝 示例题目**")
     for ex in EXAMPLES:
@@ -116,8 +137,8 @@ for msg in st.session_state.messages:
             with st.expander("🔧 工具调用追踪", expanded=False):
                 st.code(msg["trace"], language="text")
 
-# ── 输入区：三 Tab ─────────────────────────────────────────────────────────────
-tab_text, tab_camera, tab_upload = st.tabs(["✏️ 文字输入", "📷 拍题", "🖼️ 上传图片"])
+# ── 输入区：两 Tab ─────────────────────────────────────────────────────────────
+tab_text, tab_photo = st.tabs(["✏️ 文字输入", "📷 拍题 / 上传图片"])
 
 user_input = None
 
@@ -127,24 +148,22 @@ with tab_text:
     if typed:
         user_input = typed
 
-with tab_camera:
-    cam_img = st.camera_input("对准题目拍照", key="camera")
-    if cam_img:
-        with st.spinner("🔍 Gemini 识别中..."):
-            extracted = ocr_math_image(cam_img.getvalue())
-        st.success(f"识别结果：{extracted}")
-        if st.button("✅ 解这道题", key="cam_confirm"):
+with tab_photo:
+    st.caption("手机用户：点击下方按钮可直接拍照或从相册选择")
+    photo_file = st.file_uploader(
+        "选择或拍摄题目图片",
+        type=["jpg", "jpeg", "png"],
+        key="photo",
+        label_visibility="collapsed",
+    )
+    if photo_file:
+        img_bytes = photo_file.read()
+        st.image(img_bytes, width=360)
+        with st.spinner("🔍 Gemini 识别题目中..."):
+            extracted = ocr_math_image(img_bytes)
+        st.info(f"**识别结果：** {extracted}")
+        if st.button("✅ 解这道题", key="photo_confirm", type="primary"):
             user_input = extracted
-
-with tab_upload:
-    uploaded = st.file_uploader("上传题目图片", type=["jpg", "jpeg", "png"], key="upload")
-    if uploaded:
-        st.image(uploaded, width=380)
-        with st.spinner("🔍 Gemini 识别中..."):
-            extracted_up = ocr_math_image(uploaded.read())
-        st.success(f"识别结果：{extracted_up}")
-        if st.button("✅ 解这道题", key="up_confirm"):
-            user_input = extracted_up
 
 # ── Agent 解题 ─────────────────────────────────────────────────────────────────
 if user_input:
