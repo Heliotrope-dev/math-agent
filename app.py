@@ -145,6 +145,26 @@ with st.sidebar:
 st.title("🧮 Math Solver Agent")
 st.caption("完全离线的 AI 数学解题系统 — ReAct Agentic Loop · Tool Use · RAG · SymPy")
 
+# 手机端模型快速切换（桌面端用侧边栏，手机端用这里）
+with st.expander("⚙️ 切换模型", expanded=False):
+    _cloud_opts = list(CLOUD_PROVIDERS.keys())
+    _labels = {
+        "gemini-2.0-flash": "⚡ Gemini 2.0 Flash（默认，快）",
+        "gemini-2.5-flash": "🔥 Gemini 2.5 Flash（更强）",
+        "gemini-2.5-pro":   "💎 Gemini 2.5 Pro（最强）",
+        "deepseek-chat":    "💰 DeepSeek V3（便宜）",
+    }
+    _mobile_model = st.selectbox(
+        "云端模型",
+        options=_cloud_opts,
+        index=_cloud_opts.index(selected_model) if selected_model in _cloud_opts else 0,
+        format_func=lambda x: _labels.get(x, x),
+        key="mobile_model",
+        label_visibility="collapsed",
+    )
+    if not use_local:
+        selected_model = _mobile_model
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
