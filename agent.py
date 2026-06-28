@@ -9,6 +9,7 @@ agent.py — 核心 Agent 循环
 import os
 import json
 import base64
+from io import BytesIO
 import httpx
 from openai import OpenAI
 from tools import TOOL_DEFINITIONS, execute_tool
@@ -38,7 +39,8 @@ Respond in Chinese. Use LaTeX for ALL mathematical notation."""
 
 VISION_MODELS = {
     "gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro",
-    "Qwen/Qwen3-VL-32B-Instruct", "Qwen/Qwen3-VL-8B-Instruct",
+    "Qwen/Qwen3-VL-32B-Instruct", "Qwen/Qwen3-VL-32B-Thinking",
+    "Qwen/Qwen3-VL-8B-Instruct",
 }
 
 LOCAL_MODELS = ["phi4-mini", "phi4", "qwen2.5:7b", "qwen2.5:14b", "gemma3:12b"]
@@ -47,6 +49,7 @@ DEFAULT_LOCAL_MODEL = "phi4-mini"
 CLOUD_PROVIDERS = {
     # 硅基流动视觉模型（拍题用）
     "Qwen/Qwen3-VL-32B-Instruct":   ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
+    "Qwen/Qwen3-VL-32B-Thinking":   ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
     "Qwen/Qwen3-VL-8B-Instruct":    ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
     # DeepSeek（文字解题）
     "deepseek-chat":                 ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
@@ -87,19 +90,20 @@ class MathAgent:
         if history:
             messages.extend(history)
 
-        # 视觉模式：单次直接调用，不走 tool loop，速度快
+        # 视觉模式：压缩图片 + 单次直接调用
         if image_bytes and self.supports_vision:
+            image_bytes = _compress_image(image_bytes)
             b64 = base64.b64encode(image_bytes).decode()
             prompt = f"请解答图片中的数学题。{problem}" if problem else "请识别并解答图片中所有数学题，给出完整解题过程。"
             messages.append({"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
             ]})
-            response = self.client.chat.completions.create(
+            return self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
+                stream=True,
             )
-            return response.choices[0].message.content or "（无输出）"
 
         messages.append({"role": "user", "content": f"请解题：{problem}"})
         extra = {"think": False} if self.use_local else {}
@@ -146,9 +150,28 @@ class MathAgent:
         return "⚠️ 达到最大迭代次数，请尝试更简单的描述方式。"
 
     def solve_stream(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None):
-        """Run full agentic loop, return a fake stream of the complete answer."""
-        answer = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
-        return _fake_stream(answer)
+        """Run full agentic loop, return a stream of the complete answer."""
+        result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
+        # 视觉模式直接返回真实 stream，文字模式返回 fake stream
+        if isinstance(result, str):
+            return _fake_stream(result)
+        return result
+
+
+def _compress_image(image_bytes: bytes, max_size: int = 1024) -> bytes:
+    """压缩图片，减少 base64 体积。"""
+    try:
+        from PIL import Image
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
+        w, h = img.size
+        if max(w, h) > max_size:
+            r = max_size / max(w, h)
+            img = img.resize((int(w * r), int(h * r)), Image.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+    except Exception:
+        return image_bytes
 
 
 def _fake_stream(text: str):
