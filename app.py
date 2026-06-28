@@ -277,18 +277,6 @@ with st.sidebar:
         st.warning("未配置 GEMINI_API_KEY，拍题识别不可用")
 
     st.divider()
-    st.markdown("**🎓 解题模式**")
-    guide_mode = st.toggle(
-        "引导解题（苏格拉底式）",
-        value=False,
-        help="开启后 AI 不直接给答案，而是逐步引导你思考",
-    )
-    if guide_mode:
-        st.info("💡 引导模式：AI 会给提示，引导你自主解题")
-    else:
-        st.caption("直接模式：给出完整解题过程")
-
-    st.divider()
     st.markdown("**📝 示例题目**")
     for ex in EXAMPLES:
         if st.button(ex, use_container_width=True, key=ex):
@@ -348,6 +336,45 @@ with st.expander("⚙️ 切换模型", expanded=False):
     )
     if not use_local:
         selected_model = _mobile_model
+
+# ── 快捷控制栏（手机/桌面均可见）─────────────────────────────────────────────
+_ctrl_col1, _ctrl_col2 = st.columns([1, 1])
+with _ctrl_col1:
+    guide_mode = st.toggle(
+        "💡 引导解题模式",
+        value=False,
+        key="guide_mode_main",
+        help="开启后 AI 不直接给答案，逐步引导你自主思考",
+    )
+with _ctrl_col2:
+    _wb_count = len(st.session_state.wrong_book)
+    _wb_btn_label = f"📓 错题本 ({_wb_count})" if _wb_count else "📓 错题本"
+    if st.button(_wb_btn_label, use_container_width=True, key="wb_toggle"):
+        st.session_state["show_wrongbook"] = not st.session_state.get("show_wrongbook", False)
+
+# 错题本面板（可折叠）
+if st.session_state.get("show_wrongbook", False):
+    with st.container(border=True):
+        st.markdown("#### 📓 错题本")
+        wrong_book_main = st.session_state.wrong_book
+        if not wrong_book_main:
+            st.caption("还没有保存的题目，解完题后点「加入错题本」")
+        else:
+            for wi, wp in enumerate(wrong_book_main):
+                with st.expander(f"**{wi+1}.** {wp['question'][:50]}{'…' if len(wp['question']) > 50 else ''}", expanded=False):
+                    if wp.get("tags"):
+                        render_tags(wp["tags"])
+                    st.caption(f"保存于 {wp.get('saved_at', '')}")
+                    _wc1, _wc2 = st.columns(2)
+                    with _wc1:
+                        if st.button("重新解题", key=f"wbm_redo_{wi}", use_container_width=True):
+                            st.session_state["prefill"] = wp["question"]
+                            st.session_state["show_wrongbook"] = False
+                            st.rerun()
+                    with _wc2:
+                        if st.button("删除", key=f"wbm_del_{wi}", use_container_width=True):
+                            st.session_state.wrong_book.pop(wi)
+                            st.rerun()
 
 for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
