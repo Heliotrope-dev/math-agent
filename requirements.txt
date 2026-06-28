@@ -3,3 +3,4 @@ sympy
 streamlit
 requests
 httpx
+Pillow

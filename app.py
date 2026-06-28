@@ -10,7 +10,8 @@ import os
 import sys
 import base64
 import requests
-from io import StringIO
+from io import StringIO, BytesIO
+from PIL import Image
 
 import streamlit as st
 
@@ -57,21 +58,38 @@ def get_agent(use_local: bool, model: str) -> MathAgent:
     return MathAgent(use_local=use_local, model=model)
 
 
+def _compress_image(image_bytes: bytes, max_size: int = 800) -> bytes:
+    """压缩图片到 max_size px 以内，减少上传体积。"""
+    img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_size:
+        ratio = max_size / max(w, h)
+        img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
 def ocr_math_image(image_bytes: bytes) -> str:
     """用 Gemini 视觉识别图片中的数学题。"""
-    if not _GEMINI_KEY:
+    key = _secret("GEMINI_API_KEY")
+    if not key:
         return "（未配置 GEMINI_API_KEY，无法识别图片）"
-    b64 = base64.b64encode(image_bytes).decode()
     try:
+        compressed = _compress_image(image_bytes)
+        b64 = base64.b64encode(compressed).decode()
         resp = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_GEMINI_KEY}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}",
             json={"contents": [{"parts": [
                 {"text": "请识别图片中的数学题，只输出题目原文，不要解答，不要多余说明"},
                 {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
             ]}]},
-            timeout=15,
+            timeout=20,
         )
         data = resp.json()
+        if "candidates" not in data:
+            err = data.get("error", {})
+            return f"识别失败：{err.get('message', str(data))}"
         return data["candidates"][0]["content"]["parts"][0]["text"].strip()
     except Exception as e:
         return f"识别失败：{e}"
