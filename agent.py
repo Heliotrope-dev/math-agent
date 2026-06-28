@@ -36,16 +36,23 @@ When given a problem:
 Respond in Chinese. Use LaTeX for ALL mathematical notation."""
 
 
-VISION_MODELS = {"gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"}
+VISION_MODELS = {
+    "gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro",
+    "Qwen/Qwen2.5-VL-72B-Instruct", "Qwen/Qwen2-VL-7B-Instruct",
+}
 
 LOCAL_MODELS = ["phi4-mini", "phi4", "qwen2.5:7b", "qwen2.5:14b", "gemma3:12b"]
 DEFAULT_LOCAL_MODEL = "phi4-mini"
 
 CLOUD_PROVIDERS = {
+    # 硅基流动（国内，支持视觉，有免费额度）
+    "Qwen/Qwen2.5-VL-72B-Instruct": ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
+    "Qwen/Qwen2-VL-7B-Instruct":    ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
+    # DeepSeek（文字解题）
+    "deepseek-chat":                 ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
+    # Gemini（备用）
     "gemini-2.0-flash":              ("google", "https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
     "gemini-2.5-flash":              ("google", "https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
-    "gemini-2.5-pro":                ("google", "https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
-    "deepseek-chat":                 ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
 }
 
 

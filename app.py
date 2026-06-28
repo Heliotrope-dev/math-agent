@@ -16,7 +16,7 @@ from PIL import Image
 import streamlit as st
 
 # 把 Streamlit Cloud secrets 注入环境变量，让 agent.py 正常读取
-for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY"):
+for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
     if _k not in os.environ:
         try:
             os.environ[_k] = st.secrets[_k]
@@ -125,10 +125,11 @@ with st.sidebar:
         cloud_options = list(CLOUD_PROVIDERS.keys())
         selected_model = st.selectbox("云端模型", options=cloud_options, index=cloud_options.index("deepseek-chat"))
         labels = {
-            "gemini-2.0-flash": "⚡ 快速，免费额度大",
-            "gemini-2.5-flash": "🔥 更强，支持推理",
-            "gemini-2.5-pro":   "💎 最强，复杂题首选",
-            "deepseek-chat":    "💰 便宜，中文好",
+            "Qwen/Qwen2.5-VL-72B-Instruct": "📷 看图解题 · 推荐拍题用（需配置硅基流动Key）",
+            "Qwen/Qwen2-VL-7B-Instruct":    "📷 看图解题 · 轻量版（需配置硅基流动Key）",
+            "deepseek-chat":                 "💬 文字解题 · 默认推荐",
+            "gemini-2.0-flash":              "⚡ 备用",
+            "gemini-2.5-flash":              "🔥 备用（更强）",
         }
         st.info(labels.get(selected_model, "☁️ 云端模式"))
 
@@ -204,24 +205,40 @@ with tab_photo:
         label_visibility="collapsed",
     )
     if photo_file:
-        st.image(photo_file.read(), width=360)
+        img_bytes = photo_file.read()
+        st.image(img_bytes, width=360)
 
-        photo_question = st.text_area(
-            "输入题目内容",
-            height=100,
-            placeholder="对照图片输入题目，例如：第6题，求曲面 z=a(x²+y²) 的第一基本形式",
-            key="photo_question",
-        )
-        photo_note = st.text_input(
-            "补充说明（可选）",
-            placeholder="例如：只解第6题 / 用矩阵方法 / 写出详细步骤",
-            key="photo_note",
-        )
-        final_q = photo_question.strip()
-        if photo_note.strip():
-            final_q += "\n" + photo_note.strip()
-        if st.button("✅ 解这道题", key="photo_confirm", type="primary", disabled=not final_q):
-            user_input = final_q
+        _agent_tmp = get_agent(use_local, selected_model)
+        _vision = _agent_tmp.supports_vision
+
+        if _vision:
+            st.success("📷 视觉模式：AI 直接看图解题")
+            photo_note = st.text_input(
+                "说明（可选）",
+                placeholder="例如：只解第3题 / 第6题用行列式方法",
+                key="photo_note",
+            )
+            if st.button("✅ 解这道题", key="photo_confirm", type="primary"):
+                st.session_state["pending_image"] = img_bytes
+                user_input = photo_note.strip() or "请解答图片中的数学题"
+        else:
+            st.info("💬 当前模型不支持看图，请手动输入题目（或切换到 Qwen2.5-VL 视觉模型）")
+            photo_question = st.text_area(
+                "输入题目内容",
+                height=100,
+                placeholder="对照图片输入题目，例如：第6题，求曲面 z=a(x²+y²) 的第一基本形式",
+                key="photo_question",
+            )
+            photo_note = st.text_input(
+                "补充说明（可选）",
+                placeholder="例如：只解第6题 / 用矩阵方法",
+                key="photo_note",
+            )
+            final_q = photo_question.strip()
+            if photo_note.strip():
+                final_q += "\n" + photo_note.strip()
+            if st.button("✅ 解这道题", key="photo_confirm", type="primary", disabled=not final_q):
+                user_input = final_q
 
 # ── Agent 解题 ─────────────────────────────────────────────────────────────────
 if user_input:
