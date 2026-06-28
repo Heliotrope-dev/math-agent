@@ -15,7 +15,7 @@ from openai import OpenAI
 from tools import TOOL_DEFINITIONS, execute_tool
 
 # macOS 系统代理会被 httpx 自动读取并拦截 localhost 请求，需要显式禁用
-_NO_PROXY_CLIENT = httpx.Client(trust_env=False)
+# 注：不能在模块级别共享 httpx.Client，每个 agent 实例单独创建避免连接池冲突
 
 MAX_ITERATIONS = 12
 
@@ -88,7 +88,7 @@ class MathAgent:
             self.client = OpenAI(
                 api_key="ollama",
                 base_url="http://localhost:11434/v1",
-                http_client=_NO_PROXY_CLIENT,
+                http_client=httpx.Client(trust_env=False),
             )
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
