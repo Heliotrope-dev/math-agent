@@ -40,6 +40,21 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
+/* ── 全局深色背景（覆盖 HF Spaces / 亮色主题）── */
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="block-container"],
+section.main {
+    background-color: #0f0f1a !important;
+    color: #e0e0f0 !important;
+}
+
+/* ── 文字颜色 ── */
+p, span, label, div, li, td, th, h1, h2, h3, h4 {
+    color: #e0e0f0 !important;
+}
+
 /* ── 隐藏默认顶栏和底部 ── */
 #MainMenu, footer, header { visibility: hidden; }
 
