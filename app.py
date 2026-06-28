@@ -125,8 +125,8 @@ with st.sidebar:
         cloud_options = list(CLOUD_PROVIDERS.keys())
         selected_model = st.selectbox("云端模型", options=cloud_options, index=cloud_options.index("deepseek-chat"))
         labels = {
-            "Qwen/Qwen2.5-VL-72B-Instruct": "📷 看图解题 · 推荐拍题用（需配置硅基流动Key）",
-            "Qwen/Qwen2-VL-7B-Instruct":    "📷 看图解题 · 轻量版（需配置硅基流动Key）",
+            "Qwen/Qwen3-VL-32B-Instruct":   "📷 拍题首选 · 看图解题（硅基流动）",
+            "Qwen/Qwen3-VL-8B-Instruct":    "📷 拍题轻量版 · 速度更快（硅基流动）",
             "deepseek-chat":                 "💬 文字解题 · 默认推荐",
             "gemini-2.0-flash":              "⚡ 备用",
             "gemini-2.5-flash":              "🔥 备用（更强）",
