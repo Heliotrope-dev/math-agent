@@ -121,46 +121,21 @@ class MathAgent:
         return "⚠️ 达到最大迭代次数，请尝试更简单的描述方式。"
 
     def solve_stream(self, problem: str, history: list = None, on_tool_call=None):
-        """Run agentic loop for tool calls, then stream the final response."""
-        messages = [{"role": "system", "content": _SYSTEM}]
-        if history:
-            messages.extend(history)
-        messages.append({"role": "user", "content": f"请解题：{problem}"})
+        """Run full agentic loop, return a fake stream of the complete answer."""
+        answer = self.solve(problem, history=history, on_tool_call=on_tool_call)
+        return _fake_stream(answer)
 
-        extra = {"think": False} if self.use_local else {}
 
-        for iteration in range(MAX_ITERATIONS):
-            response = self.client.chat.completions.create(
-                model=self.model,
-                tools=TOOL_DEFINITIONS,
-                messages=messages,
-                extra_body=extra,
-            )
-            msg = response.choices[0].message
-            finish_reason = response.choices[0].finish_reason
+def _fake_stream(text: str):
+    """Yield text in chunks that mimic the OpenAI streaming response format."""
+    class _Delta:
+        def __init__(self, c): self.content = c
+    class _Choice:
+        def __init__(self, c): self.delta = _Delta(c)
+    class _Chunk:
+        def __init__(self, c): self.choices = [_Choice(c)]
 
-            if finish_reason != "tool_calls" or not msg.tool_calls:
-                stream = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    extra_body=extra,
-                    stream=True,
-                )
-                return stream
-
-            messages.append(msg)
-            for tc in msg.tool_calls:
-                name = tc.function.name
-                args = json.loads(tc.function.arguments)
-                if on_tool_call:
-                    on_tool_call(name, args, None)
-                result = execute_tool(name, args)
-                if on_tool_call:
-                    on_tool_call(name, args, result)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result,
-                })
-
-        return iter(["⚠️ 达到最大迭代次数"])
+    import re
+    for part in re.split(r'(\s+)', text):
+        if part:
+            yield _Chunk(part)

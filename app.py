@@ -58,6 +58,14 @@ def get_agent(use_local: bool, model: str) -> MathAgent:
     return MathAgent(use_local=use_local, model=model)
 
 
+def fix_latex(text: str) -> str:
+    """把 DeepSeek/Gemini 输出的 \\[...\\] 和 \\(...\\) 转成 Streamlit 能渲染的 $$...$$ 和 $...$。"""
+    import re
+    text = re.sub(r'\\\[\s*(.*?)\s*\\\]', r'\n$$\1$$\n', text, flags=re.DOTALL)
+    text = re.sub(r'\\\(\s*(.*?)\s*\\\)', r'$\1$', text, flags=re.DOTALL)
+    return text
+
+
 def _compress_image(image_bytes: bytes, max_size: int = 800) -> bytes:
     """压缩图片到 max_size px 以内，减少上传体积。"""
     img = Image.open(BytesIO(image_bytes)).convert("RGB")
@@ -170,7 +178,8 @@ if "messages" not in st.session_state:
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
-        st.markdown(msg["content"])
+        content = fix_latex(msg["content"]) if msg["role"] == "assistant" else msg["content"]
+        st.markdown(content)
         if msg.get("trace"):
             with st.expander("🔧 工具调用追踪", expanded=False):
                 st.code(msg["trace"], language="text")
@@ -278,8 +287,8 @@ if user_input:
                     delta = chunk.choices[0].delta.content
                     if delta:
                         collected.append(delta)
-                        answer_placeholder.markdown("".join(collected) + "▌")
-                answer = "".join(collected)
+                        answer_placeholder.markdown(fix_latex("".join(collected)) + "▌")
+                answer = fix_latex("".join(collected))
                 answer_placeholder.markdown(answer)
             except Exception as e:
                 answer = f"❌ 流式输出出错：{e}"
