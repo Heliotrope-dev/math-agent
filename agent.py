@@ -1,12 +1,9 @@
 """
-agent.py — 核心 Agent 循环（DeepSeek 版）
+agent.py — 核心 Agent 循环
 
-DeepSeek 兼容 OpenAI 接口，只需把 base_url 指向 DeepSeek，其余与 OpenAI 完全一致。
-
-与 Ollama 版的区别：
-  Ollama:   response.message.tool_calls        arguments 是 dict
-  DeepSeek: response.choices[0].message.tool_calls  arguments 是 JSON 字符串，需 json.loads
-            tool_result 消息必须带 tool_call_id
+支持两种模式：
+  DeepSeek 模式（默认）：需要 DEEPSEEK_API_KEY 环境变量
+  Ollama 本地模式：设置 USE_LOCAL=1 或传入 use_local=True，使用本地 qwen3.5:9b
 """
 
 import os
@@ -14,39 +11,49 @@ import json
 from openai import OpenAI
 from tools import TOOL_DEFINITIONS, execute_tool
 
-MODEL = "deepseek-chat"
+MAX_ITERATIONS = 12
 
-# DeepSeek 兼容 OpenAI SDK，只改 base_url 和 api_key
-client = OpenAI(
-    api_key=os.environ["DEEPSEEK_API_KEY"],
-    base_url="https://api.deepseek.com",
-)
+_USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
 
 _SYSTEM = """You are an expert mathematics tutor. When given a problem:
 
 - For simple arithmetic (e.g. 1+1, 3×4), just use `calculator` once and give the answer directly.
-- For complex problems (equations, calculus, geometry), first call `step_decomposer` to plan,
+- For complex problems (equations, calculus, geometry, complex analysis), first call `step_decomposer` to plan,
   then `formula_lookup` if needed, then `calculator` to compute.
 - Always use `calculator` for computation — never calculate mentally.
+- For limits: use calculator with operation="limit" and variable="x->0" format.
+- For definite integrals: use calculator with operation="definite_integral" and expression="f(x), a, b".
 - End with a clearly marked final answer.
 
 Explain reasoning in Chinese; keep mathematical notation in standard form."""
 
 
 class MathAgent:
-    def solve(self, problem: str) -> str:
-        """对一道数学题运行完整的 agentic loop，返回最终解答文本。"""
-        messages = [
-            {"role": "system", "content": _SYSTEM},
-            {"role": "user",   "content": f"请解题：{problem}"},
-        ]
+    def __init__(self, use_local: bool = _USE_LOCAL):
+        self.use_local = use_local
+        if use_local:
+            self.client = OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
+            self.model = "qwen3.5:9b"
+        else:
+            self.client = OpenAI(
+                api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
+                base_url="https://api.deepseek.com",
+            )
+            self.model = "deepseek-chat"
 
-        print("\n🤔 Agent 思考中...\n")
+    def solve(self, problem: str, history: list = None) -> str:
+        """运行完整的 agentic loop，支持多轮对话历史。"""
+        messages = [{"role": "system", "content": _SYSTEM}]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": f"请解题：{problem}"})
 
-        # ── Agentic loop ────────────────────────────────────────────────
-        while True:
-            response = client.chat.completions.create(
-                model=MODEL,
+        mode_label = "本地 qwen3.5:9b" if self.use_local else "DeepSeek"
+        print(f"\n🤔 Agent 思考中...（{mode_label}）\n")
+
+        for iteration in range(MAX_ITERATIONS):
+            response = self.client.chat.completions.create(
+                model=self.model,
                 tools=TOOL_DEFINITIONS,
                 messages=messages,
             )
@@ -54,17 +61,13 @@ class MathAgent:
             msg = response.choices[0].message
             finish_reason = response.choices[0].finish_reason
 
-            # ── 分支 1：没有工具调用 → 返回最终答案 ────────────────────
-            if finish_reason != "tool_calls":
-                return msg.content
+            if finish_reason != "tool_calls" or not msg.tool_calls:
+                return msg.content or "（无输出）"
 
-            # ── 分支 2：模型请求调用工具 ─────────────────────────────────
-            # 把 assistant 这一轮（含 tool_calls）写入历史
             messages.append(msg)
 
             for tc in msg.tool_calls:
                 name = tc.function.name
-                # OpenAI 格式：arguments 是 JSON 字符串，需要解析成 dict
                 args = json.loads(tc.function.arguments)
 
                 print(f"🔧 调用工具：{name}")
@@ -74,9 +77,10 @@ class MathAgent:
                 preview = result[:120] + ("…" if len(result) > 120 else "")
                 print(f"   结果：{preview}\n")
 
-                # OpenAI 格式要求带 tool_call_id，用于对应是哪次调用的结果
                 messages.append({
                     "role":         "tool",
                     "tool_call_id": tc.id,
                     "content":      result,
                 })
+
+        return "⚠️ 达到最大迭代次数，请尝试更简单的描述方式。"

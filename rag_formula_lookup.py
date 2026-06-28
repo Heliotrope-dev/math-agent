@@ -65,6 +65,26 @@ _DESCRIPTIONS: dict[str, str] = {
     "Fermat's Little Thm": "素数模运算下的费马小定理",
     "Euler's Theorem": "欧拉定理，费马小定理的推广",
     "Fundamental Thm Arith": "算术基本定理，整数的素因数分解唯一性",
+    # complex analysis
+    "C-R Equations":           "柯西黎曼方程，判断复变函数解析性的充要条件",
+    "Cauchy Integral Formula":  "柯西积分公式，用围道积分求解析函数值",
+    "Residue Theorem":          "留数定理，利用极点留数计算围道积分",
+    "First-Order Pole Residue": "一阶极点留数的计算方法",
+    "Laurent Series":           "复变函数在环形域上的洛朗级数展开",
+    "Taylor Series (complex)":  "复变函数在圆形收敛域内的泰勒展开",
+    "Liouville's Theorem":      "刘维尔定理，有界整函数为常数",
+    "Fundamental Thm (Alg)":    "代数基本定理，非常数多项式在复数域有根",
+    # numerical analysis
+    "Lagrange Interpolation":   "拉格朗日插值多项式构造公式",
+    "Newton Interpolation":     "牛顿插值多项式，基于差商构造",
+    "Divided Difference":       "差商的定义和递推计算",
+    "Composite Trapezoidal":    "复化梯形公式，数值积分方法",
+    "Composite Simpson":        "复化辛普森公式，数值积分精度更高",
+    "Newton's Method":          "牛顿迭代法求方程近似根",
+    "Gaussian Elimination":     "高斯消去法求解线性方程组",
+    "Bisection Method":         "二分法求方程根",
+    "Error Estimate (Trap)":    "复化梯形公式的截断误差估计",
+    "Error Estimate (Simp)":    "复化辛普森公式的截断误差估计",
 }
 
 

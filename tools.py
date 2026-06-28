@@ -23,7 +23,7 @@ TOOL_DEFINITIONS = [
             "name": "calculator",
             "description": (
                 "Perform symbolic or numeric math using SymPy. "
-                "Supports: evaluate, solve (equations), differentiate, integrate, simplify. "
+                "Supports: evaluate, solve (equations), differentiate, integrate, simplify, limit, definite_integral. "
                 "Always use this for any computation — never calculate mentally."
             ),
             "parameters": {
@@ -38,13 +38,15 @@ TOOL_DEFINITIONS = [
                     },
                     "operation": {
                         "type": "string",
-                        "enum": ["evaluate", "solve", "differentiate", "integrate", "simplify"],
+                        "enum": ["evaluate", "solve", "differentiate", "integrate", "simplify", "limit", "definite_integral"],
                         "description": (
                             "evaluate — compute/simplify value; "
                             "solve — find roots or solutions; "
                             "differentiate — compute derivative; "
                             "integrate — compute indefinite integral; "
-                            "simplify — algebraic simplification"
+                            "simplify — algebraic simplification; "
+                            "limit — compute limit (use variable='x->0' format for limit point); "
+                            "definite_integral — compute definite integral (expression='f(x), a, b')"
                         ),
                     },
                     "variable": {
@@ -76,6 +78,8 @@ TOOL_DEFINITIONS = [
                             "trigonometry",
                             "statistics",
                             "number_theory",
+                            "complex_analysis",
+                            "numerical_analysis",
                         ],
                         "description": "Math topic to look up.",
                     }
@@ -168,6 +172,28 @@ _FORMULAS: dict[str, dict[str, str]] = {
         "Euler's Theorem":      "aᵠ⁽ⁿ⁾ ≡ 1 (mod n)  当 gcd(a,n)=1",
         "Fundamental Thm Arith":"每个 >1 的整数可唯一分解为素数之积",
     },
+    "complex_analysis": {
+        "C-R Equations":          "∂u/∂x = ∂v/∂y,  ∂u/∂y = -∂v/∂x  （解析函数的充要条件）",
+        "Cauchy Integral Formula": "f(z₀) = (1/2πi) ∮ f(z)/(z-z₀) dz",
+        "Residue Theorem":         "∮ f(z)dz = 2πi · Σ Res[f, zₖ]",
+        "First-Order Pole Residue":"Res[f, z₀] = lim(z→z₀) (z-z₀)·f(z)",
+        "Laurent Series":          "f(z) = Σ aₙ(z-z₀)ⁿ，n从-∞到+∞",
+        "Taylor Series (complex)": "f(z) = Σ f⁽ⁿ⁾(z₀)/n! · (z-z₀)ⁿ，收敛域内",
+        "Liouville's Theorem":     "有界整函数必为常数",
+        "Fundamental Thm (Alg)":   "非常数多项式在ℂ上至少有一个零点",
+    },
+    "numerical_analysis": {
+        "Lagrange Interpolation":  "Lₙ(x) = Σ yₖ·∏(x-xⱼ)/(xₖ-xⱼ)，j≠k",
+        "Newton Interpolation":    "N(x) = f[x₀] + f[x₀,x₁](x-x₀) + f[x₀,x₁,x₂](x-x₀)(x-x₁)+…",
+        "Divided Difference":      "f[x₀,x₁] = (f(x₁)-f(x₀))/(x₁-x₀)，高阶类似",
+        "Composite Trapezoidal":   "Tₙ = h/2·[f(x₀) + 2Σf(xₖ) + f(xₙ)]，h=(b-a)/n",
+        "Composite Simpson":       "Sₙ = h/3·[f(x₀)+4f(x₁)+2f(x₂)+…+4f(xₙ₋₁)+f(xₙ)]",
+        "Newton's Method":         "xₙ₊₁ = xₙ - f(xₙ)/f'(xₙ)，二阶收敛",
+        "Gaussian Elimination":    "对增广矩阵[A|b]做行变换化为上三角，再回代",
+        "Bisection Method":        "若f(a)·f(b)<0，取中点c=(a+b)/2，缩小区间",
+        "Error Estimate (Trap)":   "|Eₙ| ≤ (b-a)³/(12n²) · max|f''(x)|",
+        "Error Estimate (Simp)":   "|Eₙ| ≤ (b-a)⁵/(180n⁴) · max|f⁽⁴⁾(x)|",
+    },
 }
 
 # 解题步骤模板（按题型匹配）
@@ -199,6 +225,20 @@ _STEP_TEMPLATES: dict[str, list[str]] = {
         "3. 列出计算公式",
         "4. 代入数值计算",
         "5. 检查概率和是否为 1",
+    ],
+    "complex_analysis": [
+        "1. 写出 f(z) = u(x,y) + iv(x,y)，分离实部虚部",
+        "2. 验证柯西-黎曼方程（判断解析性）",
+        "3. 确定奇点（极点 / 本性奇点）及其阶数",
+        "4. 计算留数（一阶极点用极限公式；高阶用导数公式）",
+        "5. 用留数定理或柯西积分公式计算围道积分",
+    ],
+    "numerical": [
+        "1. 确定问题类型（插值 / 数值积分 / 方程求根 / 线性方程组）",
+        "2. 选择算法（拉格朗日/牛顿插值；梯形/Simpson；牛顿迭代/二分；高斯消去）",
+        "3. 建立差商表或节点函数值表",
+        "4. 代入公式计算",
+        "5. 估计误差，判断精度是否满足要求",
     ],
     "default": [
         "1. 识别题型，提取关键信息",
@@ -252,6 +292,29 @@ def _run_calculator(expression: str, operation: str, variable: str = "x") -> str
             simplified = sp.simplify(expr)
             return f"原式：{expression}\n化简结果：{simplified}"
 
+        elif operation == "limit":
+            if "->" in variable:
+                var_name, point_str = variable.split("->", 1)
+                var_sym = sp.Symbol(var_name.strip())
+                point = sp.sympify(point_str.strip())
+            else:
+                var_sym = sp.Symbol(variable)
+                point = sp.sympify("0")
+            expr = sp.sympify(expr_str)
+            result = sp.limit(expr, var_sym, point)
+            return f"lim({variable}) ({expression}) = {result}"
+
+        elif operation == "definite_integral":
+            parts = [p.strip() for p in expr_str.split(",")]
+            if len(parts) == 3:
+                expr = sp.sympify(parts[0])
+                a, b = sp.sympify(parts[1]), sp.sympify(parts[2])
+                result = sp.integrate(expr, (var, a, b))
+                numeric = sp.N(result)
+                return f"∫[{parts[1]},{parts[2]}] ({parts[0]}) d{variable} = {result} ≈ {numeric}"
+            else:
+                return "definite_integral 格式：'expression, lower, upper'，例如 'x**2, 0, 1'"
+
         else:
             return f"未知操作：{operation}"
 
@@ -268,6 +331,9 @@ def _run_formula_lookup(topic: str) -> str:
         "代数": "algebra", "几何": "geometry", "微积分": "calculus",
         "三角": "trigonometry", "三角函数": "trigonometry",
         "统计": "statistics", "概率": "statistics", "数论": "number_theory",
+        "复变函数": "complex_analysis", "复变": "complex_analysis",
+        "数值分析": "numerical_analysis", "数值": "numerical_analysis",
+        "插值": "numerical_analysis", "积分": "calculus",
     }
     topic = _zh_map.get(topic, topic)
     formulas = _FORMULAS.get(topic, {})
@@ -296,6 +362,10 @@ def _run_step_decomposer(problem_type: str, problem: str) -> str:
         key = "calculus"
     elif any(w in pt_lower for w in ["statistics", "统计", "probability", "概率", "distribution"]):
         key = "statistics"
+    elif any(w in pt_lower for w in ["complex", "复变", "residue", "留数", "cauchy", "analytic", "解析"]):
+        key = "complex_analysis"
+    elif any(w in pt_lower for w in ["numerical", "数值", "interpolat", "插值", "trapezoidal", "梯形", "bisection"]):
+        key = "numerical"
 
     steps = "\n".join(_STEP_TEMPLATES[key])
     return (
