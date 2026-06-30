@@ -18,7 +18,7 @@ from tools import TOOL_DEFINITIONS, execute_tool
 # 注：不能在模块级别共享 httpx.Client，每个 agent 实例单独创建避免连接池冲突
 
 _USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
-_DEFAULT_MAX_ITERATIONS = 12
+_DEFAULT_MAX_ITERATIONS = 20
 _MAX_HISTORY_TURNS = 10  # 保留最近 N 轮对话（user+assistant 算一轮）
 
 _SYSTEM = """你是一位友好的数学老师助手，既能解题也能正常聊天。
@@ -144,9 +144,12 @@ class MathAgent:
             b64 = base64.b64encode(image_bytes).decode()
             _default_prompt = "请解答图片中的数学题"
             if problem and problem.strip() != _default_prompt:
-                prompt = f"图片中可能有多道题。请严格按照用户要求，只解答以下内容：{problem}\n不要解答图片中的其他题目。"
+                prompt = (
+                    f"图片中有多道数学题。请只找到并解答用户指定的题目：{problem}\n"
+                    "要求：给出完整解题步骤和最终答案，用 $$ ... $$ 标注最终答案，不要解答其他题目。"
+                )
             else:
-                prompt = "请识别并解答图片中所有数学题，给出完整解题过程。"
+                prompt = "请识别并解答图片中所有数学题，给出完整解题过程和最终答案。"
             messages.append({"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
@@ -227,7 +230,15 @@ class MathAgent:
                     "content":      result,
                 })
 
-        return "⚠️ 达到最大迭代次数，请尝试更简单的描述方式。"
+        # 迭代超限：让模型根据已有工具结果直接给出答案
+        messages.append({"role": "user", "content": "请根据上面的计算结果，直接给出最终答案，不要再调用工具。"})
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model, messages=messages, max_tokens=2048,
+            )
+            return resp.choices[0].message.content or "（无输出）"
+        except Exception:
+            return "⚠️ 解题超时，请尝试把题目拆分成更小的步骤发送。"
 
     def solve_stream(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None):
         """Run full agentic loop, return a stream of the complete answer."""
