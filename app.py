@@ -6,7 +6,7 @@ Launch:
   USE_LOCAL=1 streamlit run app.py
 """
 
-import os, sys, base64, requests, re, time, random, hashlib, json, secrets as _secrets
+import os, sys, base64, requests, re, time, random, hashlib, json, secrets as _secrets, contextlib
 from io import StringIO, BytesIO
 from datetime import datetime, timedelta
 import tempfile
@@ -98,17 +98,36 @@ def _load_wrong_book(email: str) -> list:
 def _save_wrong_book(email: str, wb: list):
     if not email:
         return
-    _sb_delete("wrong_book", {"email": f"eq.{email}"})
-    if wb:
-        _sb_post("wrong_book", [
-            {
-                "email": email,
-                "question": item["question"],
-                "saved_at": item.get("saved_at", ""),
-                "image_b64": item.get("image_b64", ""),
-            }
-            for item in wb
-        ])
+    rows = [
+        {
+            "email": email,
+            "question": item["question"],
+            "saved_at": item.get("saved_at", ""),
+            "image_b64": item.get("image_b64", ""),
+        }
+        for item in wb
+    ] if wb else []
+    # 先备份现有数据，delete 后 insert 失败时可以恢复
+    try:
+        _backup = _load_wrong_book(email)
+    except Exception:
+        _backup = []
+    try:
+        _sb_delete("wrong_book", {"email": f"eq.{email}"})
+        if rows:
+            _sb_post("wrong_book", rows)
+    except Exception:
+        # insert 失败，尝试恢复备份数据
+        if _backup:
+            try:
+                _sb_delete("wrong_book", {"email": f"eq.{email}"})
+                _sb_post("wrong_book", [
+                    {"email": email, "question": x["question"],
+                     "saved_at": x.get("saved_at", ""), "image_b64": x.get("image_b64", "")}
+                    for x in _backup
+                ])
+            except Exception:
+                pass
 
 def _show_login_page():
     st.markdown("""
@@ -193,6 +212,11 @@ if _stored_token and not st.session_state.get("logged_in"):
             del st.query_params["_auth"]
         except Exception:
             pass
+        # 同步清除 localStorage，防止过期 token 导致无限 reload
+        _cv1.html(
+            '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");}catch(e){}</script>',
+            height=1,
+        )
 
 st.markdown("""
 <style>
@@ -754,12 +778,13 @@ def fix_latex(text):
 
     # 行内 $ ... $ 里含矩阵/多行环境时，升级为块级 $$ ... $$
     # 防止 & 和 \\ 被 markdown 解析破坏
+    # 注：不用 re.DOTALL，限制匹配在单行内，避免跨段落回溯（ReDoS）
     def _upgrade_matrix(m):
         inner = m.group(1)
         if r'\begin{' in inner:
             return f'\n$$\n{inner}\n$$\n'
         return m.group(0)
-    text = re.sub(r'\$(?!\$)(.*?)\$(?!\$)', _upgrade_matrix, text, flags=re.DOTALL)
+    text = re.sub(r'\$(?!\$)([^\$]{1,2000}?)\$(?!\$)', _upgrade_matrix, text)
 
     # 修复奇数个 $$（未关闭的块公式）
     if text.count('$$') % 2 != 0:
@@ -1512,18 +1537,16 @@ if user_input:
                 _agent = get_agent(_solve_local, _solve_model, guide_mode=_use_guide)
 
                 buf = StringIO()
-                sys.stdout = buf
                 try:
-                    stream = _agent.solve_stream(
-                        solve_input, history=solve_history,
-                        on_tool_call=on_tool_call, image_bytes=_img_bytes,
-                    )
+                    with contextlib.redirect_stdout(buf):
+                        stream = _agent.solve_stream(
+                            solve_input, history=solve_history,
+                            on_tool_call=on_tool_call, image_bytes=_img_bytes,
+                        )
                     err = None
                 except Exception as exc:
                     import traceback
                     stream, err = None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
-                finally:
-                    sys.stdout = sys.__stdout__
                 status.update(label="完成", state="complete", expanded=False)
 
             if stream is not None:
