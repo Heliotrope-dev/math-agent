@@ -158,6 +158,13 @@ st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
 import extra_streamlit_components as _stx
 _cm = _stx.CookieManager(key="_math_cm")
 _stored_token = _cm.get(_TOKEN_COOKIE)
+
+# CookieManager 第一次渲染时 JS 尚未回传 cookie，需要等一个周期
+# 用 _cm_ready 标记：首次渲染直接 rerun，第二次才真正读 cookie
+if not st.session_state.get("_cm_ready") and not st.session_state.get("logged_in"):
+    st.session_state["_cm_ready"] = True
+    st.rerun()
+
 if _stored_token and not st.session_state.get("logged_in"):
     _auto_email = _validate_token(_stored_token)
     if _auto_email:
