@@ -874,8 +874,13 @@ with _hdr_title_col:
         '<div class="app-header"><span class="app-header-title">🧮 &nbsp; Math Agent</span></div>',
         unsafe_allow_html=True,
     )
+_ADMIN_EMAIL = "a13989358483@gmail.com"
 with _hdr_right_col:
-    use_local = st.checkbox("离线 Ollama", value=_USE_LOCAL, key="top_use_local")
+    _is_admin = st.session_state.get("user_email", "") == _ADMIN_EMAIL
+    if _is_admin:
+        use_local = st.checkbox("离线 Ollama", value=_USE_LOCAL, key="top_use_local")
+    else:
+        use_local = False
 
 # ── 手机端弹出菜单（覆盖主内容区）────────────────────────────────────────────
 if st.session_state.show_mobile_menu:
