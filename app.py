@@ -1474,13 +1474,16 @@ if user_input:
                         trace_lines.append(f"   → {preview}  ({elapsed:.1f}s)\n")
 
                 _solve_model = selected_model
+                _solve_local = use_local  # 拍题时可能临时切到云端
                 _use_guide = guide_mode and not _img_bytes and not _sim_data
                 if _img_bytes:
                     if _secret("GEMINI_API_KEY"):
                         _solve_model = "gemini-2.0-flash"
+                        _solve_local = False  # 视觉模型用云端，不走 Ollama
                         status.update(label="切换视觉模型（Gemini）…")
                     elif _secret("SILICONFLOW_API_KEY"):
                         _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+                        _solve_local = False
                         status.update(label="切换视觉模型（Qwen VL）…")
                     else:
                         # 没有视觉 API，先 OCR 成文字再解题
@@ -1491,7 +1494,7 @@ if user_input:
                             if user_input and user_input != "请解答图片中的数学题":
                                 solve_input += f"\n（补充说明：{user_input}）"
                         _img_bytes = None  # 已转为文字，不再发图
-                _agent = get_agent(use_local, _solve_model, guide_mode=_use_guide)
+                _agent = get_agent(_solve_local, _solve_model, guide_mode=_use_guide)
 
                 buf = StringIO()
                 sys.stdout = buf
