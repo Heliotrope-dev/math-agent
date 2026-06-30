@@ -1042,36 +1042,41 @@ _can_act = bool(_last_user_q and _last_asst_a)
 
 # ── 加号面板（4 功能：图片 / 文件 / 举一反三 / 引导模式）────────────────────
 if st.session_state.get("show_plus"):
-    st.markdown('<div class="plus-panel">', unsafe_allow_html=True)
-    gc1, gc2, gc3, gc4 = st.columns(4)
-    with gc1:
-        if st.button("🖼️\n\n图片", key="gp_photo", use_container_width=True):
-            st.session_state.show_plus = False
-            st.session_state.show_photo = True
-            st.rerun()
-    with gc2:
-        if st.button("📄\n\n文件", key="gp_file", use_container_width=True):
-            st.session_state.show_plus = False
-            st.session_state.show_file = True
-            st.rerun()
-    with gc3:
-        if st.button("🎯\n\n举一反三", key="gp_sim", use_container_width=True,
-                     disabled=not _can_act):
-            if _can_act:
-                st.session_state["_similar"] = {
-                    "question": _last_user_q,
-                    "answer": _last_asst_a["content"][:400],
-                }
+    with st.container():
+        st.markdown(
+            '<div style="background:#F5F0EB;border:1px solid #D4CEC8;'
+            'border-radius:16px;padding:12px 8px;margin:6px 0">',
+            unsafe_allow_html=True,
+        )
+        gc1, gc2, gc3, gc4 = st.columns(4)
+        with gc1:
+            if st.button("🖼️\n\n图片", key="gp_photo", use_container_width=True):
+                st.session_state.show_plus = False
+                st.session_state.show_photo = True
+                st.rerun()
+        with gc2:
+            if st.button("📄\n\n文件", key="gp_file", use_container_width=True):
+                st.session_state.show_plus = False
+                st.session_state.show_file = True
+                st.rerun()
+        with gc3:
+            if st.button("🎯\n\n举一反三", key="gp_sim", use_container_width=True,
+                         disabled=not _can_act):
+                if _can_act:
+                    st.session_state["_similar"] = {
+                        "question": _last_user_q,
+                        "answer": _last_asst_a["content"][:400],
+                    }
+                    st.session_state.show_plus = False
+                    st.rerun()
+        with gc4:
+            _gm_active = st.session_state.guide_mode
+            _gm_lbl = "🧭\n\n引导✓" if _gm_active else "🧭\n\n引导"
+            if st.button(_gm_lbl, key="gp_guide", use_container_width=True):
+                st.session_state.guide_mode = not _gm_active
                 st.session_state.show_plus = False
                 st.rerun()
-    with gc4:
-        _gm_active = st.session_state.guide_mode
-        _gm_lbl = "🧭\n\n引导✓" if _gm_active else "🧭\n\n引导"
-        if st.button(_gm_lbl, key="gp_guide", use_container_width=True):
-            st.session_state.guide_mode = not _gm_active
-            st.session_state.show_plus = False
-            st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ── 图片面板：手机点"Browse files"会弹出相机/相册选择 ──────────────────────
 if st.session_state.get("show_photo"):
@@ -1206,24 +1211,27 @@ with _tb_model:
 with _tb_plus:
     st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
     if st.button("✕" if st.session_state.get("show_plus") else "➕", key="tb_plus"):
-        _on = st.session_state.get("show_plus", False)
-        st.session_state.show_plus = not _on
+        st.session_state.show_plus = not st.session_state.get("show_plus", False)
         st.session_state.show_mic = False
         st.session_state.show_photo = False
         st.session_state.show_file = False
+        st.session_state["_panel_just_toggled"] = True  # 防止误触发发送
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ── 文字输入（固定底部）──────────────────────────────────────────────────────
 prefill = st.session_state.pop("prefill", "")
-_direct_input = st.session_state.pop("_direct_input", None)   # 来自语音"发送"按钮
+_direct_input = st.session_state.pop("_direct_input", None)
+_panel_just_toggled = st.session_state.pop("_panel_just_toggled", False)
 _has_patt = "pending_attachment" in st.session_state
 typed = st.chat_input(
     "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
 )
 
-# 确定是否"提交"：chat_input 发送 / 语音直接发送 / 举一反三触发 / prefill（示例题/历史记录点击）
-_submitted = (typed is not None) or (_direct_input is not None) or bool(_similar_ctx) or bool(prefill)
+# 确定是否"提交"：面板刚切换时强制跳过，避免误触发
+_submitted = (not _panel_just_toggled) and (
+    (typed is not None) or (_direct_input is not None) or bool(_similar_ctx) or bool(prefill)
+)
 _eff_text = _direct_input if _direct_input is not None else (typed if typed is not None else prefill)
 
 # ── 取出附件（仅在发送时消费）────────────────────────────────────────────────
