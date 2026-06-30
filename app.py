@@ -125,8 +125,7 @@ def _show_login_page():
             if st.button("登录", type="primary", use_container_width=True, key="do_login"):
                 if _check_user(_em, _hash_pw(_pw)):
                     _tok = _create_token(_em)
-                    _cm.set(_TOKEN_COOKIE, _tok,
-                            expires=datetime.now() + timedelta(days=_TOKEN_DAYS))
+                    _set_cookie(_TOKEN_COOKIE, _tok, _TOKEN_DAYS)
                     st.session_state["logged_in"] = True
                     st.session_state["user_email"] = _em
                     st.session_state["_token"] = _tok
@@ -156,10 +155,22 @@ def _show_login_page():
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
 
 # ── Cookie 管理（7 天免登录）─────────────────────────────────────────────────
-from streamlit_cookies_controller import CookieController as _CC
-_cm = _CC()
-_stored_token = _cm.get(_TOKEN_COOKIE)
+# st.context.cookies 直接从 HTTP 请求头读取，刷新时同步可用，无需 JS 等待
+import streamlit.components.v1 as _stcomp
 
+def _set_cookie(name: str, value: str, days: int = 7):
+    _stcomp.html(
+        f'<script>document.cookie="{name}={value}; max-age={days*86400}; path=/; SameSite=Lax";</script>',
+        height=0,
+    )
+
+def _del_cookie(name: str):
+    _stcomp.html(
+        f'<script>document.cookie="{name}=; max-age=0; path=/; SameSite=Lax";</script>',
+        height=0,
+    )
+
+_stored_token = st.context.cookies.get(_TOKEN_COOKIE, "") or ""
 if _stored_token and not st.session_state.get("logged_in"):
     _auto_email = _validate_token(_stored_token)
     if _auto_email:
@@ -800,7 +811,7 @@ with st.sidebar:
         _tok = st.session_state.pop("_token", None)
         if _tok:
             _invalidate_token(_tok)
-            _cm.remove(_TOKEN_COOKIE)
+            _del_cookie(_TOKEN_COOKIE)
         st.session_state["logged_in"] = False
         st.session_state.pop("user_email", None)
         st.rerun()
@@ -1023,10 +1034,10 @@ _last_asst_a = next((m for m in reversed(st.session_state.messages)
                      if m["role"] == "assistant"), None)
 _can_act = bool(_last_user_q and _last_asst_a)
 
-# ── 加号面板（5 功能：图片 / 文件 / 语音 / 举一反三 / 引导模式）─────────────
+# ── 加号面板（4 功能：图片 / 文件 / 举一反三 / 引导模式）────────────────────
 if st.session_state.get("show_plus"):
     st.markdown('<div class="plus-panel">', unsafe_allow_html=True)
-    gc1, gc2, gc3, gc4, gc5 = st.columns(5)
+    gc1, gc2, gc3, gc4 = st.columns(4)
     with gc1:
         if st.button("🖼️\n\n图片", key="gp_photo", use_container_width=True):
             st.session_state.show_plus = False
@@ -1038,11 +1049,6 @@ if st.session_state.get("show_plus"):
             st.session_state.show_file = True
             st.rerun()
     with gc3:
-        if st.button("🎙️\n\n语音", key="gp_mic2", use_container_width=True):
-            st.session_state.show_plus = False
-            st.session_state.show_mic = True
-            st.rerun()
-    with gc4:
         if st.button("🎯\n\n举一反三", key="gp_sim", use_container_width=True,
                      disabled=not _can_act):
             if _can_act:
@@ -1052,7 +1058,7 @@ if st.session_state.get("show_plus"):
                 }
                 st.session_state.show_plus = False
                 st.rerun()
-    with gc5:
+    with gc4:
         _gm_active = st.session_state.guide_mode
         _gm_lbl = "🧭\n\n引导✓" if _gm_active else "🧭\n\n引导"
         if st.button(_gm_lbl, key="gp_guide", use_container_width=True):
