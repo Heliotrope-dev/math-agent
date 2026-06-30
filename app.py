@@ -1,21 +1,19 @@
 """
-app.py — Math Agent Web UI (Streamlit)
+app.py — Math Solver Web UI
 
 Launch:
-  streamlit run app.py              # DeepSeek/Gemini 云端
-  USE_LOCAL=1 streamlit run app.py  # 本地 Ollama 离线
+  streamlit run app.py
+  USE_LOCAL=1 streamlit run app.py
 """
 
-import os
-import sys
-import base64
-import requests
+import os, sys, base64, requests, re, time, random, hashlib, json, secrets as _secrets
 from io import StringIO, BytesIO
-from PIL import Image
+from datetime import datetime, timedelta
+import tempfile
 
+from PIL import Image
 import streamlit as st
 
-# 把 Streamlit Cloud secrets 注入环境变量，让 agent.py 正常读取
 for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
     if _k not in os.environ:
         try:
@@ -23,648 +21,1306 @@ for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
         except Exception:
             pass
 
-import re
-import time
-from datetime import datetime
-
 from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
 
-st.set_page_config(
-    page_title="Math Solver Agent",
-    page_icon="🧮",
-    layout="wide",
-)
+# ── 用户管理（登录注册 + 7天 Cookie 持久化）─────────────────────────────────
+_USERS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
+_SESSIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions.json")
+_TOKEN_COOKIE  = "math_agent_token"
+_TOKEN_DAYS    = 7
+
+def _load_users():
+    if os.path.exists(_USERS_FILE):
+        with open(_USERS_FILE) as f:
+            return json.load(f)
+    return {}
+
+def _save_users(users: dict):
+    with open(_USERS_FILE, "w") as f:
+        json.dump(users, f, indent=2)
+
+def _hash_pw(pw: str) -> str:
+    return hashlib.sha256(pw.encode()).hexdigest()
+
+def _load_sessions() -> dict:
+    if os.path.exists(_SESSIONS_FILE):
+        with open(_SESSIONS_FILE) as f:
+            return json.load(f)
+    return {}
+
+def _save_sessions(s: dict):
+    with open(_SESSIONS_FILE, "w") as f:
+        json.dump(s, f, indent=2)
+
+def _create_token(email: str) -> str:
+    token = _secrets.token_urlsafe(32)
+    sessions = _load_sessions()
+    now = datetime.now()
+    # 清理过期 token
+    sessions = {t: v for t, v in sessions.items()
+                if datetime.fromisoformat(v["exp"]) > now}
+    sessions[token] = {"email": email, "exp": (now + timedelta(days=_TOKEN_DAYS)).isoformat()}
+    _save_sessions(sessions)
+    return token
+
+def _validate_token(token: str):
+    sessions = _load_sessions()
+    if token in sessions:
+        entry = sessions[token]
+        if datetime.fromisoformat(entry["exp"]) > datetime.now():
+            return entry["email"]
+    return None
+
+def _invalidate_token(token: str):
+    sessions = _load_sessions()
+    sessions.pop(token, None)
+    _save_sessions(sessions)
+
+# ── 错题本持久化（按用户邮箱存盘）───────────────────────────────────────────
+_USER_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_data")
+
+def _wb_path(email: str) -> str:
+    uid = hashlib.md5(email.encode()).hexdigest()
+    d = os.path.join(_USER_DATA_DIR, uid)
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, "wrong_book.json")
+
+def _load_wrong_book(email: str) -> list:
+    if not email:
+        return []
+    p = _wb_path(email)
+    if os.path.exists(p):
+        with open(p) as f:
+            return json.load(f)
+    return []
+
+def _save_wrong_book(email: str, wb: list):
+    if not email:
+        return
+    with open(_wb_path(email), "w", encoding="utf-8") as f:
+        json.dump(wb, f, ensure_ascii=False, indent=2)
+
+def _show_login_page():
+    st.markdown("""
+    <div class="login-logo">
+        <div class="login-logo-icon">🧮</div>
+        <div class="login-logo-title">Math Agent</div>
+        <div class="login-logo-sub">AI 数学助教 · 登录后开始使用</div>
+    </div>
+    """, unsafe_allow_html=True)
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        tab_l, tab_r = st.tabs(["登录", "注册"])
+        with tab_l:
+            _em = st.text_input("邮箱", key="li_email", placeholder="your@email.com")
+            _pw = st.text_input("密码", type="password", key="li_pw")
+            if st.button("登录", type="primary", use_container_width=True, key="do_login"):
+                _users = _load_users()
+                if _em in _users and _users[_em] == _hash_pw(_pw):
+                    _tok = _create_token(_em)
+                    _cm.set(_TOKEN_COOKIE, _tok, max_age=_TOKEN_DAYS * 86400)  # 秒数
+                    st.session_state["logged_in"] = True
+                    st.session_state["user_email"] = _em
+                    st.session_state["_token"] = _tok
+                    st.rerun()
+                else:
+                    st.error("邮箱或密码不正确")
+        with tab_r:
+            _rem = st.text_input("邮箱", key="reg_email", placeholder="your@email.com")
+            _rpw = st.text_input("密码（至少6位）", type="password", key="reg_pw")
+            _rpw2 = st.text_input("确认密码", type="password", key="reg_pw2")
+            if st.button("注册账号", type="primary", use_container_width=True, key="do_reg"):
+                _users = _load_users()
+                if not _rem or "@" not in _rem:
+                    st.error("请输入有效邮箱")
+                elif len(_rpw) < 6:
+                    st.error("密码至少6位")
+                elif _rpw != _rpw2:
+                    st.error("两次密码不一致")
+                elif _rem in _users:
+                    st.error("该邮箱已注册")
+                else:
+                    _users[_rem] = _hash_pw(_rpw)
+                    _save_users(_users)
+                    st.success("注册成功，请切换到登录标签页")
+
+st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
+
+# ── Cookie 管理（7 天免登录）─────────────────────────────────────────────────
+import extra_streamlit_components as _stx
+_cm = _stx.CookieManager(key="_math_cm")
+_stored_token = _cm.get(_TOKEN_COOKIE)
+if _stored_token and not st.session_state.get("logged_in"):
+    _auto_email = _validate_token(_stored_token)
+    if _auto_email:
+        st.session_state["logged_in"] = True
+        st.session_state["user_email"] = _auto_email
+        st.session_state["_token"] = _stored_token
 
 st.markdown("""
 <style>
-/* ── 全局字体 ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-/* ── 全局深色背景（覆盖 HF Spaces / 亮色主题）── */
-.stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stMain"],
-[data-testid="block-container"],
-section.main {
-    background-color: #0f0f1a !important;
-    color: #e0e0f0 !important;
-}
-
-/* ── 文字颜色 ── */
-p, span, label, div, li, td, th, h1, h2, h3, h4 {
-    color: #e0e0f0 !important;
-}
-
-/* ── 隐藏默认顶栏和底部 ── */
-#MainMenu, footer, header { visibility: hidden; }
+/* ══ 全局背景：微信暖米白 ══ */
+html, body { background: #EDE5DC !important; }
+.stApp, [data-testid="stAppViewContainer"],
+[data-testid="stMain"], [data-testid="block-container"],
+section.main, .main, .block-container,
+[data-testid="stBottom"], .stBottom,
+[data-testid="stBottomBlockContainer"],
+[class*="bottom"], [class*="Bottom"],
+footer { background: #EDE5DC !important; }
+p, span, label, div, li, td, th, h1, h2, h3, h4 { color: #1a1a1a !important; }
+#MainMenu, header { visibility: hidden; }
+[data-testid="block-container"] { padding-bottom: 180px !important; }
 
 /* ── 侧边栏 ── */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
-    border-right: 1px solid #2d2d4e;
+    background: #F0EBE5 !important;
+    border-right: 1px solid #D5CEC8 !important;
 }
-[data-testid="stSidebar"] * { color: #e0e0f0 !important; }
+[data-testid="stSidebar"] * { color: #2a2a2a !important; }
 [data-testid="stSidebar"] .stButton button {
-    background: #1e1e3a !important;
-    border: 1px solid #3d3d6e !important;
-    color: #b0b0d0 !important;
+    background: #E8E2DC !important;
+    border: 1px solid #CCC6C0 !important;
+    color: #444 !important;
     border-radius: 8px !important;
     font-size: 0.82rem !important;
-    transition: all 0.2s;
 }
 [data-testid="stSidebar"] .stButton button:hover {
-    background: #2d2d5e !important;
-    border-color: #6c6ccc !important;
-    color: #fff !important;
+    background: #DEDAD4 !important; color: #111 !important;
 }
 
-/* ── 主标题渐变 ── */
-.hero-title {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-size: 2.4rem;
-    font-weight: 700;
-    margin-bottom: 0;
-    line-height: 1.2;
-    text-align: center;
+/* ── 顶部标题 ── */
+.app-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0.5rem 0 1rem; border-bottom: 1px solid #D4CEC8;
 }
-.hero-sub {
-    color: #888;
-    font-size: 0.85rem;
-    margin-top: 4px;
-    margin-bottom: 1.2rem;
-    text-align: center;
-}
+.app-header-title { font-size: 1rem; font-weight: 600; color: #555 !important; }
 
-/* ── 标签页 ── */
-[data-testid="stTabs"] button {
-    font-size: 0.95rem !important;
-    font-weight: 500 !important;
-    border-radius: 8px 8px 0 0 !important;
-}
-[data-testid="stTabs"] button[aria-selected="true"] {
-    color: #764ba2 !important;
-    border-bottom: 2px solid #764ba2 !important;
-}
+/* ── 欢迎页 ── */
+.welcome-wrap { text-align: center; padding: 2.5rem 0 1.5rem; }
+.welcome-title { font-size: 1.8rem; font-weight: 600; color: #1a1a1a !important; margin-bottom: 0.5rem; }
+.welcome-sub { font-size: 0.88rem; color: #888 !important; margin-bottom: 2rem; }
 
-/* ── 聊天气泡 ── */
-[data-testid="stChatMessage"] {
-    border-radius: 16px !important;
+/* ── 示例卡片 ── */
+[data-testid="stVerticalBlock"] [data-testid="stButton"] button {
+    background: #FFFFFF !important;
+    border: 1px solid #D5CEC8 !important;
+    border-radius: 12px !important;
+    color: #333 !important;
+    font-size: 0.85rem !important;
     padding: 12px 16px !important;
-    margin-bottom: 8px !important;
+    text-align: left !important;
+    line-height: 1.45 !important;
+    min-height: 56px !important;
+    height: auto !important;
+    white-space: normal !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+}
+[data-testid="stVerticalBlock"] [data-testid="stButton"] button:hover {
+    background: #F5F0EB !important;
+    border-color: #A8A0A0 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.1) !important;
 }
 
-/* ── 主按钮 ── */
-.stButton button[kind="primary"] {
-    background: linear-gradient(135deg, #667eea, #764ba2) !important;
-    border: none !important;
-    border-radius: 10px !important;
-    color: white !important;
-    font-weight: 600 !important;
-    padding: 0.5rem 1.5rem !important;
-    transition: opacity 0.2s !important;
+/* ── 换一批 ── */
+.refresh-btn button {
+    background: transparent !important;
+    border: 1px solid #C8C0B8 !important;
+    border-radius: 20px !important;
+    color: #888 !important; font-size: 0.82rem !important;
 }
-.stButton button[kind="primary"]:hover { opacity: 0.88 !important; }
+.refresh-btn button:hover { border-color: #999 !important; color: #444 !important; }
+
+/* ── 微信气泡：用户（右）── */
+.bubble-user {
+    background: #95EC69;
+    color: #111;
+    border-radius: 18px 4px 18px 18px;
+    padding: 10px 14px;
+    word-break: break-word;
+    line-height: 1.6;
+    font-size: 0.95rem;
+    display: inline-block;
+    max-width: 100%;
+}
+/* ── 微信气泡：AI（左）── */
+.bubble-asst-wrap {
+    background: #FFFFFF;
+    border-radius: 4px 18px 18px 18px;
+    padding: 10px 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    word-break: break-word;
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+.bubble-asst-wrap p, .bubble-asst-wrap li { color: #1a1a1a !important; }
+
+.msg-row-user {
+    display: flex; justify-content: flex-end; align-items: flex-end;
+    gap: 8px; margin: 8px 0;
+}
+.msg-row-asst {
+    display: flex; justify-content: flex-start; align-items: flex-end;
+    gap: 8px; margin: 8px 0;
+}
+/* 头像圆角方块（微信风格）*/
+.av {
+    width: 36px; height: 36px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+}
+.av-ai   { background: #5CBE6E; }
+.av-user { background: #7BC47B; }
+
+/* ── 引导模式开关条 ── */
+.guide-bar { display: flex; align-items: center; gap: 8px; padding: 2px 0 4px; }
+.guide-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #E8E2DC; border: 1px solid #C8C2BC; border-radius: 20px;
+    padding: 4px 12px; font-size: 0.82rem; color: #555;
+    cursor: pointer; user-select: none; transition: all 0.15s;
+}
+.guide-chip.on { background: #2aae67; border-color: #2aae67; color: #fff; }
+
+/* ── 加号面板 ── */
+.plus-panel {
+    background: #F5F0EB; border: 1px solid #D4CEC8;
+    border-radius: 16px; padding: 16px 12px; margin: 8px 0;
+}
+.plus-panel .stButton button {
+    background: #FFFFFF !important; border: 1px solid #D0CAC4 !important;
+    border-radius: 12px !important; padding: 14px 6px !important;
+    height: 76px !important; font-size: 0.82rem !important; color: #444 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+}
+.plus-panel .stButton button:hover {
+    background: #EDE5DC !important; border-color: #AAA !important; color: #111 !important;
+}
+
+/* ── 工具栏图标按钮 ── */
+.toolbar-btn button {
+    background: transparent !important; border: none !important;
+    font-size: 1.4rem !important; padding: 6px !important;
+    border-radius: 50% !important; color: #666 !important;
+    height: 44px !important; width: 44px !important;
+}
+.toolbar-btn button:hover { background: #D8D0C8 !important; color: #222 !important; }
 
 /* ── 输入框 ── */
-[data-testid="stTextInput"] input,
-[data-testid="stTextArea"] textarea {
-    border-radius: 10px !important;
-    border: 1px solid #3d3d6e !important;
-    background: #12121f !important;
-    color: #e0e0f0 !important;
+[data-testid="stChatInputContainer"] {
+    background: #EDE5DC !important;
+    border-top: 1px solid #D4CEC8 !important;
+    padding: 8px 16px 14px !important;
 }
-[data-testid="stTextInput"] input:focus,
-[data-testid="stTextArea"] textarea:focus {
-    border-color: #764ba2 !important;
-    box-shadow: 0 0 0 2px rgba(118,75,162,0.2) !important;
+[data-testid="stChatInputTextArea"] {
+    background: #FFFFFF !important; border: 1px solid #C8C0B8 !important;
+    border-radius: 24px !important; color: #1a1a1a !important;
+    font-size: 0.95rem !important; padding: 10px 16px !important;
+}
+[data-testid="stChatInputTextArea"]:focus {
+    border-color: #2aae67 !important;
+    box-shadow: 0 0 0 2px rgba(42,174,103,0.15) !important;
+}
+[data-testid="stChatInputSubmitButton"] button {
+    background: #2aae67 !important; border-radius: 50% !important;
+}
+
+/* ── 知识点 pills（全覆盖，优先级最高）── */
+[data-testid="stPills"] { margin-top: 8px !important; }
+div[data-testid="stPills"] > div > label > div,
+div[data-testid="stPills"] button,
+div[data-testid="stPills"] [role="radio"],
+div[data-testid="stPills"] [role="button"] {
+    background-color: #F0EBE5 !important;
+    border: 1px solid #C8C0B8 !important;
+    border-radius: 20px !important;
+    color: #444444 !important;
+    font-size: 0.78rem !important;
+    padding: 3px 12px !important;
+}
+div[data-testid="stPills"] button:hover,
+div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="stPills"] button[aria-selected="true"],
+div[data-testid="stPills"] [aria-checked="true"],
+div[data-testid="stPills"] [aria-selected="true"] {
+    background-color: #2aae67 !important;
+    border-color: #2aae67 !important;
+    color: #ffffff !important;
+}
+div[data-testid="stPills"] p,
+div[data-testid="stPills"] span { color: inherit !important; background: transparent !important; }
+
+/* ── 通用按钮 ── */
+.stButton button { border-radius: 8px !important; font-size: 0.84rem !important; }
+.stButton button[kind="primary"] {
+    background: #2aae67 !important; border: none !important; color: #fff !important;
+}
+.stButton button[kind="primary"]:hover { background: #25a05e !important; }
+
+/* ── 轮次标签 ── */
+.turn-badge {
+    display: inline-block; background: #E8E2DC; border: 1px solid #C8C0B8;
+    color: #888; padding: 1px 8px; border-radius: 6px; font-size: 0.7rem; margin-bottom: 4px;
 }
 
 /* ── expander ── */
 [data-testid="stExpander"] {
-    border: 1px solid #2d2d4e !important;
-    border-radius: 10px !important;
-    background: #0f0f1a !important;
+    border: 1px solid #D4CEC8 !important; border-radius: 10px !important;
+    background: #F5F0EB !important;
 }
 
-/* ── success/info/warning 卡片 ── */
-[data-testid="stAlert"] { border-radius: 10px !important; }
+/* ── Status ── */
+[data-testid="stStatusWidget"] {
+    background: #F5F0EB !important; border: 1px solid #C8C0B8 !important;
+    border-radius: 10px !important;
+}
 
 /* ── 代码块 ── */
 pre, code {
-    background: #0a0a15 !important;
-    border: 1px solid #2d2d4e !important;
-    border-radius: 8px !important;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-    font-size: 0.82rem !important;
+    background: #F0EBE5 !important; border: 1px solid #D4CEC8 !important;
+    border-radius: 8px !important; font-size: 0.82rem !important; color: #333 !important;
 }
 
-/* ── 聊天消息边框 ── */
-[data-testid="stChatMessage"][data-testid*="assistant"] {
-    border-left: 3px solid #764ba2 !important;
-    background: #12121f !important;
-}
-[data-testid="stChatMessage"] {
-    background: #12121f !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
-}
+hr { border-color: #D4CEC8 !important; }
 
-/* ── st.status 组件 ── */
-[data-testid="stStatusWidget"] {
-    background: #1a1a2e !important;
-    border: 1px solid #3d3d6e !important;
+/* ── 麦克风 ── */
+[data-testid="stAudioInput"],
+[data-testid="stAudioInput"] > div {
+    background: #F5F0EB !important; border: 1px solid #C8C0B8 !important;
     border-radius: 10px !important;
 }
+[data-testid="stAudioInput"] button { background: transparent !important; color: #555 !important; }
 
-/* ── caption / 轮次标签 ── */
-.turn-badge {
-    display: inline-block;
-    background: #1e1e3a;
-    border: 1px solid #3d3d6e;
-    color: #8080aa;
-    padding: 1px 8px;
-    border-radius: 8px;
-    font-size: 0.72rem;
-    margin-bottom: 4px;
+/* ── 语音识别文本框（样式与聊天输入框一致）── */
+[data-testid="stTextArea"] textarea {
+    background: #FFFFFF !important;
+    border: 1px solid #C8C0B8 !important;
+    border-radius: 16px !important;
+    color: #1a1a1a !important;
+    font-size: 0.95rem !important;
+    padding: 10px 16px !important;
+    resize: none !important;
+}
+[data-testid="stTextArea"] textarea:focus {
+    border-color: #2aae67 !important;
+    box-shadow: 0 0 0 2px rgba(42,174,103,0.15) !important;
 }
 
-/* ── 分隔线 ── */
-hr { border-color: #2d2d4e !important; }
+/* ══ 关键：文件上传 暗色 → 白色 ══ */
+[data-testid="stFileUploaderDropzone"],
+[data-testid="stFileUploadDropzone"],
+[data-testid="stFileUploader"],
+[data-testid="stFileUploaderDropzone"] > div,
+section[data-testid*="Upload"] {
+    background: #FFFFFF !important;
+    border: 2px dashed #C8C0B8 !important;
+    border-radius: 12px !important;
+}
+[data-testid="stFileUploaderDropzone"] span,
+[data-testid="stFileUploaderDropzone"] p,
+[data-testid="stFileUploaderDropzone"] small,
+[data-testid="stFileUploadDropzone"] span,
+[data-testid="stFileUploadDropzone"] p,
+[data-testid="stFileUploadDropzone"] small { color: #777 !important; background: transparent !important; }
+[data-testid="stFileUploaderDropzone"] button,
+[data-testid="stFileUploadDropzone"] button {
+    background: #EDE5DC !important; border: 1px solid #C8C0B8 !important;
+    border-radius: 8px !important; color: #444 !important;
+}
+
+/* ── Selectbox ── */
+[data-testid="stSelectbox"] > div > div,
+[data-baseweb="select"] > div {
+    background: #FFFFFF !important;
+    border: 1px solid #C8C0B8 !important;
+    border-radius: 10px !important;
+    color: #1a1a1a !important;
+}
+[data-baseweb="popover"], [data-baseweb="menu"],
+[data-baseweb="menu"] ul { background: #FFFFFF !important; }
+[data-baseweb="menu"] li { color: #1a1a1a !important; }
+[data-baseweb="menu"] li:hover { background: #F0EBE5 !important; }
+
+/* ── Checkbox / Toggle ── */
+[data-testid="stCheckbox"] span, [data-testid="stCheckbox"] p { color: #1a1a1a !important; }
+
+/* ── 底部完全覆盖（包括 stBottom sticky 区域）── */
+[data-testid="stBottomBlockContainer"],
+[data-testid="stBottom"] > div,
+[data-testid="stBottom"] > div > div {
+    background: #EDE5DC !important;
+}
+
+/* ── 工具栏容器透明 ── */
+[data-testid="stHorizontalBlock"] { background: transparent !important; }
+[data-testid="stColumn"] { background: transparent !important; }
+[data-testid="element-container"] { background: transparent !important; }
+
+/* ── 工具栏里的 selectbox 紧凑 ── */
+.toolbar-model [data-testid="stSelectbox"] > div > div {
+    border: 1px solid #C8C0B8 !important;
+    background: rgba(255,255,255,0.7) !important;
+    font-size: 0.82rem !important;
+    color: #333 !important;
+    padding: 4px 10px !important;
+    min-height: 36px !important;
+    border-radius: 20px !important;
+}
+
+/* ── 欢迎问候语 ── */
+.greeting-wrap {
+    text-align: center;
+    padding: 4rem 0 2rem;
+}
+.greeting-main {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #1a1a1a !important;
+    margin-bottom: 0.4rem;
+}
+.greeting-sub {
+    font-size: 0.9rem;
+    color: #999 !important;
+}
+
+/* ── 侧边栏历史记录 ── */
+[data-testid="stSidebar"] .stButton button {
+    text-align: left !important;
+    font-size: 0.8rem !important;
+    padding: 6px 10px !important;
+    height: auto !important;
+    min-height: 32px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
+}
+
+/* ── 功能介绍卡片 ── */
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin: 20px 0 12px;
+}
+.feature-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid #EAE4DE;
+}
+.feature-icon { font-size: 1.5rem; margin-bottom: 6px; }
+.feature-title { font-size: 0.88rem; font-weight: 600; color: #1a1a1a !important; margin-bottom: 4px; }
+.feature-desc { font-size: 0.75rem; color: #888 !important; line-height: 1.4; }
+
+/* ── 汉堡菜单（仅手机显示）── */
+.hamburger-wrap button {
+    display: none !important;
+}
+@media (max-width: 768px) {
+    .hamburger-wrap button {
+        display: flex !important;
+        background: transparent !important;
+        border: none !important;
+        font-size: 1.3rem !important;
+        color: #555 !important;
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 36px !important;
+        width: 36px !important;
+    }
+    .hamburger-wrap button:hover {
+        background: #D8D0C8 !important;
+    }
+}
+
+/* ── 存入错题本 ── */
+button[kind="secondary"][data-testid*="wb_add"] {
+    font-size: 0.75rem !important;
+    color: #888 !important;
+    border-color: #DDD !important;
+    padding: 2px 10px !important;
+    height: auto !important;
+    min-height: 28px !important;
+    border-radius: 14px !important;
+    background: transparent !important;
+}
+
+/* ── 登录页 ── */
+.login-logo {
+    text-align: center;
+    padding: 60px 0 24px;
+}
+.login-logo-icon { font-size: 3rem; }
+.login-logo-title { font-size: 1.5rem; font-weight: 600; color: #1a1a1a !important; margin: 8px 0 4px; }
+.login-logo-sub { font-size: 0.85rem; color: #888 !important; }
+
+/* ══ 手机端响应式 ══ */
+@media (max-width: 768px) {
+    /* 侧边栏折叠 */
+    [data-testid="stSidebar"] { display: none !important; }
+    /* 强制所有列横排，不折行 */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+        gap: 4px !important;
+    }
+    [data-testid="stColumn"] {
+        min-width: 0 !important;
+        flex-shrink: 1 !important;
+        overflow: hidden !important;
+    }
+    /* 气泡宽度自适应 */
+    .bubble-user { max-width: 80vw !important; font-size: 0.9rem !important; }
+    .bubble-asst-wrap { font-size: 0.9rem !important; }
+    /* 欢迎语 */
+    .greeting-main { font-size: 1.4rem !important; }
+    /* 工具栏在小屏更紧凑 */
+    .toolbar-model [data-testid="stSelectbox"] > div > div {
+        font-size: 0.68rem !important; padding: 2px 6px !important; min-height: 32px !important;
+    }
+    .toolbar-btn button {
+        width: 36px !important; height: 36px !important; font-size: 1.1rem !important;
+    }
+    /* 头像缩小 */
+    .av { width: 28px !important; height: 28px !important; font-size: 0.9rem !important; }
+    /* 头部 */
+    .app-header-title { font-size: 0.9rem !important; }
+    /* 输入框 */
+    [data-testid="stChatInputTextArea"] { font-size: 0.9rem !important; }
+    /* 功能卡片 */
+    .feature-card { padding: 10px 8px; }
+    .feature-title { font-size: 0.82rem !important; }
+    .feature-desc { font-size: 0.7rem !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
+# ── 登录检查（未登录则显示登录页并阻止后续渲染）─────────────────────────────
+if not st.session_state.get("logged_in"):
+    _show_login_page()
+    st.stop()
+
+# ── 配置 ──────────────────────────────────────────────────────────────────────
 _USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
 
-def _secret(key: str) -> str:
-    """从 st.secrets（Streamlit Cloud）或环境变量读取密钥。"""
+def _secret(key):
     try:
         return st.secrets[key]
     except Exception:
         return os.environ.get(key, "")
 
-_GEMINI_KEY = _secret("GEMINI_API_KEY")
-
-EXAMPLES = [
-    "解方程：2x² + 5x - 3 = 0",
-    "求导：f(x) = x³·sin(x)",
+# ── 示例题目池（30+ 题，每次随机抽 6 道）────────────────────────────────────
+_ALL_EXAMPLES = [
+    "解方程 2x² + 5x − 3 = 0",
+    "解方程组：x + y = 5，2x − y = 1",
+    "化简 (x² − 4) / (x + 2)",
+    "展开 (x + 2)⁴，保留完整系数",
+    "解不等式 |2x − 3| < 5",
+    "求导：f(x) = x³ · sin(x)",
+    "求导：g(x) = ln(x² + 1)",
+    "求 y = eˣ · cos(x) 的导数",
+    "求 f(x) = arctan(2x) 的导数",
+    "求 f(x) = xˣ 的导数",
     "计算定积分 ∫₀¹ x² dx",
+    "计算不定积分 ∫ x · eˣ dx",
+    "计算 ∫ sin²(x) dx",
+    "计算广义积分 ∫₁^∞ 1/x² dx",
+    "分部积分法计算 ∫ x · ln(x) dx",
     "求极限 lim(x→0) sin(x)/x",
-    "查公式：复变函数柯西积分公式",
-    "用复化Simpson公式（n=4）估算 ∫₀¹ eˣ dx 的误差",
-    "直角三角形两直角边为 3 和 4，求斜边",
+    "洛必达法则求 lim(x→0) (eˣ − 1)/x",
+    "求 lim(x→∞) (1 + 1/x)ˣ",
+    "求 lim(x→0) (1 − cos x) / x²",
+    "计算行列式 |1 2; 3 4|",
+    "求矩阵 [[2,1],[1,3]] 的特征值",
+    "解线性方程组 x + 2y = 3，3x + 4y = 5",
+    "求向量 (1,2,3) 和 (4,5,6) 的点积与夹角",
+    "等差数列首项 2，公差 3，求第 10 项和前 n 项和",
+    "等比数列首项 1，公比 2，求前 8 项和",
+    "判断级数 Σ(1/n²) 是否收敛",
+    "求 eˣ 在 x=0 处的泰勒展开前 5 项",
+    "直角三角形两直角边 3 和 4，求斜边和面积",
+    "圆心 (1,2)、半径 5，写出圆的方程",
+    "求抛物线 y = x² 在 x=1 处的切线方程",
+    "掷两枚骰子，点数之和为 7 的概率",
+    "正态分布 N(0,1) 中 P(−1 < X < 1) = ?",
+    "二项分布 B(10, 0.3) 的期望和方差",
+    "用 Simpson 公式（n=4）估算 ∫₀¹ eˣ dx 的误差",
+    "查公式：柯西积分公式",
+    "查公式：欧拉公式 eⁱθ",
 ]
 
+def _get_examples(n=6):
+    return random.sample(_ALL_EXAMPLES, min(n, len(_ALL_EXAMPLES)))
 
+# ── Agent ─────────────────────────────────────────────────────────────────────
 @st.cache_resource
-def get_agent(use_local: bool, model: str, guide_mode: bool = False) -> MathAgent:
+def get_agent(use_local, model, guide_mode=False):
     return MathAgent(use_local=use_local, model=model, guide_mode=guide_mode)
 
-
-def fix_latex(text: str) -> str:
-    """把 \\[...\\] 和 \\(...\\) 转成 Streamlit 能渲染的 $$...$$ 和 $...$。"""
+# ── 工具函数 ──────────────────────────────────────────────────────────────────
+def fix_latex(text):
     text = re.sub(r'\\\[\s*(.*?)\s*\\\]', r'\n$$\1$$\n', text, flags=re.DOTALL)
     text = re.sub(r'\\\(\s*(.*?)\s*\\\)', r'$\1$', text, flags=re.DOTALL)
     return text
 
-
-def extract_tags(text: str) -> tuple[str, list[str]]:
-    """从回答末尾提取知识点标签行，返回 (去掉标签行的文本, 标签列表)。"""
+def extract_tags(text):
     match = re.search(r'📚\s*\*{0,2}知识点\*{0,2}\s*[：:](.*?)$', text, re.MULTILINE)
     if not match:
         return text, []
-    tags_str = match.group(1).strip()
-    tags = [t.strip() for t in re.split(r'[·・,，、]+', tags_str) if t.strip()]
-    clean = text[:match.start()].rstrip()
-    return clean, tags
+    tags = [t.strip() for t in re.split(r'[·・,，、]+', match.group(1).strip()) if t.strip()]
+    return text[:match.start()].rstrip(), tags
 
+def _compress_image(image_bytes, max_size=800):
+    try:
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
+        w, h = img.size
+        if max(w, h) > max_size:
+            ratio = max_size / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+    except Exception as e:
+        st.warning(f"图片压缩失败: {e}")
+        return image_bytes
 
-def render_tags(tags: list[str], prefix: str = ""):
-    if not tags:
-        return
-    pills = "".join(
-        f'<span style="display:inline-block;background:#667eea33;'
-        f'border:1px solid #667eea88;color:#6060cc;padding:2px 10px;border-radius:12px;'
-        f'font-size:0.78rem;margin:2px 4px 2px 0;font-weight:500;">{t}</span>'
-        for t in tags
-    )
-    st.markdown(
-        f'<div style="margin-top:6px;line-height:2.2;">📚 {pills}</div>',
-        unsafe_allow_html=True,
-    )
-
-
-def _compress_image(image_bytes: bytes, max_size: int = 800) -> bytes:
-    """压缩图片到 max_size px 以内，减少上传体积。"""
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    w, h = img.size
-    if max(w, h) > max_size:
-        ratio = max_size / max(w, h)
-        img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
-    buf = BytesIO()
-    img.save(buf, format="JPEG", quality=85)
-    return buf.getvalue()
-
-
-def ocr_math_image(image_bytes: bytes) -> str:
-    """用 Gemini 视觉识别图片中的数学题。"""
+def ocr_math_image(image_bytes):
     key = _secret("GEMINI_API_KEY")
     if not key:
         return "（未配置 GEMINI_API_KEY，无法识别图片）"
     try:
-        compressed = _compress_image(image_bytes)
-        b64 = base64.b64encode(compressed).decode()
+        b64 = base64.b64encode(_compress_image(image_bytes)).decode()
         resp = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}",
             json={"contents": [{"parts": [
-                {"text": "请识别图片中的数学题，只输出题目原文，不要解答，不要多余说明"},
+                {"text": "请识别图片中的数学题，只输出题目原文，不要解答"},
                 {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
             ]}]},
             timeout=20,
         )
         data = resp.json()
         if "candidates" not in data:
-            err = data.get("error", {})
-            return f"识别失败：{err.get('message', str(data))}"
+            return f"识别失败：{data.get('error', {}).get('message', str(data))}"
         return data["candidates"][0]["content"]["parts"][0]["text"].strip()
     except Exception as e:
         return f"识别失败：{e}"
 
 
-# ── Session state 初始化（必须在 sidebar 之前）────────────────────────────────
+def transcribe_audio(audio_file) -> str:
+    """用 Gemini 把录音转成数学题文字（支持中英文）。"""
+    key = _secret("GEMINI_API_KEY")
+    if not key:
+        return ""
+    try:
+        raw = audio_file.read()
+        # 检测 MIME 类型（浏览器一般录 webm 或 wav）
+        mime = "audio/webm"
+        if raw[:4] == b"RIFF":
+            mime = "audio/wav"
+        elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
+            mime = "audio/mp3"
+        b64 = base64.b64encode(raw).decode()
+        resp = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}",
+            json={"contents": [{"parts": [
+                {"text": (
+                    "这是一段数学题的语音录音。"
+                    "请把语音内容逐字转录成文字，保留数学符号和表达式。"
+                    "中文说的用中文输出，英文说的用英文输出，混合则混合输出。"
+                    "只输出转录文字，不要解答，不要加任何说明。"
+                )},
+                {"inline_data": {"mime_type": mime, "data": b64}},
+            ]}]},
+            timeout=30,
+        )
+        data = resp.json()
+        if "candidates" not in data:
+            return ""
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception:
+        return ""
+
+# ── Session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "wrong_book" not in st.session_state:
-    st.session_state.wrong_book = []
+    # 登录后从磁盘加载，未登录为空
+    st.session_state.wrong_book = _load_wrong_book(st.session_state.get("user_email", ""))
+if "example_set" not in st.session_state:
+    st.session_state.example_set = _get_examples()
+if "show_photo" not in st.session_state:
+    st.session_state.show_photo = False
+if "show_file" not in st.session_state:
+    st.session_state.show_file = False
+if "guide_mode" not in st.session_state:
+    st.session_state.guide_mode = False
+if "show_mobile_menu" not in st.session_state:
+    st.session_state.show_mobile_menu = False
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── 侧边栏 ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### ⚙️ 设置")
-
-    use_local = st.checkbox(
-        "🖥️ 本地 Ollama 模式（离线）",
-        value=_USE_LOCAL,
-        help="使用本地模型，无需 API Key",
+    # ── 用户信息 + 退出 ──────────────────────────────────────────────────────
+    _uemail = st.session_state.get("user_email", "")
+    st.markdown(
+        f'<p style="font-size:0.75rem;color:#888;margin:0 0 4px">👤 {_uemail}</p>',
+        unsafe_allow_html=True,
     )
-
-    if use_local:
-        selected_model = st.selectbox(
-            "本地模型",
-            options=LOCAL_MODELS,
-            index=LOCAL_MODELS.index(DEFAULT_LOCAL_MODEL),
-        )
-        speed = {"phi4-mini": "⚡ 极快", "phi4": "🐢 较慢但准"}.get(selected_model, "⚡")
-        st.success(f"{speed} · 本地离线 · {selected_model}")
-    else:
-        cloud_options = list(CLOUD_PROVIDERS.keys())
-        selected_model = st.selectbox("云端模型", options=cloud_options, index=cloud_options.index("deepseek-chat"))
-        labels = {
-            "Qwen/Qwen3-VL-32B-Instruct":   "📷 拍题首选 · 看图解题（硅基流动）",
-            "Qwen/Qwen3-VL-8B-Instruct":    "📷 拍题轻量版 · 速度更快（硅基流动）",
-            "deepseek-chat":                 "💬 文字解题 · 默认推荐",
-            "gemini-2.0-flash":              "⚡ 备用",
-            "gemini-2.5-flash":              "🔥 备用（更强）",
-        }
-        st.info(labels.get(selected_model, "☁️ 云端模式"))
-
-    # 动态读取（支持 Streamlit Cloud secrets 热更新）
-    gemini_ok = bool(_secret("GEMINI_API_KEY"))
-    if not gemini_ok:
-        st.warning("未配置 GEMINI_API_KEY，拍题识别不可用")
-
+    if st.button("退出登录", key="logout_btn", use_container_width=True):
+        _tok = st.session_state.pop("_token", None)
+        if _tok:
+            _invalidate_token(_tok)
+            _cm.delete(_TOKEN_COOKIE)
+        st.session_state["logged_in"] = False
+        st.session_state.pop("user_email", None)
+        st.rerun()
     st.divider()
-    st.markdown("**📝 示例题目**")
-    for ex in EXAMPLES:
-        if st.button(ex, use_container_width=True, key=ex):
-            st.session_state["prefill"] = ex
 
-    st.divider()
-    # 错题本
-    wrong_book = st.session_state.get("wrong_book", [])
-    wb_label = f"📓 错题本（{len(wrong_book)} 题）" if wrong_book else "📓 错题本（空）"
-    with st.expander(wb_label, expanded=False):
+    # ── 最近问题（最多显示10条，超出自动删最早）────────────────────────────────
+    _user_msgs = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
+    if _user_msgs:
+        st.markdown('<p style="font-size:0.75rem;color:#888;margin:0 0 6px">最近问题</p>',
+                    unsafe_allow_html=True)
+        for _qi, _q in enumerate(_user_msgs[-10:]):
+            _q_short = _q[:28] + "…" if len(_q) > 28 else _q
+            if st.button(_q_short, key=f"hist_{_qi}", use_container_width=True):
+                st.session_state["prefill"] = _q
+                st.rerun()
+        st.divider()
+
+    wrong_book = st.session_state.wrong_book
+    with st.expander(f"错题本（{len(wrong_book)}）", expanded=False):
         if not wrong_book:
-            st.caption("解完题后点「加入错题本」保存")
+            st.caption("解完题后点「存入错题本」")
         else:
             for wi, wp in enumerate(wrong_book):
-                st.markdown(f"**{wi+1}.** {wp['question'][:60]}{'…' if len(wp['question']) > 60 else ''}")
-                if wp.get("tags"):
-                    render_tags(wp["tags"])
+                q_preview = wp["question"][:48] + ("…" if len(wp["question"]) > 48 else "")
+                st.markdown(f"**{wi+1}.** {q_preview}")
                 st.caption(wp.get("saved_at", ""))
                 c1, c2 = st.columns(2)
                 with c1:
-                    if st.button("重新解题", key=f"wb_redo_{wi}", use_container_width=True):
+                    if st.button("重做", key=f"wb_redo_{wi}", use_container_width=True):
                         st.session_state["prefill"] = wp["question"]
                         st.rerun()
                 with c2:
                     if st.button("删除", key=f"wb_del_{wi}", use_container_width=True):
-                        st.session_state["wrong_book"].pop(wi)
+                        st.session_state.wrong_book.pop(wi)
+                        _save_wrong_book(_uemail, st.session_state.wrong_book)
                         st.rerun()
-                st.divider()
 
-    if st.button("🗑️ 清空对话", use_container_width=True):
+    if st.button("清空对话", use_container_width=True):
         st.session_state.messages = []
         st.session_state.pop("prefill", None)
         st.rerun()
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-_turn_count = len([m for m in st.session_state.messages if m["role"] == "assistant"])
-_turn_label = f"  ·  第 {_turn_count} 轮" if _turn_count > 0 else ""
-st.markdown(f"""
-<div class="hero-title">🧮 Math Solver Agent</div>
-<div class="hero-sub">AI 数学解题助手 · 支持拍题 · ReAct Agentic Loop · Tool Use · SymPy{_turn_label}</div>
-""", unsafe_allow_html=True)
-
-# 手机端模型快速切换（桌面端用侧边栏，手机端用这里）
-with st.expander("⚙️ 切换模型", expanded=False):
-    _cloud_opts = list(CLOUD_PROVIDERS.keys())
-    _labels = {
-        "gemini-2.0-flash": "⚡ Gemini 2.0 Flash（默认，快）",
-        "gemini-2.5-flash": "🔥 Gemini 2.5 Flash（更强）",
-        "gemini-2.5-pro":   "💎 Gemini 2.5 Pro（最强）",
-        "deepseek-chat":    "💰 DeepSeek V3（便宜）",
-    }
-    _mobile_model = st.selectbox(
-        "云端模型",
-        options=_cloud_opts,
-        index=_cloud_opts.index(selected_model) if selected_model in _cloud_opts else 0,
-        format_func=lambda x: _labels.get(x, x),
-        key="mobile_model",
-        label_visibility="collapsed",
+# ── 主界面顶部（含手机端 ☰ 菜单按钮）────────────────────────────────────────
+_hdr_menu_col, _hdr_title_col, _hdr_right_col = st.columns([1, 5, 2])
+with _hdr_menu_col:
+    st.markdown('<div class="hamburger-wrap">', unsafe_allow_html=True)
+    _menu_icon = "✕" if st.session_state.show_mobile_menu else "☰"
+    if st.button(_menu_icon, key="mobile_menu_btn"):
+        st.session_state.show_mobile_menu = not st.session_state.show_mobile_menu
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+with _hdr_title_col:
+    st.markdown(
+        '<div class="app-header"><span class="app-header-title">🧮 &nbsp; Math Agent</span></div>',
+        unsafe_allow_html=True,
     )
-    if not use_local:
-        selected_model = _mobile_model
+with _hdr_right_col:
+    use_local = st.checkbox("离线 Ollama", value=_USE_LOCAL, key="top_use_local")
 
-# ── 快捷控制栏（手机/桌面均可见）─────────────────────────────────────────────
-_ctrl_col1, _ctrl_col2 = st.columns([1, 1])
-with _ctrl_col1:
-    guide_mode = st.toggle(
-        "💡 引导解题模式",
-        value=False,
-        key="guide_mode_main",
-        help="开启后 AI 不直接给答案，逐步引导你自主思考",
+# ── 手机端弹出菜单（覆盖主内容区）────────────────────────────────────────────
+if st.session_state.show_mobile_menu:
+    st.markdown("---")
+    _mob_msgs = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
+    if _mob_msgs:
+        st.markdown('<p style="font-size:0.8rem;font-weight:600;margin-bottom:6px">📋 最近问题</p>',
+                    unsafe_allow_html=True)
+        for _mi, _mq in enumerate(_mob_msgs[-10:]):
+            _ms = _mq[:30] + "…" if len(_mq) > 30 else _mq
+            if st.button(_ms, key=f"mob_hist_{_mi}", use_container_width=True):
+                st.session_state["prefill"] = _mq
+                st.session_state.show_mobile_menu = False
+                st.rerun()
+        st.markdown("---")
+    _mob_wb = st.session_state.wrong_book
+    if _mob_wb:
+        st.markdown(f'<p style="font-size:0.8rem;font-weight:600;margin-bottom:6px">📌 错题本（{len(_mob_wb)}）</p>',
+                    unsafe_allow_html=True)
+        for _mwi, _mwp in enumerate(_mob_wb):
+            _mwq = _mwp["question"][:30] + "…" if len(_mwp["question"]) > 30 else _mwp["question"]
+            if st.button(f"重做：{_mwq}", key=f"mob_wb_{_mwi}", use_container_width=True):
+                st.session_state["prefill"] = _mwp["question"]
+                st.session_state.show_mobile_menu = False
+                st.rerun()
+        st.markdown("---")
+    if st.button("🗑️ 清空对话", key="mob_clear", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.pop("prefill", None)
+        st.session_state.show_mobile_menu = False
+        st.rerun()
+    if st.button("← 返回对话", key="mob_back", type="primary", use_container_width=True):
+        st.session_state.show_mobile_menu = False
+        st.rerun()
+    st.stop()
+
+# selected_model 从工具栏取（见下方 toolbar），先给默认值
+selected_model = st.session_state.get("_sel_model", "deepseek-chat")
+
+# ── 欢迎页（无对话时）────────────────────────────────────────────────────────
+if not st.session_state.messages:
+    st.markdown(
+        '<div class="greeting-wrap">'
+        '<div class="greeting-main">你好，有什么数学问题？</div>'
+        '<div class="greeting-sub">微积分 &nbsp;·&nbsp; 方程 &nbsp;·&nbsp; 线性代数 &nbsp;·&nbsp; 概率统计 &nbsp;·&nbsp; 拍题上传</div>'
+        '</div>',
+        unsafe_allow_html=True,
     )
-with _ctrl_col2:
-    _wb_count = len(st.session_state.wrong_book)
-    _wb_btn_label = f"📓 错题本 ({_wb_count})" if _wb_count else "📓 错题本"
-    if st.button(_wb_btn_label, use_container_width=True, key="wb_toggle"):
-        st.session_state["show_wrongbook"] = not st.session_state.get("show_wrongbook", False)
 
-# 错题本面板（可折叠）
-if st.session_state.get("show_wrongbook", False):
-    with st.container(border=True):
-        st.markdown("#### 📓 错题本")
-        wrong_book_main = st.session_state.wrong_book
-        if not wrong_book_main:
-            st.caption("还没有保存的题目，解完题后点「加入错题本」")
-        else:
-            for wi, wp in enumerate(wrong_book_main):
-                with st.expander(f"**{wi+1}.** {wp['question'][:50]}{'…' if len(wp['question']) > 50 else ''}", expanded=False):
-                    if wp.get("tags"):
-                        render_tags(wp["tags"])
-                    st.caption(f"保存于 {wp.get('saved_at', '')}")
-                    _wc1, _wc2 = st.columns(2)
-                    with _wc1:
-                        if st.button("重新解题", key=f"wbm_redo_{wi}", use_container_width=True):
-                            st.session_state["prefill"] = wp["question"]
-                            st.session_state["show_wrongbook"] = False
-                            st.rerun()
-                    with _wc2:
-                        if st.button("删除", key=f"wbm_del_{wi}", use_container_width=True):
-                            st.session_state.wrong_book.pop(wi)
-                            st.rerun()
+    examples = st.session_state.example_set
+    cols = st.columns(2, gap="small")
+    for idx, ex in enumerate(examples):
+        with cols[idx % 2]:
+            if st.button(ex, key=f"ex_{idx}", use_container_width=True):
+                st.session_state["prefill"] = ex
+                st.rerun()
 
+    _, mid, _ = st.columns([2, 1, 2])
+    with mid:
+        if st.button("↻ 换一批", key="refresh_ex", use_container_width=True):
+            st.session_state.example_set = _get_examples()
+            st.rerun()
+
+    st.markdown("""
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="feature-icon">📐</div>
+            <div class="feature-title">精准解题</div>
+            <div class="feature-desc">多工具协作，完整推导过程与答案</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📷</div>
+            <div class="feature-title">拍题识别</div>
+            <div class="feature-desc">拍照或上传图片，AI 识别并解答</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🎙️</div>
+            <div class="feature-title">语音提问</div>
+            <div class="feature-desc">支持中英文语音识别，说题即解</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🧭</div>
+            <div class="feature-title">引导学习</div>
+            <div class="feature-desc">苏格拉底式教学，引导自主思考</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ── 对话历史（微信气泡：AI 左，用户 右）──────────────────────────────────────
 _asst_turn = 0
 for i, msg in enumerate(st.session_state.messages):
-    if msg["role"] == "assistant":
-        _asst_turn += 1
-    with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
-        if msg["role"] == "assistant":
-            st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>', unsafe_allow_html=True)
-        content = fix_latex(msg["content"]) if msg["role"] == "assistant" else msg["content"]
-        st.markdown(content)
-        if msg["role"] == "assistant":
-            if msg.get("tags"):
-                render_tags(msg["tags"])
-            if msg.get("trace"):
-                with st.expander("🔧 工具调用追踪", expanded=False):
-                    st.code(msg["trace"], language="text")
-            # 操作按钮（只对已有内容的历史消息显示）
-            prev_q = st.session_state.messages[i - 1]["content"] if i > 0 else ""
-            bcol1, bcol2, _ = st.columns([1, 1, 3])
-            with bcol1:
-                if st.button("🎯 举一反三", key=f"similar_{i}", use_container_width=True):
-                    st.session_state["_similar"] = {"question": prev_q, "answer": msg["content"][:400]}
-            with bcol2:
-                already_saved = any(
-                    wp["question"] == prev_q for wp in st.session_state.wrong_book
-                )
-                btn_label = "✅ 已加入" if already_saved else "📖 加入错题本"
-                if st.button(btn_label, key=f"wrongbook_{i}", use_container_width=True, disabled=already_saved):
-                    st.session_state.wrong_book.append({
-                        "question": prev_q,
-                        "answer": msg["content"],
-                        "tags": msg.get("tags", []),
-                        "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    })
-                    st.rerun()
-        elif msg.get("trace"):
-            with st.expander("🔧 工具调用追踪", expanded=False):
-                st.code(msg["trace"], language="text")
+    role = msg["role"]
 
-# ── 举一反三触发 ────────────────────────────────────────────────────────────────
+    if role == "user":
+        # 右侧：空白 + 内容 + 头像
+        _, _bubble_col, _av_col = st.columns([2, 5, 1])
+        with _bubble_col:
+            st.markdown(
+                f'<div class="msg-row-user">'
+                f'<div class="bubble-user">{msg["content"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with _av_col:
+            st.markdown('<div class="av av-user">👤</div>', unsafe_allow_html=True)
+    else:
+        _asst_turn += 1
+        _av_col2, _bubble_col2, _ = st.columns([1, 6, 1])
+        with _av_col2:
+            st.markdown('<div class="av av-ai">🧮</div>', unsafe_allow_html=True)
+        with _bubble_col2:
+            st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>',
+                        unsafe_allow_html=True)
+            with st.container(border=False):
+                st.markdown(
+                    '<div class="bubble-asst-wrap">',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(fix_latex(msg["content"]))
+                st.markdown('</div>', unsafe_allow_html=True)
+                if msg.get("tags"):
+                    tag_key = f"ktag_{i}"
+                    sel = st.pills("知识点", msg["tags"], key=tag_key,
+                                   label_visibility="collapsed")
+                    if sel:
+                        st.session_state.pop(tag_key, None)
+                        st.session_state["prefill"] = (
+                            f"请详细讲解「{sel}」：定义、推导过程和典型例题"
+                        )
+                        st.rerun()
+                if msg.get("trace"):
+                    with st.expander("工具调用详情", expanded=False):
+                        st.code(msg["trace"], language="text")
+                # ── 存入错题本按钮 ──
+                _prev_q = next((m["content"] for m in reversed(st.session_state.messages[:i])
+                                if m["role"] == "user"), "")
+                if _prev_q and not any(w["question"] == _prev_q for w in st.session_state.wrong_book):
+                    if st.button("📌 存入错题本", key=f"wb_add_{i}", use_container_width=False):
+                        st.session_state.wrong_book.append({
+                            "question": _prev_q,
+                            "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        })
+                        _save_wrong_book(st.session_state.get("user_email",""), st.session_state.wrong_book)
+                        st.rerun()
+
+# ── 新消息占位容器（必须在工具栏之前声明，确保新消息渲染在工具栏上方）────────
+_new_turn = st.container()
+
+# ── 举一反三触发 ──────────────────────────────────────────────────────────────
 _similar_ctx = st.session_state.pop("_similar", None)
 
-# ── 输入区：两 Tab ─────────────────────────────────────────────────────────────
-tab_text, tab_photo = st.tabs(["✏️ 文字输入", "📷 拍题 / 上传图片"])
+_last_user_q = next((m["content"] for m in reversed(st.session_state.messages)
+                     if m["role"] == "user"), None)
+_last_asst_a = next((m for m in reversed(st.session_state.messages)
+                     if m["role"] == "assistant"), None)
+_can_act = bool(_last_user_q and _last_asst_a)
 
-user_input = None
+# ── 加号面板（5 功能：图片 / 文件 / 语音 / 举一反三 / 引导模式）─────────────
+if st.session_state.get("show_plus"):
+    st.markdown('<div class="plus-panel">', unsafe_allow_html=True)
+    gc1, gc2, gc3, gc4, gc5 = st.columns(5)
+    with gc1:
+        if st.button("🖼️\n\n图片", key="gp_photo", use_container_width=True):
+            st.session_state.show_plus = False
+            st.session_state.show_photo = True
+            st.rerun()
+    with gc2:
+        if st.button("📄\n\n文件", key="gp_file", use_container_width=True):
+            st.session_state.show_plus = False
+            st.session_state.show_file = True
+            st.rerun()
+    with gc3:
+        if st.button("🎙️\n\n语音", key="gp_mic2", use_container_width=True):
+            st.session_state.show_plus = False
+            st.session_state.show_mic = True
+            st.rerun()
+    with gc4:
+        if st.button("🎯\n\n举一反三", key="gp_sim", use_container_width=True,
+                     disabled=not _can_act):
+            if _can_act:
+                st.session_state["_similar"] = {
+                    "question": _last_user_q,
+                    "answer": _last_asst_a["content"][:400],
+                }
+                st.session_state.show_plus = False
+                st.rerun()
+    with gc5:
+        _gm_active = st.session_state.guide_mode
+        _gm_lbl = "🧭\n\n引导✓" if _gm_active else "🧭\n\n引导"
+        if st.button(_gm_lbl, key="gp_guide", use_container_width=True):
+            st.session_state.guide_mode = not _gm_active
+            st.session_state.show_plus = False
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-with tab_text:
-    prefill = st.session_state.pop("prefill", "")
-    typed = st.chat_input("输入数学题，例如：解方程 x² - 5x + 6 = 0") or prefill
-    if typed:
-        user_input = typed
-
-# 举一反三作为新一轮对话触发
-if _similar_ctx and not user_input:
-    user_input = "🎯 举一反三"
-    st.session_state["_similar_ctx_data"] = _similar_ctx
-
-with tab_photo:
-    st.caption("拍照或上传图片后，手动输入题目内容发给 AI 解题")
-    photo_file = st.file_uploader(
-        "选择或拍摄题目图片",
-        type=["jpg", "jpeg", "png"],
-        key="photo",
+# ── 图片面板：手机点"Browse files"会弹出相机/相册选择 ──────────────────────
+if st.session_state.get("show_photo"):
+    st.caption("📱 手机：点击下方按钮后可选相机拍摄或从相册选取")
+    _pf = st.file_uploader(
+        "选择题目图片",
+        type=["jpg", "jpeg", "png", "webp", "heic"],
+        key="photo_inline",
         label_visibility="collapsed",
     )
-    if photo_file:
-        img_bytes = photo_file.read()
-        st.image(img_bytes, width=360)
+    if _pf:
+        _pb_ready = _pf.read()
+        # 自动存为待发附件，关闭面板，用户在聊天框补说明后发送
+        st.session_state["pending_attachment"] = {"type": "image", "bytes": _pb_ready, "name": _pf.name}
+        st.session_state.show_photo = False
+        st.rerun()
 
-        _has_vision_key = bool(_secret("SILICONFLOW_API_KEY"))
-        if _has_vision_key:
-            st.success("📷 自动切换视觉模型解题")
+# ── 文件面板：txt/md 内容附加到消息里 ───────────────────────────────────────
+if st.session_state.get("show_file"):
+    _ff = st.file_uploader("📄 选择文本文件", type=["txt","md"],
+                           key="file_inline", label_visibility="visible")
+    if _ff:
+        _fc = _ff.read().decode("utf-8", errors="replace")
+        st.code(_fc[:300] + ("…" if len(_fc) > 300 else ""), language="text")
+        # 自动存为待发附件，用户在聊天框补说明后发送
+        st.session_state["pending_attachment"] = {"type": "file", "content": _fc, "name": _ff.name}
+        st.session_state.show_file = False
+        st.rerun()
+
+# ── 麦克风面板（录完立即识别，显示可编辑预览）───────────────────────────────
+if st.session_state.get("show_mic"):
+    _av = st.audio_input("🎙️ 说出数学题（支持中英文）", key="mic_input",
+                         label_visibility="visible")
+    if _av:
+        with st.spinner("识别中…"):
+            _vt = transcribe_audio(_av)
+        st.session_state.show_mic = False
+        if _vt:
+            st.session_state["voice_transcript"] = _vt
         else:
-            st.info("请手动输入题目（未配置视觉模型 Key）")
+            st.warning("未能识别，请重试或检查 GEMINI_API_KEY")
+        st.rerun()
 
-        photo_note = st.text_input(
-            "说明（可选）",
-            placeholder="例如：只解第3题 / 第6题用行列式方法",
-            key="photo_note",
+# ── 语音识别预览（样式模拟输入框，可编辑后点发送）──────────────────────────
+if "voice_transcript" in st.session_state:
+    st.markdown(
+        '<p style="font-size:0.78rem;color:#888;margin:4px 0 2px">🎙️ 识别结果 — 可修改后发送</p>',
+        unsafe_allow_html=True,
+    )
+    _vt_val = st.text_area(
+        "语音识别内容",
+        value=st.session_state.voice_transcript,
+        height=72,
+        key="voice_edit",
+        label_visibility="collapsed",
+        placeholder="识别内容将显示在这里…",
+    )
+    _vbc1, _vbc2 = st.columns([1, 8])
+    with _vbc1:
+        if st.button("✕", key="voice_cancel", use_container_width=True):
+            del st.session_state["voice_transcript"]
+            st.rerun()
+    with _vbc2:
+        if st.button("➤ 发送给 AI 解答", key="voice_send", type="primary", use_container_width=True):
+            if _vt_val.strip():
+                st.session_state["_direct_input"] = _vt_val.strip()
+                del st.session_state["voice_transcript"]
+                st.rerun()
+
+# ── 待发附件预览条 ───────────────────────────────────────────────────────────
+_patt = st.session_state.get("pending_attachment")
+if _patt:
+    _pv1, _pv2 = st.columns([9, 1])
+    with _pv1:
+        if _patt["type"] == "image":
+            st.image(_patt["bytes"], width=100)
+            st.caption(f"📷 {_patt.get('name','')}  — 可在输入框补充说明后发送")
+        elif _patt["type"] == "audio":
+            st.info("🎙️ 语音已录制，点发送时自动识别为文字")
+        elif _patt["type"] == "file":
+            st.info(f"📄 {_patt.get('name','')}  — 点发送时内容附入消息")
+    with _pv2:
+        if st.button("✕", key="cancel_attach"):
+            del st.session_state["pending_attachment"]
+            st.rerun()
+
+# ── 底部工具栏（Claude 风格：🎙️ · 模型选择 · 引导 · ➕）────────────────────
+guide_mode = st.session_state.guide_mode
+_tb_mic, _tb_model, _tb_plus = st.columns([1, 8, 1], gap="small")
+
+with _tb_mic:
+    st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
+    if st.button("✕" if st.session_state.get("show_mic") else "🎙️", key="tb_mic"):
+        _on = st.session_state.get("show_mic", False)
+        st.session_state.show_mic = not _on
+        st.session_state.show_plus = False
+        st.session_state.show_photo = False
+        st.session_state.show_file = False
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with _tb_model:
+    st.markdown('<div class="toolbar-model">', unsafe_allow_html=True)
+    if use_local:
+        selected_model = st.selectbox(
+            "模型", LOCAL_MODELS, index=LOCAL_MODELS.index(DEFAULT_LOCAL_MODEL),
+            label_visibility="collapsed", key="tb_model_local",
         )
+    else:
+        _copts = list(CLOUD_PROVIDERS.keys())
+        _def_idx = _copts.index("deepseek-chat")
+        selected_model = st.selectbox(
+            "模型", _copts, index=_def_idx,
+            label_visibility="collapsed", key="tb_model_cloud",
+        )
+    st.session_state["_sel_model"] = selected_model
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        if not _has_vision_key:
-            photo_question = st.text_area(
-                "题目内容",
-                height=100,
-                placeholder="对照图片手动输入题目内容",
-                key="photo_question",
-            )
-        else:
-            photo_question = ""
+with _tb_plus:
+    st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
+    if st.button("✕" if st.session_state.get("show_plus") else "➕", key="tb_plus"):
+        _on = st.session_state.get("show_plus", False)
+        st.session_state.show_plus = not _on
+        st.session_state.show_mic = False
+        st.session_state.show_photo = False
+        st.session_state.show_file = False
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        _can_submit = _has_vision_key or bool(photo_question.strip() if not _has_vision_key else True)
-        if st.button("✅ 解这道题", key="photo_confirm", type="primary", disabled=not _can_submit):
-            if _has_vision_key:
-                st.session_state["pending_image"] = img_bytes
-                user_input = photo_note.strip() or "请解答图片中的数学题"
-            else:
-                final_q = photo_question.strip()
-                if photo_note.strip():
-                    final_q += "\n" + photo_note.strip()
-                user_input = final_q
+# ── 文字输入（固定底部）──────────────────────────────────────────────────────
+prefill = st.session_state.pop("prefill", "")
+_direct_input = st.session_state.pop("_direct_input", None)   # 来自语音"发送"按钮
+_has_patt = "pending_attachment" in st.session_state
+typed = st.chat_input(
+    "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
+)
 
-# ── Agent 解题 ─────────────────────────────────────────────────────────────────
+# 确定是否"提交"：chat_input 发送 / 语音直接发送 / 举一反三触发 / prefill（示例题/历史记录点击）
+_submitted = (typed is not None) or (_direct_input is not None) or bool(_similar_ctx) or bool(prefill)
+_eff_text = _direct_input if _direct_input is not None else (typed if typed is not None else prefill)
+
+# ── 取出附件（仅在发送时消费）────────────────────────────────────────────────
+_patt_send = st.session_state.pop("pending_attachment", None) if _submitted else None
+
+# ── 构造 user_input 和展示用 display_text ─────────────────────────────────────
+user_input = None
+display_text = None
+_img_bytes = None
+
+if _submitted:
+    if _similar_ctx:
+        user_input = "🎯 举一反三"
+        display_text = "🎯 举一反三"
+    elif _patt_send:
+        att = _patt_send
+        if att["type"] == "image":
+            _img_bytes = att["bytes"]
+            user_input = _eff_text.strip() or "请解答图片中的数学题"
+            display_text = ("📷 " + _eff_text.strip()) if _eff_text.strip() else "📷 图片题目"
+        elif att["type"] == "file":
+            _file_ctx = f"[文件：{att.get('name','')}]\n{att['content']}"
+            user_input = (_file_ctx + "\n\n说明：" + _eff_text if _eff_text.strip() else _file_ctx)
+            display_text = f"📄 {att.get('name','')}  {_eff_text}".strip()
+    elif _eff_text:
+        user_input = _eff_text
+        display_text = _eff_text
+
+# ── Agent 解题（渲染到 _new_turn 容器，确保在工具栏上方显示）──────────────────
 if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(user_input)
+    _sim_data = _similar_ctx if _similar_ctx else None
+    st.session_state.messages.append({"role": "user", "content": display_text or user_input})
 
-    with st.chat_message("assistant", avatar="🤖"):
-        history = [
-            {"role": m["role"], "content": m["content"]}
-            for m in st.session_state.messages[:-1]
-        ]
-
-        trace_lines: list[str] = []
-        _tool_start_times: dict[str, float] = {}
-        _TOOL_LABELS = {
-            "step_decomposer": "📋 规划解题步骤",
-            "formula_lookup":  "📐 检索公式",
-            "calculator":      "🔢 符号计算",
-        }
-
-        # 举一反三：构造特殊提示，不使用历史（避免混入当前对话）
-        _sim_data = st.session_state.pop("_similar_ctx_data", None)
-        if _sim_data:
-            solve_input = (
-                f"上一道题目是：{_sim_data['question']}\n\n"
-                "请出一道与上题类似但不同的练习题，标注题型和难度，只出题，不要给解答。"
+    with _new_turn:
+        # 用户气泡
+        _, _ub_col, _uav_col = st.columns([2, 5, 1])
+        with _ub_col:
+            _safe_disp = (display_text or user_input).replace("<", "&lt;").replace(">", "&gt;")
+            st.markdown(
+                f'<div class="msg-row-user"><div class="bubble-user">{_safe_disp}</div></div>',
+                unsafe_allow_html=True,
             )
-            solve_history = []
-        else:
-            solve_input = user_input
-            solve_history = history
+        with _uav_col:
+            st.markdown('<div class="av av-user">👤</div>', unsafe_allow_html=True)
 
-        with st.status("🤔 思考中...", expanded=True) as status:
-            if guide_mode:
-                status.update(label="💡 引导模式 - 组织提示...")
-
-            def on_tool_call(name, args, result):
-                label = _TOOL_LABELS.get(name, f"🔧 {name}")
-                ts = datetime.now().strftime("%H:%M:%S")
-                if result is None:
-                    _tool_start_times[name] = time.time()
-                    status.update(label=f"{label}...")
-                    trace_lines.append(f"[{ts}] {label}")
-                    trace_lines.append(f"   参数: {args}")
-                else:
-                    elapsed = time.time() - _tool_start_times.get(name, time.time())
-                    preview = str(result)[:100] + ("…" if len(str(result)) > 100 else "")
-                    trace_lines.append(f"   → {preview}  ({elapsed:.1f}s)\n")
-
-            # 取出图片（拍题模式自动切换视觉模型）
-            _img = st.session_state.pop("pending_image", None)
-            _solve_model = selected_model
-            _use_guide = guide_mode and not _img  # 视觉模式不走引导流程
-            if _img and _secret("SILICONFLOW_API_KEY"):
-                _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
-                status.update(label="📷 切换视觉模型中...")
-            # 举一反三也不需要引导模式（直接出题）
+        # AI 回答
+        _aav_col, _ai_col, _ = st.columns([1, 6, 1])
+        with _aav_col:
+            st.markdown('<div class="av av-ai">🧮</div>', unsafe_allow_html=True)
+        with _ai_col:
+            history = [
+                {"role": m["role"], "content": m["content"]}
+                for m in st.session_state.messages[:-1]
+            ]
+            trace_lines: list[str] = []
+            _tool_start: dict[str, float] = {}
+            _TOOL_LABELS = {
+                "step_decomposer": "规划步骤",
+                "formula_lookup":  "检索公式",
+                "calculator":      "符号计算",
+            }
             if _sim_data:
-                _use_guide = False
-            _agent = get_agent(use_local, _solve_model, guide_mode=_use_guide)
-
-            buf = StringIO()
-            sys.stdout = buf
-            try:
-                stream = _agent.solve_stream(
-                    solve_input,
-                    history=solve_history,
-                    on_tool_call=on_tool_call,
-                    image_bytes=_img,
+                solve_input = (
+                    f"上一题：{_sim_data['question']}\n\n"
+                    "请出一道相似但不同的练习题，标注题型和难度，只出题不解答。"
                 )
-                err = None
-            except Exception as exc:
-                import traceback
-                stream = None
-                err = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}"
-            finally:
-                sys.stdout = sys.__stdout__
+                solve_history = []
+            else:
+                solve_input = user_input
+                solve_history = history
 
-            status.update(label="✅ 完成", state="complete", expanded=False)
+            with st.status("思考中…", expanded=True) as status:
+                def on_tool_call(name, args, result):
+                    label = _TOOL_LABELS.get(name, name)
+                    ts = datetime.now().strftime("%H:%M:%S")
+                    if result is None:
+                        _tool_start[name] = time.time()
+                        status.update(label=f"{label}…")
+                        trace_lines.append(f"[{ts}] {label}\n   参数: {args}")
+                    else:
+                        elapsed = time.time() - _tool_start.get(name, time.time())
+                        preview = str(result)[:120] + ("…" if len(str(result)) > 120 else "")
+                        trace_lines.append(f"   → {preview}  ({elapsed:.1f}s)\n")
 
-        if stream is not None:
-            answer_placeholder = st.empty()
-            collected = []
-            try:
-                for chunk in stream:
-                    delta = chunk.choices[0].delta.content
-                    if delta:
-                        collected.append(delta)
-                        answer_placeholder.markdown(fix_latex("".join(collected)) + "▌")
-                raw_answer = "".join(collected)
-                clean_answer, tags = extract_tags(raw_answer)
-                answer = fix_latex(clean_answer)
-                answer_placeholder.markdown(answer)
-                render_tags(tags)
-            except Exception as e:
-                answer = f"❌ 流式输出出错：{e}"
-                tags = []
-                answer_placeholder.markdown(answer)
-        else:
-            answer = f"❌ 出错：{err}"
-            tags = []
-            st.markdown(answer)
+                _solve_model = selected_model
+                _use_guide = guide_mode and not _img_bytes and not _sim_data
+                if _img_bytes:
+                    if _secret("SILICONFLOW_API_KEY"):
+                        _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+                        status.update(label="切换视觉模型（Qwen VL）…")
+                    elif _secret("GEMINI_API_KEY"):
+                        # 有 Gemini key 就用 Gemini 视觉，无需额外 key
+                        _solve_model = "gemini-2.0-flash"
+                        status.update(label="切换视觉模型（Gemini）…")
+                    else:
+                        # 没有视觉 API，先 OCR 成文字再解题
+                        status.update(label="识别图片内容…")
+                        _ocr = ocr_math_image(_img_bytes)
+                        if _ocr and not _ocr.startswith("（"):
+                            solve_input = f"请解答以下题目：{_ocr}"
+                            if user_input and user_input != "请解答图片中的数学题":
+                                solve_input += f"\n（补充说明：{user_input}）"
+                        _img_bytes = None  # 已转为文字，不再发图
+                _agent = get_agent(use_local, _solve_model, guide_mode=_use_guide)
 
-        trace = "\n".join(trace_lines) or buf.getvalue().strip()
-        if trace:
-            with st.expander("🔧 工具调用追踪", expanded=False):
-                st.code(trace, language="text")
+                buf = StringIO()
+                sys.stdout = buf
+                try:
+                    stream = _agent.solve_stream(
+                        solve_input, history=solve_history,
+                        on_tool_call=on_tool_call, image_bytes=_img_bytes,
+                    )
+                    err = None
+                except Exception as exc:
+                    import traceback
+                    stream, err = None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
+                finally:
+                    sys.stdout = sys.__stdout__
+                status.update(label="完成", state="complete", expanded=False)
 
-        # 操作按钮（当前回答）
-        prev_q = st.session_state.messages[-1]["content"] if st.session_state.messages else ""
-        bcol1, bcol2, _ = st.columns([1, 1, 3])
-        with bcol1:
-            if st.button("🎯 举一反三", key="similar_new", use_container_width=True):
-                st.session_state["_similar"] = {"question": prev_q, "answer": answer[:400]}
-                st.rerun()
-        with bcol2:
-            if st.button("📖 加入错题本", key="wrongbook_new", use_container_width=True):
-                st.session_state.wrong_book.append({
-                    "question": prev_q,
-                    "answer": answer,
-                    "tags": tags,
-                    "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                })
-                st.rerun()
+            if stream is not None:
+                ph = st.empty()
+                collected: list[str] = []
+                try:
+                    for chunk in stream:
+                        delta = chunk.choices[0].delta.content
+                        if delta:
+                            collected.append(delta)
+                            ph.markdown(fix_latex("".join(collected)) + "▌")
+                    raw = "".join(collected)
+                    clean_answer, tags = extract_tags(raw)
+                    answer = fix_latex(clean_answer)
+                    ph.markdown(answer)
+                    if tags:
+                        nk = "ktag_new"
+                        sel = st.pills("知识点", tags, key=nk, label_visibility="collapsed")
+                        if sel:
+                            st.session_state.pop(nk, None)
+                            st.session_state["prefill"] = f"请详细讲解「{sel}」"
+                            st.rerun()
+                except Exception as e:
+                    answer, tags = f"流式输出出错：{e}", []
+                    ph.markdown(answer)
+            else:
+                answer, tags = f"出错：{err}", []
+                st.markdown(answer)
+
+            trace = "\n".join(trace_lines) or buf.getvalue().strip()
+            if trace:
+                with st.expander("工具调用详情", expanded=False):
+                    st.code(trace, language="text")
 
     st.session_state.messages.append({
-        "role": "assistant",
-        "content": answer,
-        "tags": tags,
-        "trace": trace,
+        "role": "assistant", "content": answer, "tags": tags, "trace": trace,
     })

@@ -4,3 +4,7 @@ __pycache__/
 .DS_Store
 .venv-mcp/
 .streamlit/secrets.toml
+users.json
+sessions.json
+user_data/
+*.webloc

@@ -166,7 +166,7 @@ class MathAgent:
             )
 
         messages.append({"role": "user", "content": f"请解题：{problem}"})
-        extra = {"think": False} if self.use_local else {}
+        extra = {}  # think:False 会导致 Ollama 挂起，去掉
 
         for iteration in range(self.max_iterations):
             response = self.client.chat.completions.create(
