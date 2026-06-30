@@ -23,15 +23,37 @@ for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
 
 from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
 
-# ── Supabase 初始化 ───────────────────────────────────────────────────────────
-from supabase import create_client as _sb_create
-_SUPABASE_URL = "https://jqfvgpeyzghnuznjjwio.supabase.co"
-_SUPABASE_KEY = (
+# ── Supabase REST（直接用 requests，无需 supabase 包）────────────────────────
+_SB_URL = "https://jqfvgpeyzghnuznjjwio.supabase.co/rest/v1"
+_SB_KEY = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
     ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxZnZncGV5emdobnV6bmpqd2lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDUxNjUsImV4cCI6MjA5ODM4MTE2NX0"
     ".8DcpQHEsOsjlwzBdYWX_3PaIcFlYgpm_YzbKpFBapqQ"
 )
-_sb = _sb_create(_SUPABASE_URL, _SUPABASE_KEY)
+_SB_HDR = {
+    "apikey": _SB_KEY,
+    "Authorization": f"Bearer {_SB_KEY}",
+    "Content-Type": "application/json",
+}
+
+def _sb_get(table: str, params: dict) -> list:
+    try:
+        r = requests.get(f"{_SB_URL}/{table}", headers=_SB_HDR, params=params, timeout=8)
+        return r.json() if r.ok else []
+    except Exception:
+        return []
+
+def _sb_post(table: str, data: dict | list):
+    try:
+        requests.post(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, timeout=8)
+    except Exception:
+        pass
+
+def _sb_delete(table: str, params: dict):
+    try:
+        requests.delete(f"{_SB_URL}/{table}", headers=_SB_HDR, params=params, timeout=8)
+    except Exception:
+        pass
 
 # ── 用户管理（登录注册 + 7天 Cookie 持久化）─────────────────────────────────
 _TOKEN_COOKIE = "math_agent_token"
@@ -41,72 +63,48 @@ def _hash_pw(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
 
 def _user_exists(email: str) -> bool:
-    try:
-        return len(_sb.table("users").select("email").eq("email", email).execute().data) > 0
-    except Exception:
-        return False
+    return len(_sb_get("users", {"email": f"eq.{email}", "select": "email"})) > 0
 
 def _check_user(email: str, pw_hash: str) -> bool:
-    try:
-        rows = (_sb.table("users").select("email")
-                .eq("email", email).eq("password_hash", pw_hash).execute().data)
-        return len(rows) > 0
-    except Exception:
-        return False
+    return len(_sb_get("users", {
+        "email": f"eq.{email}", "password_hash": f"eq.{pw_hash}", "select": "email"
+    })) > 0
 
 def _register_user(email: str, pw_hash: str):
-    _sb.table("users").insert({"email": email, "password_hash": pw_hash}).execute()
+    _sb_post("users", {"email": email, "password_hash": pw_hash})
 
 def _create_token(email: str) -> str:
     token = _secrets.token_urlsafe(32)
     now = datetime.now()
     exp = (now + timedelta(days=_TOKEN_DAYS)).isoformat()
-    try:
-        _sb.table("sessions").delete().eq("email", email).lt("expires_at", now.isoformat()).execute()
-        _sb.table("sessions").insert({"token": token, "email": email, "expires_at": exp}).execute()
-    except Exception:
-        pass
+    _sb_delete("sessions", {"email": f"eq.{email}", "expires_at": f"lt.{now.isoformat()}"})
+    _sb_post("sessions", {"token": token, "email": email, "expires_at": exp})
     return token
 
 def _validate_token(token: str):
-    try:
-        now = datetime.now().isoformat()
-        rows = (_sb.table("sessions").select("email")
-                .eq("token", token).gt("expires_at", now).execute().data)
-        if rows:
-            return rows[0]["email"]
-    except Exception:
-        pass
-    return None
+    rows = _sb_get("sessions", {
+        "token": f"eq.{token}", "expires_at": f"gt.{datetime.now().isoformat()}", "select": "email"
+    })
+    return rows[0]["email"] if rows else None
 
 def _invalidate_token(token: str):
-    try:
-        _sb.table("sessions").delete().eq("token", token).execute()
-    except Exception:
-        pass
+    _sb_delete("sessions", {"token": f"eq.{token}"})
 
-# ── 错题本持久化（Supabase）──────────────────────────────────────────────────
+# ── 错题本持久化（Supabase REST）─────────────────────────────────────────────
 def _load_wrong_book(email: str) -> list:
     if not email:
         return []
-    try:
-        return (_sb.table("wrong_book").select("question,saved_at")
-                .eq("email", email).order("id").execute().data)
-    except Exception:
-        return []
+    return _sb_get("wrong_book", {"email": f"eq.{email}", "select": "question,saved_at", "order": "id"})
 
 def _save_wrong_book(email: str, wb: list):
     if not email:
         return
-    try:
-        _sb.table("wrong_book").delete().eq("email", email).execute()
-        if wb:
-            _sb.table("wrong_book").insert([
-                {"email": email, "question": item["question"], "saved_at": item.get("saved_at", "")}
-                for item in wb
-            ]).execute()
-    except Exception:
-        pass
+    _sb_delete("wrong_book", {"email": f"eq.{email}"})
+    if wb:
+        _sb_post("wrong_book", [
+            {"email": email, "question": item["question"], "saved_at": item.get("saved_at", "")}
+            for item in wb
+        ])
 
 def _show_login_page():
     st.markdown("""
