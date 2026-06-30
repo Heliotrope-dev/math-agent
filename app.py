@@ -1423,3 +1423,4 @@ if user_input:
         "role": "assistant", "content": answer, "tags": tags, "trace": trace,
         "practice": practice,
     })
+    st.rerun()  # 刷新让欢迎页消失、聊天历史正确显示
