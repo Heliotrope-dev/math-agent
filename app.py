@@ -652,6 +652,25 @@ def _secret(key):
     except Exception:
         return os.environ.get(key, "")
 
+_OLLAMA_FALLBACK_MODELS = ["qwen2.5:7b", "qwen2.5:14b", "phi4-mini", "phi4", "llama3.2"]
+
+def _fetch_ollama_models() -> list[str]:
+    """从 Ollama /api/tags 动态获取已安装模型列表，结果缓存在 session state。"""
+    if "ollama_model_list" in st.session_state:
+        return st.session_state["ollama_model_list"]
+    try:
+        base = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+        r = requests.get(f"{base}/api/tags", timeout=4)
+        if r.ok:
+            models = [m["name"] for m in r.json().get("models", [])]
+            if models:
+                st.session_state["ollama_model_list"] = models
+                return models
+    except Exception:
+        pass
+    st.session_state["ollama_model_list"] = _OLLAMA_FALLBACK_MODELS
+    return _OLLAMA_FALLBACK_MODELS
+
 # ── 示例题目池（30+ 题，每次随机抽 6 道）────────────────────────────────────
 _ALL_EXAMPLES = [
     "解方程 2x² + 5x − 3 = 0",
@@ -1283,10 +1302,19 @@ with _tb_mic:
 with _tb_model:
     st.markdown('<div class="toolbar-model">', unsafe_allow_html=True)
     if use_local:
-        selected_model = st.selectbox(
-            "模型", LOCAL_MODELS, index=LOCAL_MODELS.index(DEFAULT_LOCAL_MODEL),
-            label_visibility="collapsed", key="tb_model_local",
-        )
+        _ollama_models = _fetch_ollama_models()
+        _prev_local = st.session_state.get("_sel_model", "")
+        _local_idx = _ollama_models.index(_prev_local) if _prev_local in _ollama_models else 0
+        _mc, _mrefresh = st.columns([8, 1])
+        with _mc:
+            selected_model = st.selectbox(
+                "模型", _ollama_models, index=_local_idx,
+                label_visibility="collapsed", key="tb_model_local",
+            )
+        with _mrefresh:
+            if st.button("↻", key="ollama_refresh", help="刷新模型列表"):
+                st.session_state.pop("ollama_model_list", None)
+                st.rerun()
     else:
         _copts = list(CLOUD_PROVIDERS.keys())
         _def_idx = _copts.index("deepseek-chat")

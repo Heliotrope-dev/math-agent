@@ -167,14 +167,30 @@ class MathAgent:
         messages.append({"role": "user", "content": f"请解题：{problem}"})
         extra = {}  # think:False 会导致 Ollama 挂起，去掉
 
+        # 检测模型是否支持 tool calling（先试一次，失败则降级为无工具模式）
+        _tools_supported = True
+
         for iteration in range(self.max_iterations):
-            response = self.client.chat.completions.create(
-                model=self.model,
-                tools=TOOL_DEFINITIONS,
-                messages=messages,
-                max_tokens=4096,
-                extra_body=extra,
-            )
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    tools=TOOL_DEFINITIONS if _tools_supported else None,
+                    messages=messages,
+                    max_tokens=4096,
+                    extra_body=extra,
+                )
+            except Exception as e:
+                if _tools_supported and ("tool" in str(e).lower() or "function" in str(e).lower()):
+                    # 模型不支持工具调用，降级为直接对话
+                    _tools_supported = False
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        max_tokens=4096,
+                        extra_body=extra,
+                    )
+                else:
+                    raise
 
             msg = response.choices[0].message
             finish_reason = response.choices[0].finish_reason
