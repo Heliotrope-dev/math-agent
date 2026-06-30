@@ -425,26 +425,33 @@ hr { border-color: #D4CEC8 !important; }
     box-shadow: 0 0 0 2px rgba(42,174,103,0.15) !important;
 }
 
-/* ══ 关键：文件上传 暗色 → 白色 ══ */
+/* ══ 文件上传：只显示按钮，隐藏虚线框和说明文字 ══ */
 [data-testid="stFileUploaderDropzone"],
-[data-testid="stFileUploadDropzone"],
-[data-testid="stFileUploader"],
-[data-testid="stFileUploaderDropzone"] > div,
-section[data-testid*="Upload"] {
-    background: #FFFFFF !important;
-    border: 2px dashed #C8C0B8 !important;
-    border-radius: 12px !important;
+[data-testid="stFileUploadDropzone"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
 }
-[data-testid="stFileUploaderDropzone"] span,
-[data-testid="stFileUploaderDropzone"] p,
+/* 隐藏 "200MB per file · JPG PNG..." 说明文字 */
+[data-testid="stFileUploaderDropzone"] > div:not(:has(button)),
 [data-testid="stFileUploaderDropzone"] small,
-[data-testid="stFileUploadDropzone"] span,
-[data-testid="stFileUploadDropzone"] p,
-[data-testid="stFileUploadDropzone"] small { color: #777 !important; background: transparent !important; }
+[data-testid="stFileUploaderDropzone"] span:not([data-testid]),
+[data-testid="stFileUploaderDropzone"] p {
+    display: none !important;
+}
 [data-testid="stFileUploaderDropzone"] button,
 [data-testid="stFileUploadDropzone"] button {
-    background: #EDE5DC !important; border: 1px solid #C8C0B8 !important;
-    border-radius: 8px !important; color: #444 !important;
+    background: #FFFFFF !important;
+    border: 1px solid #C8C0B8 !important;
+    border-radius: 12px !important;
+    color: #444 !important;
+    width: 100% !important;
+    padding: 14px !important;
+    font-size: 0.9rem !important;
+}
+[data-testid="stFileUploaderDropzone"] button:hover {
+    background: #F5F0EB !important;
+    border-color: #999 !important;
 }
 
 /* ── Selectbox ── */
@@ -1055,12 +1062,11 @@ if st.session_state.get("show_plus"):
 
 # ── 图片面板：手机点"Browse files"会弹出相机/相册选择 ──────────────────────
 if st.session_state.get("show_photo"):
-    st.caption("📱 手机：点击下方按钮后可选相机拍摄或从相册选取")
     _pf = st.file_uploader(
-        "选择题目图片",
+        "📷  拍照 / 从相册选取",
         type=["jpg", "jpeg", "png", "webp", "heic"],
         key="photo_inline",
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
     if _pf:
         _pb_ready = _pf.read()
@@ -1121,19 +1127,37 @@ if "voice_transcript" in st.session_state:
                 del st.session_state["voice_transcript"]
                 st.rerun()
 
-# ── 待发附件预览条 ───────────────────────────────────────────────────────────
+# ── 待发附件预览条（紧凑横条）────────────────────────────────────────────────
 _patt = st.session_state.get("pending_attachment")
 if _patt:
-    _pv1, _pv2 = st.columns([9, 1])
-    with _pv1:
-        if _patt["type"] == "image":
-            st.image(_patt["bytes"], width=100)
-            st.caption(f"📷 {_patt.get('name','')}  — 可在输入框补充说明后发送")
-        elif _patt["type"] == "audio":
-            st.info("🎙️ 语音已录制，点发送时自动识别为文字")
-        elif _patt["type"] == "file":
-            st.info(f"📄 {_patt.get('name','')}  — 点发送时内容附入消息")
-    with _pv2:
+    if _patt["type"] == "image":
+        _thumb_b64 = base64.b64encode(_compress_image(_patt["bytes"], max_size=80)).decode()
+        _icon_html = (
+            f'<img src="data:image/jpeg;base64,{_thumb_b64}" '
+            f'style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0">'
+        )
+        _label = _patt.get("name", "图片")
+    elif _patt["type"] == "file":
+        _icon_html = '<span style="font-size:1.4rem">📄</span>'
+        _label = _patt.get("name", "文件")
+    else:
+        _icon_html = '<span style="font-size:1.4rem">🎙️</span>'
+        _label = "语音"
+
+    _pa_col, _px_col = st.columns([10, 1])
+    with _pa_col:
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:10px;'
+            f'background:#F5F0EB;border:1px solid #D4CEC8;border-radius:12px;'
+            f'padding:8px 12px;margin:4px 0">'
+            f'{_icon_html}'
+            f'<span style="font-size:0.8rem;color:#555;overflow:hidden;'
+            f'text-overflow:ellipsis;white-space:nowrap">'
+            f'📎 {_label} · 补充说明后发送</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    with _px_col:
         if st.button("✕", key="cancel_attach"):
             del st.session_state["pending_attachment"]
             st.rerun()
