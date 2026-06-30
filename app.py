@@ -412,7 +412,15 @@ hr { border-color: #D4CEC8 !important; }
     background: #F5F0EB !important; border: 1px solid #C8C0B8 !important;
     border-radius: 10px !important;
 }
-[data-testid="stAudioInput"] button { background: transparent !important; color: #555 !important; }
+/* 录音 / 停止 按钮放大 */
+[data-testid="stAudioInput"] button {
+    background: transparent !important; color: #555 !important;
+    width: 72px !important; height: 72px !important;
+    min-width: 72px !important; border-radius: 50% !important;
+}
+[data-testid="stAudioInput"] button svg {
+    width: 36px !important; height: 36px !important;
+}
 
 /* ── 语音识别文本框（样式与聊天输入框一致）── */
 [data-testid="stTextArea"] textarea {
@@ -1106,31 +1114,27 @@ if st.session_state.get("show_mic"):
             st.warning("未能识别，请重试或检查 GEMINI_API_KEY")
         st.rerun()
 
-# ── 语音识别预览（样式模拟输入框，可编辑后点发送）──────────────────────────
+# ── 语音识别完成 → 注入聊天输入框 ───────────────────────────────────────────
 if "voice_transcript" in st.session_state:
-    st.markdown(
-        '<p style="font-size:0.78rem;color:#888;margin:4px 0 2px">🎙️ 识别结果 — 可修改后发送</p>',
-        unsafe_allow_html=True,
-    )
-    _vt_val = st.text_area(
-        "语音识别内容",
-        value=st.session_state.voice_transcript,
-        height=72,
-        key="voice_edit",
-        label_visibility="collapsed",
-        placeholder="识别内容将显示在这里…",
-    )
-    _vbc1, _vbc2 = st.columns([1, 8])
-    with _vbc1:
-        if st.button("✕", key="voice_cancel", use_container_width=True):
-            del st.session_state["voice_transcript"]
-            st.rerun()
-    with _vbc2:
-        if st.button("➤ 发送给 AI 解答", key="voice_send", type="primary", use_container_width=True):
-            if _vt_val.strip():
-                st.session_state["_direct_input"] = _vt_val.strip()
-                del st.session_state["voice_transcript"]
-                st.rerun()
+    _vt_inject = st.session_state.pop("voice_transcript")
+    _vt_js = json.dumps(_vt_inject)
+    # 用 JS 把识别文字填入聊天输入框，用户可直接看到并确认后发送
+    _stcomp.html(f"""
+    <script>
+    (function() {{
+        var val = {_vt_js};
+        function inject() {{
+            var ta = parent.document.querySelector('[data-testid="stChatInputTextArea"]');
+            if (!ta) {{ setTimeout(inject, 150); return; }}
+            var setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+            setter.call(ta, val);
+            ta.dispatchEvent(new Event('input', {{bubbles: true}}));
+            ta.focus();
+        }}
+        inject();
+    }})();
+    </script>
+    """, height=1)
 
 # ── 待发附件预览条（紧凑横条）────────────────────────────────────────────────
 _patt = st.session_state.get("pending_attachment")
