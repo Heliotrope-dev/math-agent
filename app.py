@@ -24,6 +24,7 @@ for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
             pass
 
 import re
+import time
 from datetime import datetime
 
 from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
@@ -150,6 +151,47 @@ p, span, label, div, li, td, th, h1, h2, h3, h4 {
 
 /* ── success/info/warning 卡片 ── */
 [data-testid="stAlert"] { border-radius: 10px !important; }
+
+/* ── 代码块 ── */
+pre, code {
+    background: #0a0a15 !important;
+    border: 1px solid #2d2d4e !important;
+    border-radius: 8px !important;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+    font-size: 0.82rem !important;
+}
+
+/* ── 聊天消息边框 ── */
+[data-testid="stChatMessage"][data-testid*="assistant"] {
+    border-left: 3px solid #764ba2 !important;
+    background: #12121f !important;
+}
+[data-testid="stChatMessage"] {
+    background: #12121f !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
+}
+
+/* ── st.status 组件 ── */
+[data-testid="stStatusWidget"] {
+    background: #1a1a2e !important;
+    border: 1px solid #3d3d6e !important;
+    border-radius: 10px !important;
+}
+
+/* ── caption / 轮次标签 ── */
+.turn-badge {
+    display: inline-block;
+    background: #1e1e3a;
+    border: 1px solid #3d3d6e;
+    color: #8080aa;
+    padding: 1px 8px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    margin-bottom: 4px;
+}
+
+/* ── 分隔线 ── */
+hr { border-color: #2d2d4e !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -327,9 +369,11 @@ with st.sidebar:
         st.rerun()
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-st.markdown("""
+_turn_count = len([m for m in st.session_state.messages if m["role"] == "assistant"])
+_turn_label = f"  ·  第 {_turn_count} 轮" if _turn_count > 0 else ""
+st.markdown(f"""
 <div class="hero-title">🧮 Math Solver Agent</div>
-<div class="hero-sub">AI 数学解题助手 · 支持拍题 · ReAct Agentic Loop · Tool Use · SymPy</div>
+<div class="hero-sub">AI 数学解题助手 · 支持拍题 · ReAct Agentic Loop · Tool Use · SymPy{_turn_label}</div>
 """, unsafe_allow_html=True)
 
 # 手机端模型快速切换（桌面端用侧边栏，手机端用这里）
@@ -391,8 +435,13 @@ if st.session_state.get("show_wrongbook", False):
                             st.session_state.wrong_book.pop(wi)
                             st.rerun()
 
+_asst_turn = 0
 for i, msg in enumerate(st.session_state.messages):
+    if msg["role"] == "assistant":
+        _asst_turn += 1
     with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
+        if msg["role"] == "assistant":
+            st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>', unsafe_allow_html=True)
         content = fix_latex(msg["content"]) if msg["role"] == "assistant" else msg["content"]
         st.markdown(content)
         if msg["role"] == "assistant":
@@ -501,6 +550,7 @@ if user_input:
         ]
 
         trace_lines: list[str] = []
+        _tool_start_times: dict[str, float] = {}
         _TOOL_LABELS = {
             "step_decomposer": "📋 规划解题步骤",
             "formula_lookup":  "📐 检索公式",
@@ -525,12 +575,16 @@ if user_input:
 
             def on_tool_call(name, args, result):
                 label = _TOOL_LABELS.get(name, f"🔧 {name}")
+                ts = datetime.now().strftime("%H:%M:%S")
                 if result is None:
+                    _tool_start_times[name] = time.time()
                     status.update(label=f"{label}...")
-                    trace_lines.append(f"{label}\n   参数: {args}")
+                    trace_lines.append(f"[{ts}] {label}")
+                    trace_lines.append(f"   参数: {args}")
                 else:
+                    elapsed = time.time() - _tool_start_times.get(name, time.time())
                     preview = str(result)[:100] + ("…" if len(str(result)) > 100 else "")
-                    trace_lines.append(f"   → {preview}\n")
+                    trace_lines.append(f"   → {preview}  ({elapsed:.1f}s)\n")
 
             # 取出图片（拍题模式自动切换视觉模型）
             _img = st.session_state.pop("pending_image", None)
@@ -555,8 +609,9 @@ if user_input:
                 )
                 err = None
             except Exception as exc:
+                import traceback
                 stream = None
-                err = str(exc)
+                err = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}"
             finally:
                 sys.stdout = sys.__stdout__
 

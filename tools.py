@@ -64,27 +64,21 @@ TOOL_DEFINITIONS = [
             "name": "formula_lookup",
             "description": (
                 "Retrieve relevant formulas and identities for a math topic. "
+                "Use free-form natural language — e.g. '二次方程求根公式', 'chain rule for derivatives', '复变函数留数定理'. "
                 "Call this before solving to confirm which formulas apply."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "topic": {
+                    "query": {
                         "type": "string",
-                        "enum": [
-                            "algebra",
-                            "geometry",
-                            "calculus",
-                            "trigonometry",
-                            "statistics",
-                            "number_theory",
-                            "complex_analysis",
-                            "numerical_analysis",
-                        ],
-                        "description": "Math topic to look up.",
+                        "description": (
+                            "Natural language description of the math concept or formula needed. "
+                            "Examples: '导数乘积法则', 'Pythagorean theorem', '留数定理', 'binomial probability'"
+                        ),
                     }
                 },
-                "required": ["topic"],
+                "required": ["query"],
             },
         },
     },
@@ -325,25 +319,103 @@ def _run_calculator(expression: str, operation: str, variable: str = "x") -> str
         )
 
 
-def _run_formula_lookup(topic: str) -> str:
-    """从公式库中检索指定主题的公式。"""
-    _zh_map = {
-        "代数": "algebra", "几何": "geometry", "微积分": "calculus",
-        "三角": "trigonometry", "三角函数": "trigonometry",
-        "统计": "statistics", "概率": "statistics", "数论": "number_theory",
-        "复变函数": "complex_analysis", "复变": "complex_analysis",
-        "数值分析": "numerical_analysis", "数值": "numerical_analysis",
-        "插值": "numerical_analysis", "积分": "calculus",
-    }
-    topic = _zh_map.get(topic, topic)
-    formulas = _FORMULAS.get(topic, {})
-    if not formulas:
-        return f"未找到主题 '{topic}' 的公式。"
+# RAG 懒加载索引（首次调用时构建，需要 Ollama 在线）
+_rag_index: "list[dict] | None" = None
+_rag_available: "bool | None" = None
 
-    lines = [f"📐 {topic.upper()} 常用公式", "=" * 44]
-    for name, formula in formulas.items():
-        lines.append(f"\n• {name}")
-        lines.append(f"  {formula}")
+
+def _get_rag_index():
+    global _rag_index, _rag_available
+    if _rag_available is False:
+        return None
+    if _rag_index is not None:
+        return _rag_index
+    try:
+        from rag_formula_lookup import build_index
+        _rag_index = build_index()
+        _rag_available = True
+        return _rag_index
+    except Exception:
+        _rag_available = False
+        return None
+
+
+# 关键词 → 主题映射（扩展版，用于 RAG 不可用时的 fallback）
+_KW_MAP: dict[str, str] = {
+    # algebra
+    "algebra": "algebra", "代数": "algebra", "方程": "algebra", "二次": "algebra",
+    "因式": "algebra", "对数": "algebra", "log": "algebra", "指数": "algebra",
+    "求根": "algebra", "根号": "algebra", "展开": "algebra",
+    # geometry
+    "geometry": "geometry", "几何": "geometry", "面积": "geometry", "体积": "geometry",
+    "距离": "geometry", "三角形": "geometry", "圆": "geometry", "勾股": "geometry",
+    "球": "geometry", "圆柱": "geometry", "中点": "geometry",
+    # calculus
+    "calculus": "calculus", "微积分": "calculus", "导数": "calculus", "微分": "calculus",
+    "积分": "calculus", "极限": "calculus", "limit": "calculus", "derivative": "calculus",
+    "integral": "calculus", "洛必达": "calculus", "链式": "calculus", "乘积法则": "calculus",
+    "商式": "calculus", "不定积分": "calculus", "定积分": "calculus", "微积分基本": "calculus",
+    # trigonometry
+    "trigonometry": "trigonometry", "三角函数": "trigonometry", "sin": "trigonometry",
+    "cos": "trigonometry", "tan": "trigonometry", "正弦": "trigonometry", "余弦": "trigonometry",
+    "倍角": "trigonometry", "和角": "trigonometry", "正切": "trigonometry",
+    # statistics
+    "statistics": "statistics", "统计": "statistics", "概率": "statistics",
+    "probability": "statistics", "贝叶斯": "statistics", "正态": "statistics",
+    "distribution": "statistics", "方差": "statistics", "二项": "statistics",
+    "组合数": "statistics",
+    # number theory
+    "number_theory": "number_theory", "数论": "number_theory", "素数": "number_theory",
+    "质数": "number_theory", "欧拉": "number_theory", "gcd": "number_theory",
+    "费马": "number_theory", "最大公约数": "number_theory",
+    # complex analysis
+    "complex_analysis": "complex_analysis", "复变": "complex_analysis", "留数": "complex_analysis",
+    "柯西": "complex_analysis", "解析函数": "complex_analysis", "cauchy": "complex_analysis",
+    "residue": "complex_analysis", "洛朗": "complex_analysis", "极点": "complex_analysis",
+    "围道": "complex_analysis",
+    # numerical analysis
+    "numerical_analysis": "numerical_analysis", "数值分析": "numerical_analysis",
+    "插值": "numerical_analysis", "梯形": "numerical_analysis", "simpson": "numerical_analysis",
+    "辛普森": "numerical_analysis", "牛顿迭代": "numerical_analysis", "二分法": "numerical_analysis",
+    "高斯消去": "numerical_analysis", "拉格朗日": "numerical_analysis", "差商": "numerical_analysis",
+}
+
+
+def _run_formula_lookup(query: str) -> str:
+    """从公式库中检索与 query 相关的公式（先 RAG，再关键词 fallback）。"""
+    # ── RAG 路径（需要 Ollama 在线）──────────────────────────────
+    index = _get_rag_index()
+    if index:
+        try:
+            from rag_formula_lookup import retrieve
+            hits = retrieve(query, index, top_k=5)
+            lines = [f"📐 公式检索：{query}", "=" * 44]
+            for d in hits:
+                lines.append(f"\n• {d['name']}  [{d['topic']}]")
+                formula_part = d["text"].split(": ", 1)[-1]
+                lines.append(f"  {formula_part}")
+            return "\n".join(lines)
+        except Exception:
+            pass
+
+    # ── Fallback：关键词匹配（不需要 Ollama）──────────────────────
+    query_lower = query.lower()
+    matched_topics: list[str] = []
+    for kw, topic in _KW_MAP.items():
+        if kw in query_lower and topic not in matched_topics:
+            matched_topics.append(topic)
+
+    if not matched_topics:
+        # 最后兜底：返回 algebra + calculus 基础公式
+        matched_topics = ["algebra", "calculus"]
+
+    lines = [f"📐 公式检索：{query}", "=" * 44]
+    for topic in matched_topics:
+        formulas = _FORMULAS.get(topic, {})
+        lines.append(f"\n【{topic.upper()}】")
+        for name, formula in formulas.items():
+            lines.append(f"\n• {name}")
+            lines.append(f"  {formula}")
     return "\n".join(lines)
 
 
@@ -389,7 +461,7 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
             variable=tool_input.get("variable", "x"),
         )
     elif tool_name == "formula_lookup":
-        return _run_formula_lookup(topic=tool_input["topic"])
+        return _run_formula_lookup(query=tool_input.get("query") or tool_input.get("topic", ""))
     elif tool_name == "step_decomposer":
         return _run_step_decomposer(
             problem_type=tool_input["problem_type"],

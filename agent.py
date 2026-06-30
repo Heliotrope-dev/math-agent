@@ -17,9 +17,9 @@ from tools import TOOL_DEFINITIONS, execute_tool
 # macOS 系统代理会被 httpx 自动读取并拦截 localhost 请求，需要显式禁用
 # 注：不能在模块级别共享 httpx.Client，每个 agent 实例单独创建避免连接池冲突
 
-MAX_ITERATIONS = 12
-
 _USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
+_DEFAULT_MAX_ITERATIONS = 12
+_MAX_HISTORY_TURNS = 10  # 保留最近 N 轮对话（user+assistant 算一轮）
 
 _SYSTEM = """你是一位专业的数学教师。
 
@@ -81,9 +81,16 @@ CLOUD_PROVIDERS = {
 
 
 class MathAgent:
-    def __init__(self, use_local: bool = _USE_LOCAL, model: str = None, guide_mode: bool = False):
+    def __init__(
+        self,
+        use_local: bool = _USE_LOCAL,
+        model: str = None,
+        guide_mode: bool = False,
+        max_iterations: int = _DEFAULT_MAX_ITERATIONS,
+    ):
         self.use_local = use_local
         self.guide_mode = guide_mode
+        self.max_iterations = max_iterations
         if use_local:
             self.client = OpenAI(
                 api_key="ollama",
@@ -108,6 +115,20 @@ class MathAgent:
     def supports_vision(self) -> bool:
         return self.model in VISION_MODELS
 
+    @staticmethod
+    def _trim_history(history: list) -> list:
+        """保留最近 _MAX_HISTORY_TURNS 轮（每轮 = user + assistant），避免 context 过长。"""
+        turns = []
+        buf = []
+        for msg in reversed(history):
+            buf.insert(0, msg)
+            if msg["role"] == "user":
+                turns.insert(0, buf)
+                buf = []
+                if len(turns) >= _MAX_HISTORY_TURNS:
+                    break
+        return [m for turn in turns for m in turn]
+
     def solve(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None) -> str:
         """运行完整的 agentic loop，支持多轮对话历史。
 
@@ -116,7 +137,7 @@ class MathAgent:
         system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
         messages = [{"role": "system", "content": system}]
         if history:
-            messages.extend(history)
+            messages.extend(self._trim_history(history))
 
         # 视觉模式：压缩图片（减少 token）+ 单次直接调用
         if image_bytes and self.supports_vision:
@@ -147,7 +168,7 @@ class MathAgent:
         messages.append({"role": "user", "content": f"请解题：{problem}"})
         extra = {"think": False} if self.use_local else {}
 
-        for iteration in range(MAX_ITERATIONS):
+        for iteration in range(self.max_iterations):
             response = self.client.chat.completions.create(
                 model=self.model,
                 tools=TOOL_DEFINITIONS,
@@ -210,12 +231,14 @@ def _compress_image(image_bytes: bytes, max_size: int = 768) -> bytes:
         buf = BytesIO()
         img.save(buf, format="JPEG", quality=80)
         return buf.getvalue()
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("图片压缩失败，使用原图：%s", e)
         return image_bytes
 
 
-def _fake_stream(text: str):
-    """Yield text in chunks that mimic the OpenAI streaming response format."""
+def _fake_stream(text: str, chunk_size: int = 10):
+    """Yield text in fixed-size chunks that mimic the OpenAI streaming response format."""
     class _Delta:
         def __init__(self, c): self.content = c
     class _Choice:
@@ -223,7 +246,5 @@ def _fake_stream(text: str):
     class _Chunk:
         def __init__(self, c): self.choices = [_Choice(c)]
 
-    import re
-    for part in re.split(r'(\s+)', text):
-        if part:
-            yield _Chunk(part)
+    for i in range(0, len(text), chunk_size):
+        yield _Chunk(text[i:i + chunk_size])
