@@ -744,8 +744,27 @@ def get_agent(use_local, model, guide_mode=False):
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 def fix_latex(text):
+    # 去除模型可能输出的多余 HTML 标签（Gemini 有时会在末尾加 </div> 等）
+    text = re.sub(r'</?(div|span|p|br|html|body)[^>]*>', '', text, flags=re.IGNORECASE)
+
+    # \[ ... \] → $$ ... $$（块公式）
     text = re.sub(r'\\\[\s*(.*?)\s*\\\]', r'\n$$\1$$\n', text, flags=re.DOTALL)
+    # \( ... \) → $ ... $（行内公式）
     text = re.sub(r'\\\(\s*(.*?)\s*\\\)', r'$\1$', text, flags=re.DOTALL)
+
+    # 行内 $ ... $ 里含矩阵/多行环境时，升级为块级 $$ ... $$
+    # 防止 & 和 \\ 被 markdown 解析破坏
+    def _upgrade_matrix(m):
+        inner = m.group(1)
+        if r'\begin{' in inner:
+            return f'\n$$\n{inner}\n$$\n'
+        return m.group(0)
+    text = re.sub(r'\$(?!\$)(.*?)\$(?!\$)', _upgrade_matrix, text, flags=re.DOTALL)
+
+    # 修复奇数个 $$（未关闭的块公式）
+    if text.count('$$') % 2 != 0:
+        text += '\n$$'
+
     return text
 
 def extract_tags(text):
