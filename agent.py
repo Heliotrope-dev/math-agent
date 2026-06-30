@@ -63,7 +63,7 @@ VISION_MODELS = {
     "Qwen/Qwen3-VL-8B-Instruct",
 }
 
-LOCAL_MODELS = ["phi4-mini", "phi4", "qwen2.5:7b", "qwen2.5:14b", "gemma3:12b"]
+LOCAL_MODELS = ["phi4-mini", "phi4"]
 DEFAULT_LOCAL_MODEL = "phi4-mini"
 
 CLOUD_PROVIDERS = {

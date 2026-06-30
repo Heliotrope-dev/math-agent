@@ -131,6 +131,11 @@ def _show_login_page():
                     st.session_state["logged_in"] = True
                     st.session_state["user_email"] = _em
                     st.session_state["_token"] = _tok
+                    # 同时写 localStorage，关闭浏览器后也能恢复
+                    _cv1.html(
+                        f'<script>try{{window.parent.localStorage.setItem("ma_auth_tok","{_tok}");}}catch(e){{}}</script>',
+                        height=1,
+                    )
                     st.rerun()
                 else:
                     st.error("邮箱或密码不正确")
@@ -156,8 +161,26 @@ def _show_login_page():
 
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
 
+# ── localStorage 读取（关闭浏览器后用桌面快捷打开也能恢复登录）─────────────
+# 总是渲染，让 Streamlit 组件树稳定；JS 内部判断是否需要注入
+import streamlit.components.v1 as _cv1
+_cv1.html("""
+<script>
+try {
+    var url = new URL(window.parent.location.href);
+    if (!url.searchParams.get('_auth')) {
+        var t = window.parent.localStorage.getItem('ma_auth_tok');
+        if (t) {
+            url.searchParams.set('_auth', t);
+            window.parent.history.replaceState(null, '', url.toString());
+            window.parent.location.reload();
+        }
+    }
+} catch(e) {}
+</script>
+""", height=1)
+
 # ── URL 参数持久化（7 天免登录）──────────────────────────────────────────────
-# st.query_params 存储在 URL 中，刷新后完整保留，无需 JS cookie，100% 可靠
 _stored_token = st.query_params.get("_auth", "") or ""
 if _stored_token and not st.session_state.get("logged_in"):
     _auto_email = _validate_token(_stored_token)
@@ -652,7 +675,7 @@ def _secret(key):
     except Exception:
         return os.environ.get(key, "")
 
-_OLLAMA_FALLBACK_MODELS = ["qwen2.5:7b", "qwen2.5:14b", "phi4-mini", "phi4", "llama3.2"]
+_OLLAMA_FALLBACK_MODELS = ["phi4-mini", "phi4"]
 
 def _fetch_ollama_models() -> list[str]:
     """从 Ollama /api/tags 动态获取已安装模型列表，结果缓存在 session state。"""
@@ -846,6 +869,10 @@ with st.sidebar:
             del st.query_params["_auth"]
         except Exception:
             pass
+        _cv1.html(
+            '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");}catch(e){}</script>',
+            height=1,
+        )
         st.session_state["logged_in"] = False
         st.session_state.pop("user_email", None)
         st.rerun()
@@ -1223,31 +1250,11 @@ if st.session_state.get("show_mic"):
             st.warning("未能识别语音，请重试（录音时长需超过1秒）")
         st.rerun()
 
-# ── 语音识别完成 → 可编辑预览框（原生 text_input，不依赖 JS）──────────────
+# ── 语音识别完成 → 搬运到 _vt_widget（渲染在工具栏下方，见底部）──────────
 if "voice_transcript" in st.session_state and "_vt_widget" not in st.session_state:
     st.session_state["_vt_widget"] = st.session_state.pop("voice_transcript")
 elif "voice_transcript" in st.session_state:
     del st.session_state["voice_transcript"]
-
-if "_vt_widget" in st.session_state:
-    st.markdown(
-        '<p style="font-size:0.82rem;color:#2aae67;margin:4px 0 2px 2px">🎙️ 语音识别完成 · 编辑后点发送</p>',
-        unsafe_allow_html=True,
-    )
-    _vt_c, _vt_btn, _vt_x = st.columns([8, 1, 1])
-    with _vt_c:
-        st.text_input("", key="_vt_widget", label_visibility="collapsed")
-    with _vt_btn:
-        if st.button("➤", key="vt_send", type="primary", use_container_width=True):
-            _val = st.session_state.get("_vt_widget", "").strip()
-            if _val:
-                st.session_state["_direct_input"] = _val
-                del st.session_state["_vt_widget"]
-                st.rerun()
-    with _vt_x:
-        if st.button("✕", key="vt_cancel", use_container_width=True):
-            del st.session_state["_vt_widget"]
-            st.rerun()
 
 # ── 待发附件预览条（紧凑横条）────────────────────────────────────────────────
 _patt = st.session_state.get("pending_attachment")
@@ -1341,9 +1348,32 @@ prefill = st.session_state.pop("prefill", "")
 _direct_input = st.session_state.pop("_direct_input", None)
 _panel_just_toggled = st.session_state.pop("_panel_just_toggled", False)
 _has_patt = "pending_attachment" in st.session_state
-typed = st.chat_input(
-    "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
-)
+
+# 语音识别完成时：在输入框位置显示可编辑预览，替代 chat_input
+if "_vt_widget" in st.session_state:
+    st.markdown(
+        '<p style="font-size:0.82rem;color:#2aae67;margin:4px 0 2px 2px">🎙️ 语音识别完成 · 编辑后点发送</p>',
+        unsafe_allow_html=True,
+    )
+    _vt_c, _vt_btn, _vt_x = st.columns([8, 1, 1])
+    with _vt_c:
+        st.text_input("", key="_vt_widget", label_visibility="collapsed")
+    with _vt_btn:
+        if st.button("➤", key="vt_send", type="primary", use_container_width=True):
+            _val = st.session_state.get("_vt_widget", "").strip()
+            if _val:
+                st.session_state["_direct_input"] = _val
+                del st.session_state["_vt_widget"]
+                st.rerun()
+    with _vt_x:
+        if st.button("✕", key="vt_cancel", use_container_width=True):
+            del st.session_state["_vt_widget"]
+            st.rerun()
+    typed = None
+else:
+    typed = st.chat_input(
+        "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
+    )
 
 # 确定是否"提交"：面板刚切换时强制跳过，避免误触发
 _submitted = (not _panel_just_toggled) and (
@@ -1446,13 +1476,12 @@ if user_input:
                 _solve_model = selected_model
                 _use_guide = guide_mode and not _img_bytes and not _sim_data
                 if _img_bytes:
-                    if _secret("SILICONFLOW_API_KEY"):
-                        _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
-                        status.update(label="切换视觉模型（Qwen VL）…")
-                    elif _secret("GEMINI_API_KEY"):
-                        # 有 Gemini key 就用 Gemini 视觉，无需额外 key
+                    if _secret("GEMINI_API_KEY"):
                         _solve_model = "gemini-2.0-flash"
                         status.update(label="切换视觉模型（Gemini）…")
+                    elif _secret("SILICONFLOW_API_KEY"):
+                        _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+                        status.update(label="切换视觉模型（Qwen VL）…")
                     else:
                         # 没有视觉 API，先 OCR 成文字再解题
                         status.update(label="识别图片内容…")
