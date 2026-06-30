@@ -125,7 +125,8 @@ def _show_login_page():
             if st.button("登录", type="primary", use_container_width=True, key="do_login"):
                 if _check_user(_em, _hash_pw(_pw)):
                     _tok = _create_token(_em)
-                    _cm.set(_TOKEN_COOKIE, _tok, max_age=_TOKEN_DAYS * 86400)
+                    _cm.set(_TOKEN_COOKIE, _tok,
+                            expires=datetime.now() + timedelta(days=_TOKEN_DAYS))
                     st.session_state["logged_in"] = True
                     st.session_state["user_email"] = _em
                     st.session_state["_token"] = _tok
@@ -155,15 +156,9 @@ def _show_login_page():
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
 
 # ── Cookie 管理（7 天免登录）─────────────────────────────────────────────────
-import extra_streamlit_components as _stx
-_cm = _stx.CookieManager(key="_math_cm")
+from streamlit_cookies_controller import CookieController as _CC
+_cm = _CC()
 _stored_token = _cm.get(_TOKEN_COOKIE)
-
-# CookieManager 第一次渲染时 JS 尚未回传 cookie，需要等一个周期
-# 用 _cm_ready 标记：首次渲染直接 rerun，第二次才真正读 cookie
-if not st.session_state.get("_cm_ready") and not st.session_state.get("logged_in"):
-    st.session_state["_cm_ready"] = True
-    st.rerun()
 
 if _stored_token and not st.session_state.get("logged_in"):
     _auto_email = _validate_token(_stored_token)
@@ -805,7 +800,7 @@ with st.sidebar:
         _tok = st.session_state.pop("_token", None)
         if _tok:
             _invalidate_token(_tok)
-            _cm.delete(_TOKEN_COOKIE)
+            _cm.remove(_TOKEN_COOKIE)
         st.session_state["logged_in"] = False
         st.session_state.pop("user_email", None)
         st.rerun()
