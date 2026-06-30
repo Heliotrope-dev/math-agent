@@ -142,7 +142,11 @@ class MathAgent:
         if image_bytes and self.supports_vision:
             image_bytes = _compress_image(image_bytes, max_size=768)
             b64 = base64.b64encode(image_bytes).decode()
-            prompt = f"请解答图片中的数学题。{problem}" if problem else "请识别并解答图片中所有数学题，给出完整解题过程。"
+            _default_prompt = "请解答图片中的数学题"
+            if problem and problem.strip() != _default_prompt:
+                prompt = f"图片中可能有多道题。请严格按照用户要求，只解答以下内容：{problem}\n不要解答图片中的其他题目。"
+            else:
+                prompt = "请识别并解答图片中所有数学题，给出完整解题过程。"
             messages.append({"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
