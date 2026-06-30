@@ -425,33 +425,39 @@ hr { border-color: #D4CEC8 !important; }
     box-shadow: 0 0 0 2px rgba(42,174,103,0.15) !important;
 }
 
-/* ══ 文件上传：只显示按钮，隐藏虚线框和说明文字 ══ */
+/* ══ 文件上传：白色圆角按钮，隐藏虚线框和小字说明 ══ */
 [data-testid="stFileUploaderDropzone"],
 [data-testid="stFileUploadDropzone"] {
     background: transparent !important;
     border: none !important;
-    padding: 0 !important;
+    padding: 4px 0 !important;
 }
-/* 隐藏 "200MB per file · JPG PNG..." 说明文字 */
-[data-testid="stFileUploaderDropzone"] > div:not(:has(button)),
+/* 隐藏 "Drag and drop" / "200MB per file" 小字 */
 [data-testid="stFileUploaderDropzone"] small,
-[data-testid="stFileUploaderDropzone"] span:not([data-testid]),
-[data-testid="stFileUploaderDropzone"] p {
+[data-testid="stFileUploadDropzone"] small {
     display: none !important;
 }
+[data-testid="stFileUploaderDropzone"] > div > span,
+[data-testid="stFileUploadDropzone"] > div > span {
+    display: none !important;
+}
+/* 上传按钮：全宽白色圆角 */
 [data-testid="stFileUploaderDropzone"] button,
 [data-testid="stFileUploadDropzone"] button {
     background: #FFFFFF !important;
     border: 1px solid #C8C0B8 !important;
-    border-radius: 12px !important;
-    color: #444 !important;
+    border-radius: 14px !important;
+    color: #333 !important;
     width: 100% !important;
-    padding: 14px !important;
-    font-size: 0.9rem !important;
+    padding: 14px 20px !important;
+    font-size: 0.92rem !important;
+    font-weight: 500 !important;
+    justify-content: center !important;
 }
-[data-testid="stFileUploaderDropzone"] button:hover {
+[data-testid="stFileUploaderDropzone"] button:hover,
+[data-testid="stFileUploadDropzone"] button:hover {
     background: #F5F0EB !important;
-    border-color: #999 !important;
+    border-color: #888 !important;
 }
 
 /* ── Selectbox ── */
