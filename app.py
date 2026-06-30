@@ -93,7 +93,7 @@ def _invalidate_token(token: str):
 def _load_wrong_book(email: str) -> list:
     if not email:
         return []
-    return _sb_get("wrong_book", {"email": f"eq.{email}", "select": "question,saved_at", "order": "id"})
+    return _sb_get("wrong_book", {"email": f"eq.{email}", "select": "*", "order": "id"})
 
 def _save_wrong_book(email: str, wb: list):
     if not email:
@@ -101,7 +101,12 @@ def _save_wrong_book(email: str, wb: list):
     _sb_delete("wrong_book", {"email": f"eq.{email}"})
     if wb:
         _sb_post("wrong_book", [
-            {"email": email, "question": item["question"], "saved_at": item.get("saved_at", "")}
+            {
+                "email": email,
+                "question": item["question"],
+                "saved_at": item.get("saved_at", ""),
+                "image_b64": item.get("image_b64", ""),
+            }
             for item in wb
         ])
 
@@ -758,12 +763,16 @@ def transcribe_audio(audio_file) -> str:
         return ""
     try:
         raw = audio_file.read()
-        # 检测 MIME 类型（浏览器一般录 webm 或 wav）
+        # 检测 MIME 类型（桌面 Chrome→webm，iOS Safari→mp4，桌面 Firefox→ogg）
         mime = "audio/webm"
         if raw[:4] == b"RIFF":
             mime = "audio/wav"
         elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
             mime = "audio/mp3"
+        elif len(raw) > 8 and raw[4:8] == b"ftyp":
+            mime = "audio/mp4"   # iOS Safari / m4a
+        elif raw[:4] == b"OggS":
+            mime = "audio/ogg"
         b64 = base64.b64encode(raw).decode()
         resp = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}",
@@ -847,7 +856,18 @@ with st.sidebar:
                 c1, c2 = st.columns(2)
                 with c1:
                     if st.button("重做", key=f"wb_redo_{wi}", use_container_width=True):
-                        st.session_state["prefill"] = wp["question"]
+                        _wb_img = wp.get("image_b64", "")
+                        if _wb_img:
+                            # 恢复图片为待发附件，用户可补充文字后发送
+                            _img_bytes_wb = base64.b64decode(_wb_img)
+                            st.session_state["pending_attachment"] = {
+                                "type": "image", "bytes": _img_bytes_wb, "name": "错题图片"
+                            }
+                            _txt = wp["question"].lstrip("📷").strip()
+                            if _txt and _txt != "图片题目":
+                                st.session_state["prefill"] = _txt
+                        else:
+                            st.session_state["prefill"] = wp["question"]
                         st.rerun()
                 with c2:
                     if st.button("删除", key=f"wb_del_{wi}", use_container_width=True):
@@ -859,6 +879,60 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.pop("prefill", None)
         st.rerun()
+
+    st.divider()
+    with st.expander("📖 使用手册", expanded=False):
+        st.markdown("""
+**🧮 Math Agent 使用指南**
+
+---
+
+**提问方式**
+
+- **文字**：直接在底部输入框输入题目，支持 LaTeX 符号（如 `$x^2$`、`\\int`）
+- **拍题**：点 ➕ → 拍照 / 上传图片，AI 自动识别并解答
+- **语音**：点左下角 🎙️ 录音，识别完成后在文本框确认发送
+- **示例题**：首页六道例题卡片，点击直接解题
+
+---
+
+**Agent 工作方式**
+
+Math Agent 不是普通聊天机器人，它会**主动调用工具**完成解题：
+
+1. **step_decomposer** — 分析题型，拆解解题步骤
+2. **formula_lookup** — 查阅所需公式与定理
+3. **calculator** — 精确计算（积分、极限、方程、行列式等）
+
+每次解题你可以展开「工具调用详情」看到完整推导过程。
+
+---
+
+**学习功能**
+
+- 📚 **知识点标签**：点击某个知识点，AI 详细讲解定义和推导
+- 🧪 **同类练习题**：每次解题后生成一道练习，点击直接做
+- 📌 **错题本**：点「存入错题本」，随时从侧边栏重做
+- 🧭 **引导模式**：开启后 AI 用苏格拉底式提问引导你自己想，不直接给答案
+
+---
+
+**模型选择**
+
+底部工具栏可切换模型：
+- `deepseek-chat` — 默认，文字解题最稳定
+- `gemini-2.0/2.5-flash` — 速度快，支持拍题识别
+- `Qwen3-VL-*` — 视觉能力强，拍题效果好
+
+---
+
+**小技巧**
+
+- 发完消息后可继续追问，AI 记住上下文
+- 闲聊也可以，不一定要发数学题
+- 拍题时建议补充文字说明具体问哪部分
+""")
+
 
 # ── 主界面顶部（含手机端 ☰ 菜单按钮）────────────────────────────────────────
 _hdr_menu_col, _hdr_title_col, _hdr_right_col = st.columns([1, 5, 2])
@@ -1000,45 +1074,44 @@ for i, msg in enumerate(st.session_state.messages):
         with _bubble_col2:
             st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>',
                         unsafe_allow_html=True)
-            with st.container(border=False):
+            st.markdown(
+                f'<div class="bubble-asst-wrap">{fix_latex(msg["content"])}</div>',
+                unsafe_allow_html=True,
+            )
+            if msg.get("tags"):
+                tag_key = f"ktag_{i}"
+                sel = st.pills("知识点", msg["tags"], key=tag_key,
+                               label_visibility="collapsed")
+                if sel:
+                    st.session_state.pop(tag_key, None)
+                    st.session_state["prefill"] = (
+                        f"请详细讲解「{sel}」：定义、推导过程和典型例题"
+                    )
+                    st.rerun()
+            if msg.get("practice"):
                 st.markdown(
-                    '<div class="bubble-asst-wrap">',
+                    '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
                     unsafe_allow_html=True,
                 )
-                st.markdown(fix_latex(msg["content"]))
-                st.markdown('</div>', unsafe_allow_html=True)
-                if msg.get("tags"):
-                    tag_key = f"ktag_{i}"
-                    sel = st.pills("知识点", msg["tags"], key=tag_key,
-                                   label_visibility="collapsed")
-                    if sel:
-                        st.session_state.pop(tag_key, None)
-                        st.session_state["prefill"] = (
-                            f"请详细讲解「{sel}」：定义、推导过程和典型例题"
-                        )
-                        st.rerun()
-                if msg.get("practice"):
-                    st.markdown(
-                        '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
-                        unsafe_allow_html=True,
-                    )
-                    if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
-                        st.session_state["_direct_input"] = msg["practice"]
-                        st.rerun()
-                if msg.get("trace"):
-                    with st.expander("工具调用详情", expanded=False):
-                        st.code(msg["trace"], language="text")
-                # ── 存入错题本按钮 ──
-                _prev_q = next((m["content"] for m in reversed(st.session_state.messages[:i])
-                                if m["role"] == "user"), "")
-                if _prev_q and not any(w["question"] == _prev_q for w in st.session_state.wrong_book):
-                    if st.button("📌 存入错题本", key=f"wb_add_{i}", use_container_width=False):
-                        st.session_state.wrong_book.append({
-                            "question": _prev_q,
-                            "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        })
-                        _save_wrong_book(st.session_state.get("user_email",""), st.session_state.wrong_book)
-                        st.rerun()
+                if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
+                    st.session_state["_direct_input"] = msg["practice"]
+                    st.rerun()
+            if msg.get("trace"):
+                with st.expander("工具调用详情", expanded=False):
+                    st.code(msg["trace"], language="text")
+            # ── 存入错题本按钮 ──
+            _prev_msg = next((m for m in reversed(st.session_state.messages[:i])
+                              if m["role"] == "user"), None)
+            _prev_q = _prev_msg["content"] if _prev_msg else ""
+            if _prev_q and not any(w["question"] == _prev_q for w in st.session_state.wrong_book):
+                if st.button("📌 存入错题本", key=f"wb_add_{i}", use_container_width=False):
+                    st.session_state.wrong_book.append({
+                        "question": _prev_q,
+                        "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "image_b64": _prev_msg.get("image_b64", "") if _prev_msg else "",
+                    })
+                    _save_wrong_book(st.session_state.get("user_email",""), st.session_state.wrong_book)
+                    st.rerun()
 
 # ── 新消息占位容器（必须在工具栏之前声明，确保新消息渲染在工具栏上方）────────
 _new_turn = st.container()
@@ -1128,7 +1201,7 @@ if st.session_state.get("show_mic"):
         if _vt:
             st.session_state["voice_transcript"] = _vt
         else:
-            st.warning("未能识别，请重试或检查 GEMINI_API_KEY")
+            st.warning("未能识别语音，请重试（录音时长需超过1秒）")
         st.rerun()
 
 # ── 语音识别完成 → 可编辑预览框（原生 text_input，不依赖 JS）──────────────
