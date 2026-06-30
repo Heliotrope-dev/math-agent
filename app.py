@@ -23,82 +23,90 @@ for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
 
 from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
 
+# ── Supabase 初始化 ───────────────────────────────────────────────────────────
+from supabase import create_client as _sb_create
+_SUPABASE_URL = "https://jqfvgpeyzghnuznjjwio.supabase.co"
+_SUPABASE_KEY = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+    ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxZnZncGV5emdobnV6bmpqd2lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDUxNjUsImV4cCI6MjA5ODM4MTE2NX0"
+    ".8DcpQHEsOsjlwzBdYWX_3PaIcFlYgpm_YzbKpFBapqQ"
+)
+_sb = _sb_create(_SUPABASE_URL, _SUPABASE_KEY)
+
 # ── 用户管理（登录注册 + 7天 Cookie 持久化）─────────────────────────────────
-_USERS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
-_SESSIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions.json")
-_TOKEN_COOKIE  = "math_agent_token"
-_TOKEN_DAYS    = 7
-
-def _load_users():
-    if os.path.exists(_USERS_FILE):
-        with open(_USERS_FILE) as f:
-            return json.load(f)
-    return {}
-
-def _save_users(users: dict):
-    with open(_USERS_FILE, "w") as f:
-        json.dump(users, f, indent=2)
+_TOKEN_COOKIE = "math_agent_token"
+_TOKEN_DAYS   = 7
 
 def _hash_pw(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
 
-def _load_sessions() -> dict:
-    if os.path.exists(_SESSIONS_FILE):
-        with open(_SESSIONS_FILE) as f:
-            return json.load(f)
-    return {}
+def _user_exists(email: str) -> bool:
+    try:
+        return len(_sb.table("users").select("email").eq("email", email).execute().data) > 0
+    except Exception:
+        return False
 
-def _save_sessions(s: dict):
-    with open(_SESSIONS_FILE, "w") as f:
-        json.dump(s, f, indent=2)
+def _check_user(email: str, pw_hash: str) -> bool:
+    try:
+        rows = (_sb.table("users").select("email")
+                .eq("email", email).eq("password_hash", pw_hash).execute().data)
+        return len(rows) > 0
+    except Exception:
+        return False
+
+def _register_user(email: str, pw_hash: str):
+    _sb.table("users").insert({"email": email, "password_hash": pw_hash}).execute()
 
 def _create_token(email: str) -> str:
     token = _secrets.token_urlsafe(32)
-    sessions = _load_sessions()
     now = datetime.now()
-    # 清理过期 token
-    sessions = {t: v for t, v in sessions.items()
-                if datetime.fromisoformat(v["exp"]) > now}
-    sessions[token] = {"email": email, "exp": (now + timedelta(days=_TOKEN_DAYS)).isoformat()}
-    _save_sessions(sessions)
+    exp = (now + timedelta(days=_TOKEN_DAYS)).isoformat()
+    try:
+        _sb.table("sessions").delete().eq("email", email).lt("expires_at", now.isoformat()).execute()
+        _sb.table("sessions").insert({"token": token, "email": email, "expires_at": exp}).execute()
+    except Exception:
+        pass
     return token
 
 def _validate_token(token: str):
-    sessions = _load_sessions()
-    if token in sessions:
-        entry = sessions[token]
-        if datetime.fromisoformat(entry["exp"]) > datetime.now():
-            return entry["email"]
+    try:
+        now = datetime.now().isoformat()
+        rows = (_sb.table("sessions").select("email")
+                .eq("token", token).gt("expires_at", now).execute().data)
+        if rows:
+            return rows[0]["email"]
+    except Exception:
+        pass
     return None
 
 def _invalidate_token(token: str):
-    sessions = _load_sessions()
-    sessions.pop(token, None)
-    _save_sessions(sessions)
+    try:
+        _sb.table("sessions").delete().eq("token", token).execute()
+    except Exception:
+        pass
 
-# ── 错题本持久化（按用户邮箱存盘）───────────────────────────────────────────
-_USER_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_data")
-
-def _wb_path(email: str) -> str:
-    uid = hashlib.md5(email.encode()).hexdigest()
-    d = os.path.join(_USER_DATA_DIR, uid)
-    os.makedirs(d, exist_ok=True)
-    return os.path.join(d, "wrong_book.json")
-
+# ── 错题本持久化（Supabase）──────────────────────────────────────────────────
 def _load_wrong_book(email: str) -> list:
     if not email:
         return []
-    p = _wb_path(email)
-    if os.path.exists(p):
-        with open(p) as f:
-            return json.load(f)
-    return []
+    try:
+        return (_sb.table("wrong_book").select("question,saved_at")
+                .eq("email", email).order("id").execute().data)
+    except Exception:
+        return []
 
 def _save_wrong_book(email: str, wb: list):
     if not email:
         return
-    with open(_wb_path(email), "w", encoding="utf-8") as f:
-        json.dump(wb, f, ensure_ascii=False, indent=2)
+    try:
+        _sb.table("wrong_book").delete().eq("email", email).execute()
+        if wb:
+            _sb.table("wrong_book").insert([
+                {"email": email, "question": item["question"], "saved_at": item.get("saved_at", "")}
+                for item in wb
+            ]).execute()
+    except Exception:
+        pass
 
 def _show_login_page():
     st.markdown("""
@@ -115,10 +123,9 @@ def _show_login_page():
             _em = st.text_input("邮箱", key="li_email", placeholder="your@email.com")
             _pw = st.text_input("密码", type="password", key="li_pw")
             if st.button("登录", type="primary", use_container_width=True, key="do_login"):
-                _users = _load_users()
-                if _em in _users and _users[_em] == _hash_pw(_pw):
+                if _check_user(_em, _hash_pw(_pw)):
                     _tok = _create_token(_em)
-                    _cm.set(_TOKEN_COOKIE, _tok, max_age=_TOKEN_DAYS * 86400)  # 秒数
+                    _cm.set(_TOKEN_COOKIE, _tok, max_age=_TOKEN_DAYS * 86400)
                     st.session_state["logged_in"] = True
                     st.session_state["user_email"] = _em
                     st.session_state["_token"] = _tok
@@ -130,19 +137,20 @@ def _show_login_page():
             _rpw = st.text_input("密码（至少6位）", type="password", key="reg_pw")
             _rpw2 = st.text_input("确认密码", type="password", key="reg_pw2")
             if st.button("注册账号", type="primary", use_container_width=True, key="do_reg"):
-                _users = _load_users()
                 if not _rem or "@" not in _rem:
                     st.error("请输入有效邮箱")
                 elif len(_rpw) < 6:
                     st.error("密码至少6位")
                 elif _rpw != _rpw2:
                     st.error("两次密码不一致")
-                elif _rem in _users:
+                elif _user_exists(_rem):
                     st.error("该邮箱已注册")
                 else:
-                    _users[_rem] = _hash_pw(_rpw)
-                    _save_users(_users)
-                    st.success("注册成功，请切换到登录标签页")
+                    try:
+                        _register_user(_rem, _hash_pw(_rpw))
+                        st.success("注册成功，请切换到登录标签页")
+                    except Exception as _e:
+                        st.error(f"注册失败：{_e}")
 
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
 
@@ -933,9 +941,16 @@ for i, msg in enumerate(st.session_state.messages):
         # 右侧：空白 + 内容 + 头像
         _, _bubble_col, _av_col = st.columns([2, 5, 1])
         with _bubble_col:
+            _img_html = ""
+            if msg.get("image_b64"):
+                _img_html = (
+                    f'<img src="data:image/jpeg;base64,{msg["image_b64"]}" '
+                    f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'
+                )
+            _safe_txt = msg["content"].replace("<", "&lt;").replace(">", "&gt;")
             st.markdown(
                 f'<div class="msg-row-user">'
-                f'<div class="bubble-user">{msg["content"]}</div>'
+                f'<div class="bubble-user">{_img_html}{_safe_txt}</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -1187,6 +1202,7 @@ if _submitted:
         att = _patt_send
         if att["type"] == "image":
             _img_bytes = att["bytes"]
+            _img_b64_bubble = base64.b64encode(_compress_image(_img_bytes, max_size=400)).decode()
             user_input = _eff_text.strip() or "请解答图片中的数学题"
             display_text = ("📷 " + _eff_text.strip()) if _eff_text.strip() else "📷 图片题目"
         elif att["type"] == "file":
@@ -1200,15 +1216,24 @@ if _submitted:
 # ── Agent 解题（渲染到 _new_turn 容器，确保在工具栏上方显示）──────────────────
 if user_input:
     _sim_data = _similar_ctx if _similar_ctx else None
-    st.session_state.messages.append({"role": "user", "content": display_text or user_input})
+    _msg_record = {"role": "user", "content": display_text or user_input}
+    if _img_bytes and "_img_b64_bubble" in dir():
+        _msg_record["image_b64"] = _img_b64_bubble
+    st.session_state.messages.append(_msg_record)
 
     with _new_turn:
         # 用户气泡
         _, _ub_col, _uav_col = st.columns([2, 5, 1])
         with _ub_col:
             _safe_disp = (display_text or user_input).replace("<", "&lt;").replace(">", "&gt;")
+            _new_img_html = ""
+            if _img_bytes and "_img_b64_bubble" in dir():
+                _new_img_html = (
+                    f'<img src="data:image/jpeg;base64,{_img_b64_bubble}" '
+                    f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'
+                )
             st.markdown(
-                f'<div class="msg-row-user"><div class="bubble-user">{_safe_disp}</div></div>',
+                f'<div class="msg-row-user"><div class="bubble-user">{_new_img_html}{_safe_disp}</div></div>',
                 unsafe_allow_html=True,
             )
         with _uav_col:
