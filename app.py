@@ -1144,17 +1144,11 @@ for i, msg in enumerate(st.session_state.messages):
                 unsafe_allow_html=True,
             )
             if msg.get("tags"):
-                # 用版本号让 key 每次点击后变化，防止 Streamlit widget 缓存恢复选中值
-                _tv = st.session_state.get(f"ktag_ver_{i}", 0)
-                tag_key = f"ktag_{i}_v{_tv}"
-                sel = st.pills("知识点", msg["tags"], key=tag_key,
-                               label_visibility="collapsed")
-                if sel:
-                    st.session_state[f"ktag_ver_{i}"] = _tv + 1  # 换 key，重置 pill
-                    st.session_state["prefill"] = (
-                        f"请详细讲解「{sel}」：定义、推导过程和典型例题"
-                    )
-                    st.rerun()
+                _tcols = st.columns(len(msg["tags"]))
+                for _ti, _tag in enumerate(msg["tags"]):
+                    with _tcols[_ti]:
+                        if st.button(_tag, key=f"tag_{i}_{_ti}", use_container_width=True):
+                            st.session_state["_direct_input"] = f"请详细讲解「{_tag}」：定义、推导过程和典型例题"
             if msg.get("practice"):
                 st.markdown(
                     '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
@@ -1547,13 +1541,11 @@ if user_input:
                     answer = fix_latex(clean_answer)
                     ph.markdown(answer)
                     if tags:
-                        _tnv = st.session_state.get("ktag_new_ver", 0)
-                        nk = f"ktag_new_v{_tnv}"
-                        sel = st.pills("知识点", tags, key=nk, label_visibility="collapsed")
-                        if sel:
-                            st.session_state["ktag_new_ver"] = _tnv + 1
-                            st.session_state["prefill"] = f"请详细讲解「{sel}」：定义、推导过程和典型例题"
-                            st.rerun()
+                        _ntcols = st.columns(len(tags))
+                        for _nti, _ntag in enumerate(tags):
+                            with _ntcols[_nti]:
+                                if st.button(_ntag, key=f"tag_new_{_nti}", use_container_width=True):
+                                    st.session_state["_direct_input"] = f"请详细讲解「{_ntag}」：定义、推导过程和典型例题"
                     if practice:
                         st.markdown(
                             f'<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
