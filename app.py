@@ -923,8 +923,7 @@ if not st.session_state.messages:
     for idx, ex in enumerate(examples):
         with cols[idx % 2]:
             if st.button(ex, key=f"ex_{idx}", use_container_width=True):
-                st.session_state["prefill"] = ex
-                st.rerun()
+                st.session_state["_direct_input"] = ex
 
     _, mid, _ = st.columns([2, 1, 2])
     with mid:
