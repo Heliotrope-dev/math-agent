@@ -708,6 +708,13 @@ def extract_tags(text):
     tags = [t.strip() for t in re.split(r'[·・,，、]+', match.group(1).strip()) if t.strip()]
     return text[:match.start()].rstrip(), tags
 
+def extract_practice(text):
+    match = re.search(r'🧪\s*\*{0,2}例题\*{0,2}\s*[：:](.*?)$', text, re.MULTILINE)
+    if not match:
+        return text, ""
+    practice = match.group(1).strip()
+    return text[:match.start()].rstrip(), practice
+
 def _compress_image(image_bytes, max_size=800):
     try:
         img = Image.open(BytesIO(image_bytes)).convert("RGB")
@@ -1004,6 +1011,14 @@ for i, msg in enumerate(st.session_state.messages):
                         st.session_state["prefill"] = (
                             f"请详细讲解「{sel}」：定义、推导过程和典型例题"
                         )
+                        st.rerun()
+                if msg.get("practice"):
+                    st.markdown(
+                        '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
+                        st.session_state["_direct_input"] = msg["practice"]
                         st.rerun()
                 if msg.get("trace"):
                     with st.expander("工具调用详情", expanded=False):
@@ -1368,6 +1383,7 @@ if user_input:
                             collected.append(delta)
                             ph.markdown(fix_latex("".join(collected)) + "▌")
                     raw = "".join(collected)
+                    raw, practice = extract_practice(raw)
                     clean_answer, tags = extract_tags(raw)
                     answer = fix_latex(clean_answer)
                     ph.markdown(answer)
@@ -1378,11 +1394,19 @@ if user_input:
                             st.session_state.pop(nk, None)
                             st.session_state["prefill"] = f"请详细讲解「{sel}」"
                             st.rerun()
+                    if practice:
+                        st.markdown(
+                            f'<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
+                            unsafe_allow_html=True,
+                        )
+                        if st.button(practice, key="practice_new", use_container_width=True):
+                            st.session_state["_direct_input"] = practice
+                            st.rerun()
                 except Exception as e:
-                    answer, tags = f"流式输出出错：{e}", []
+                    answer, tags, practice = f"流式输出出错：{e}", [], ""
                     ph.markdown(answer)
             else:
-                answer, tags = f"出错：{err}", []
+                answer, tags, practice = f"出错：{err}", [], ""
                 st.markdown(answer)
 
             trace = "\n".join(trace_lines) or buf.getvalue().strip()
@@ -1392,4 +1416,5 @@ if user_input:
 
     st.session_state.messages.append({
         "role": "assistant", "content": answer, "tags": tags, "trace": trace,
+        "practice": practice,
     })
