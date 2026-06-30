@@ -1144,11 +1144,13 @@ for i, msg in enumerate(st.session_state.messages):
                 unsafe_allow_html=True,
             )
             if msg.get("tags"):
-                tag_key = f"ktag_{i}"
+                # 用版本号让 key 每次点击后变化，防止 Streamlit widget 缓存恢复选中值
+                _tv = st.session_state.get(f"ktag_ver_{i}", 0)
+                tag_key = f"ktag_{i}_v{_tv}"
                 sel = st.pills("知识点", msg["tags"], key=tag_key,
                                label_visibility="collapsed")
                 if sel:
-                    st.session_state.pop(tag_key, None)
+                    st.session_state[f"ktag_ver_{i}"] = _tv + 1  # 换 key，重置 pill
                     st.session_state["prefill"] = (
                         f"请详细讲解「{sel}」：定义、推导过程和典型例题"
                     )
@@ -1545,11 +1547,12 @@ if user_input:
                     answer = fix_latex(clean_answer)
                     ph.markdown(answer)
                     if tags:
-                        nk = "ktag_new"
+                        _tnv = st.session_state.get("ktag_new_ver", 0)
+                        nk = f"ktag_new_v{_tnv}"
                         sel = st.pills("知识点", tags, key=nk, label_visibility="collapsed")
                         if sel:
-                            st.session_state.pop(nk, None)
-                            st.session_state["prefill"] = f"请详细讲解「{sel}」"
+                            st.session_state["ktag_new_ver"] = _tnv + 1
+                            st.session_state["prefill"] = f"请详细讲解「{sel}」：定义、推导过程和典型例题"
                             st.rerun()
                     if practice:
                         st.markdown(
