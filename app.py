@@ -14,7 +14,7 @@ import tempfile
 from PIL import Image
 import streamlit as st
 
-for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
+for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY", "OLLAMA_BASE_URL"):
     if _k not in os.environ:
         try:
             os.environ[_k] = st.secrets[_k]
