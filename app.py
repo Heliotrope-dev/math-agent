@@ -55,9 +55,8 @@ def _sb_delete(table: str, params: dict):
     except Exception:
         pass
 
-# ── 用户管理（登录注册 + 7天 Cookie 持久化）─────────────────────────────────
-_TOKEN_COOKIE = "math_agent_token"
-_TOKEN_DAYS   = 7
+# ── 用户管理（登录注册 + 7天免登录）──────────────────────────────────────────
+_TOKEN_DAYS = 7
 
 def _hash_pw(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
@@ -123,7 +122,7 @@ def _show_login_page():
             if st.button("登录", type="primary", use_container_width=True, key="do_login"):
                 if _check_user(_em, _hash_pw(_pw)):
                     _tok = _create_token(_em)
-                    _set_cookie(_TOKEN_COOKIE, _tok, _TOKEN_DAYS)
+                    st.query_params["_auth"] = _tok
                     st.session_state["logged_in"] = True
                     st.session_state["user_email"] = _em
                     st.session_state["_token"] = _tok
@@ -152,29 +151,20 @@ def _show_login_page():
 
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
 
-# ── Cookie 管理（7 天免登录）─────────────────────────────────────────────────
-# st.context.cookies 直接从 HTTP 请求头读取，刷新时同步可用，无需 JS 等待
-import streamlit.components.v1 as _stcomp
-
-def _set_cookie(name: str, value: str, days: int = 7):
-    _stcomp.html(
-        f'<script>document.cookie="{name}={value}; max-age={days*86400}; path=/; SameSite=Lax";</script>',
-        height=0,
-    )
-
-def _del_cookie(name: str):
-    _stcomp.html(
-        f'<script>document.cookie="{name}=; max-age=0; path=/; SameSite=Lax";</script>',
-        height=0,
-    )
-
-_stored_token = st.context.cookies.get(_TOKEN_COOKIE, "") or ""
+# ── URL 参数持久化（7 天免登录）──────────────────────────────────────────────
+# st.query_params 存储在 URL 中，刷新后完整保留，无需 JS cookie，100% 可靠
+_stored_token = st.query_params.get("_auth", "") or ""
 if _stored_token and not st.session_state.get("logged_in"):
     _auto_email = _validate_token(_stored_token)
     if _auto_email:
         st.session_state["logged_in"] = True
         st.session_state["user_email"] = _auto_email
         st.session_state["_token"] = _stored_token
+    else:
+        try:
+            del st.query_params["_auth"]
+        except Exception:
+            pass
 
 st.markdown("""
 <style>
@@ -817,7 +807,10 @@ with st.sidebar:
         _tok = st.session_state.pop("_token", None)
         if _tok:
             _invalidate_token(_tok)
-            _del_cookie(_TOKEN_COOKIE)
+        try:
+            del st.query_params["_auth"]
+        except Exception:
+            pass
         st.session_state["logged_in"] = False
         st.session_state.pop("user_email", None)
         st.rerun()
@@ -1119,27 +1112,31 @@ if st.session_state.get("show_mic"):
             st.warning("未能识别，请重试或检查 GEMINI_API_KEY")
         st.rerun()
 
-# ── 语音识别完成 → 注入聊天输入框 ───────────────────────────────────────────
-if "voice_transcript" in st.session_state:
-    _vt_inject = st.session_state.pop("voice_transcript")
-    _vt_js = json.dumps(_vt_inject)
-    # 用 JS 把识别文字填入聊天输入框，用户可直接看到并确认后发送
-    _stcomp.html(f"""
-    <script>
-    (function() {{
-        var val = {_vt_js};
-        function inject() {{
-            var ta = parent.document.querySelector('[data-testid="stChatInputTextArea"]');
-            if (!ta) {{ setTimeout(inject, 150); return; }}
-            var setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-            setter.call(ta, val);
-            ta.dispatchEvent(new Event('input', {{bubbles: true}}));
-            ta.focus();
-        }}
-        inject();
-    }})();
-    </script>
-    """, height=1)
+# ── 语音识别完成 → 可编辑预览框（原生 text_input，不依赖 JS）──────────────
+if "voice_transcript" in st.session_state and "_vt_widget" not in st.session_state:
+    st.session_state["_vt_widget"] = st.session_state.pop("voice_transcript")
+elif "voice_transcript" in st.session_state:
+    del st.session_state["voice_transcript"]
+
+if "_vt_widget" in st.session_state:
+    st.markdown(
+        '<p style="font-size:0.82rem;color:#2aae67;margin:4px 0 2px 2px">🎙️ 语音识别完成 · 编辑后点发送</p>',
+        unsafe_allow_html=True,
+    )
+    _vt_c, _vt_btn, _vt_x = st.columns([8, 1, 1])
+    with _vt_c:
+        st.text_input("", key="_vt_widget", label_visibility="collapsed")
+    with _vt_btn:
+        if st.button("➤", key="vt_send", type="primary", use_container_width=True):
+            _val = st.session_state.get("_vt_widget", "").strip()
+            if _val:
+                st.session_state["_direct_input"] = _val
+                del st.session_state["_vt_widget"]
+                st.rerun()
+    with _vt_x:
+        if st.button("✕", key="vt_cancel", use_container_width=True):
+            del st.session_state["_vt_widget"]
+            st.rerun()
 
 # ── 待发附件预览条（紧凑横条）────────────────────────────────────────────────
 _patt = st.session_state.get("pending_attachment")
