@@ -281,109 +281,11 @@ class MathAgent:
             return "⚠️ 解题超时，请尝试把题目拆分成更小的步骤发送。"
 
     def solve_stream(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None):
-        """工具循环非流式运行，最终回复用真实 API 流式返回，实现逐字输出效果。"""
-        system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
-        messages = [{"role": "system", "content": system}]
-        if history:
-            messages.extend(self._trim_history(history))
-
-        # 视觉模式：直接流式
-        if image_bytes and self.supports_vision:
-            image_bytes = _compress_image(image_bytes, max_size=768)
-            b64 = base64.b64encode(image_bytes).decode()
-            _default_prompt = "请解答图片中的数学题"
-            if problem and problem.strip() != _default_prompt:
-                prompt = (
-                    f"图片中有多道数学题。请只找到并解答用户指定的题目：{problem}\n"
-                    "要求：给出完整解题步骤和最终答案，用 $$ ... $$ 标注最终答案，不要解答其他题目。"
-                )
-            else:
-                prompt = "请识别并解答图片中所有数学题，给出完整解题过程和最终答案。"
-            messages.append({"role": "user", "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-            ]})
-            return self.client.chat.completions.create(
-                model=self.model, messages=messages, stream=True, max_tokens=8192
-            )
-
-        # 引导模式：直接流式
-        if self.guide_mode:
-            messages.append({"role": "user", "content": problem})
-            return self.client.chat.completions.create(
-                model=self.model, messages=messages, stream=True, max_tokens=8192
-            )
-
-        # 普通模式：工具循环（非流式）+ 最终回复（流式）
-        is_explain = any(kw in problem[:30] for kw in ("讲解", "介绍", "复习", "系统学", "【知识点"))
-        messages.append({"role": "user", "content": problem if is_explain else f"请解题：{problem}"})
-        extra = {}
-        _tools_supported = True
-
-        for iteration in range(self.max_iterations):
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    tools=TOOL_DEFINITIONS if _tools_supported else None,
-                    messages=messages,
-                    max_tokens=8192,
-                    extra_body=extra,
-                )
-            except Exception as e:
-                err = str(e).lower()
-                if _tools_supported and ("tool" in err or "function" in err
-                                         or "400" in err or "bad request" in err
-                                         or "502" in err):
-                    _tools_supported = False
-                    response = self.client.chat.completions.create(
-                        model=self.model, messages=messages, max_tokens=8192, extra_body=extra
-                    )
-                else:
-                    raise
-
-            msg = response.choices[0].message
-            finish_reason = response.choices[0].finish_reason
-
-            if finish_reason != "tool_calls" or not msg.tool_calls:
-                # 工具全部执行完毕，用同样的 messages 发起流式最终回复
-                return self.client.chat.completions.create(
-                    model=self.model, messages=messages, max_tokens=8192, stream=True, extra_body=extra
-                )
-
-            messages.append(msg)
-
-            for tc in msg.tool_calls:
-                name = tc.function.name
-                try:
-                    args = json.loads(tc.function.arguments)
-                except json.JSONDecodeError:
-                    try:
-                        args, _ = json.JSONDecoder().raw_decode(tc.function.arguments.strip())
-                    except Exception:
-                        args = {}
-
-                print(f"🔧 调用工具：{name}")
-                print(f"   参数：{args}")
-
-                if on_tool_call:
-                    on_tool_call(name, args, None)
-                result = execute_tool(name, args)
-                preview = result[:120] + ("…" if len(result) > 120 else "")
-                print(f"   结果：{preview}\n")
-                if on_tool_call:
-                    on_tool_call(name, args, result)
-
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result,
-                })
-
-        # 迭代超限后流式回复
-        messages.append({"role": "user", "content": "请根据上面的计算结果，直接给出最终答案，不要再调用工具。"})
-        return self.client.chat.completions.create(
-            model=self.model, messages=messages, max_tokens=8192, stream=True
-        )
+        """运行完整 agentic loop，返回可迭代的 stream 对象（视觉/引导模式为真实流式）。"""
+        result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
+        if isinstance(result, str):
+            return _fake_stream(result)
+        return result
 
 
 def _compress_image(image_bytes: bytes, max_size: int = 768) -> bytes:
