@@ -59,6 +59,43 @@ def _sb_delete(table: str, params: dict):
     except Exception:
         pass
 
+def _sb_patch(table: str, data: dict, params: dict):
+    try:
+        requests.patch(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, params=params, timeout=8)
+    except Exception:
+        pass
+
+# ── 学习记录（user_topics 表）────────────────────────────────────────────────
+def _track_topic(email: str, course: str, topic: str):
+    if not email:
+        return
+    existing = _sb_get("user_topics", {
+        "user_email": f"eq.{email}", "topic": f"eq.{topic}", "select": "id,visit_count"
+    })
+    if existing:
+        _sb_patch("user_topics",
+                  {"visit_count": existing[0]["visit_count"] + 1,
+                   "last_visited": datetime.now().isoformat()},
+                  {"user_email": f"eq.{email}", "topic": f"eq.{topic}"})
+    else:
+        _sb_post("user_topics", {
+            "user_email": email, "course": course, "topic": topic,
+            "visit_count": 1, "last_visited": datetime.now().isoformat(),
+        })
+
+def _load_user_profile(email: str) -> dict:
+    if not email:
+        return {}
+    rows = _sb_get("user_topics", {
+        "user_email": f"eq.{email}", "select": "course,topic,visit_count,last_visited",
+        "order": "visit_count.desc", "limit": "30",
+    })
+    if not rows:
+        return {}
+    weak   = [r for r in rows if r["visit_count"] >= 2][:6]
+    recent = sorted(rows, key=lambda r: r.get("last_visited") or "", reverse=True)[:5]
+    return {"weak": weak, "recent": recent, "all": rows}
+
 # ── 用户管理（登录注册 + 7天免登录）──────────────────────────────────────────
 _TOKEN_DAYS = 7
 
@@ -992,6 +1029,33 @@ with st.sidebar:
                         _save_wrong_book(_uemail, st.session_state.wrong_book)
                         st.rerun()
 
+    # ── 学习档案 ────────────────────────────────────────────────────────────────
+    if "user_profile" not in st.session_state:
+        st.session_state["user_profile"] = _load_user_profile(_uemail)
+    _profile = st.session_state.get("user_profile", {})
+    if _profile:
+        with st.expander("📊 学习档案", expanded=False):
+            _weak = _profile.get("weak", [])
+            _recent = _profile.get("recent", [])
+            if _weak:
+                st.caption("⚠️ 薄弱点（多次学习）")
+                for _w in _weak:
+                    _label = f"{_w['topic']} ×{_w['visit_count']}"
+                    if st.button(_label, key=f"weak_{_w['topic']}", use_container_width=True):
+                        st.session_state["current_course"] = _w.get("course", "")
+                        st.session_state.messages = []
+                        st.session_state["_direct_input"] = (
+                            f"请重点讲解{_w.get('course','')}中的【{_w['topic']}】，"
+                            f"我之前学过{_w['visit_count']}次但还不够熟练，"
+                            f"请从易错点和考试考法角度重点讲解。"
+                        )
+                        st.rerun()
+            if _recent:
+                st.caption("🕐 最近学过")
+                for _r in _recent[:4]:
+                    st.markdown(f"- {_r.get('course','')} · **{_r['topic']}**",
+                                unsafe_allow_html=False)
+
     if st.button("清空对话", use_container_width=True):
         st.session_state.messages = []
         st.session_state.pop("prefill", None)
@@ -1160,6 +1224,8 @@ if not st.session_state.messages:
         for _ti, _topic in enumerate(_topics):
             with _tcols[_ti % 2]:
                 if st.button(_topic, key=f"topic_{_ti}", use_container_width=True):
+                    _track_topic(_uemail, _cur_course, _topic)
+                    st.session_state.pop("user_profile", None)  # 刷新档案缓存
                     st.session_state["_direct_input"] = (
                         f"请系统讲解{_cur_course}中的【{_topic}】：核心定义、重要定理（附证明思路）、"
                         f"典型例题解析，以及这个知识点的常见考法和易错点。"
@@ -1542,7 +1608,22 @@ if user_input:
                 solve_history = []
             else:
                 solve_input = user_input
-                solve_history = history
+                # 注入学习上下文（仅在对话开始时，且用户有学习记录）
+                _profile_ctx = st.session_state.get("user_profile", {})
+                _weak_ctx = _profile_ctx.get("weak", [])
+                if not history and _weak_ctx:
+                    _weak_str = "、".join(
+                        f"{w['topic']}（学了{w['visit_count']}次）" for w in _weak_ctx[:4]
+                    )
+                    solve_history = [{
+                        "role": "user",
+                        "content": f"[系统提示：该用户的薄弱知识点为：{_weak_str}。讲解时适当关联这些薄弱点，帮助巩固。]"
+                    }, {
+                        "role": "assistant",
+                        "content": "好的，我已了解你的学习情况，会在讲解时适当关联薄弱点。"
+                    }]
+                else:
+                    solve_history = history
 
             with st.status("思考中…", expanded=True) as status:
                 def on_tool_call(name, args, result):
