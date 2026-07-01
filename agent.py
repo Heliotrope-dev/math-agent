@@ -222,7 +222,14 @@ class MathAgent:
 
             for tc in msg.tool_calls:
                 name = tc.function.name
-                args = json.loads(tc.function.arguments)
+                try:
+                    args = json.loads(tc.function.arguments)
+                except json.JSONDecodeError:
+                    # 模型有时在 JSON 后附加多余内容，用 raw_decode 取第一个完整对象
+                    try:
+                        args, _ = json.JSONDecoder().raw_decode(tc.function.arguments.strip())
+                    except Exception:
+                        args = {}
 
                 print(f"🔧 调用工具：{name}")
                 print(f"   参数：{args}")
