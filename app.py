@@ -1182,7 +1182,7 @@ for i, msg in enumerate(st.session_state.messages):
             st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>',
                         unsafe_allow_html=True)
             st.markdown(
-                f'<div class="bubble-asst-wrap">{fix_latex(msg["content"])}</div>',
+                f'<div class="bubble-asst-wrap">\n\n{fix_latex(msg["content"])}\n\n</div>',
                 unsafe_allow_html=True,
             )
             if msg.get("tags"):
