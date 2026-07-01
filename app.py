@@ -14,7 +14,8 @@ import tempfile
 from PIL import Image
 import streamlit as st
 
-for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY", "OLLAMA_BASE_URL"):
+for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
+           "OLLAMA_BASE_URL", "SUPABASE_URL", "SUPABASE_KEY"):
     if _k not in os.environ:
         try:
             os.environ[_k] = st.secrets[_k]
@@ -24,12 +25,14 @@ for _k in ("GEMINI_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY", "OLLAMA_
 from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
 
 # ── Supabase REST（直接用 requests，无需 supabase 包）────────────────────────
-_SB_URL = "https://jqfvgpeyzghnuznjjwio.supabase.co/rest/v1"
-_SB_KEY = (
+_SB_URL = os.environ.get(
+    "SUPABASE_URL", "https://jqfvgpeyzghnuznjjwio.supabase.co"
+).rstrip("/") + "/rest/v1"
+_SB_KEY = os.environ.get("SUPABASE_KEY", (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
     ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxZnZncGV5emdobnV6bmpqd2lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDUxNjUsImV4cCI6MjA5ODM4MTE2NX0"
     ".8DcpQHEsOsjlwzBdYWX_3PaIcFlYgpm_YzbKpFBapqQ"
-)
+))
 _SB_HDR = {
     "apikey": _SB_KEY,
     "Authorization": f"Bearer {_SB_KEY}",
@@ -143,8 +146,15 @@ def _show_login_page():
         with tab_l:
             _em = st.text_input("邮箱", key="li_email", placeholder="your@email.com")
             _pw = st.text_input("密码", type="password", key="li_pw")
-            if st.button("登录", type="primary", use_container_width=True, key="do_login"):
+            _lockout_until = st.session_state.get("_login_lockout_until", 0)
+            _locked = time.time() < _lockout_until
+            if _locked:
+                _wait_secs = int(_lockout_until - time.time()) + 1
+                st.error(f"密码错误次数过多，请等待 {_wait_secs} 秒后重试")
+            if st.button("登录", type="primary", use_container_width=True, key="do_login", disabled=_locked):
                 if _check_user(_em, _hash_pw(_pw)):
+                    st.session_state["_login_attempts"] = 0
+                    st.session_state["_login_lockout_until"] = 0
                     _tok = _create_token(_em)
                     st.query_params["_auth"] = _tok
                     st.session_state["logged_in"] = True
@@ -157,7 +167,14 @@ def _show_login_page():
                     )
                     st.rerun()
                 else:
-                    st.error("邮箱或密码不正确")
+                    _attempts = st.session_state.get("_login_attempts", 0) + 1
+                    st.session_state["_login_attempts"] = _attempts
+                    if _attempts >= 5:
+                        st.session_state["_login_lockout_until"] = time.time() + 60
+                        st.session_state["_login_attempts"] = 0
+                        st.error("密码连续错误5次，请等待1分钟后重试")
+                    else:
+                        st.error(f"邮箱或密码不正确（还有 {5 - _attempts} 次机会）")
         with tab_r:
             _rem = st.text_input("邮箱", key="reg_email", placeholder="your@email.com")
             _rpw = st.text_input("密码（至少6位）", type="password", key="reg_pw")
@@ -192,7 +209,11 @@ try {
         if (t) {
             url.searchParams.set('_auth', t);
             window.parent.history.replaceState(null, '', url.toString());
-            window.parent.location.reload();
+            // 用 location.replace 代替 reload，确保 Streamlit 已就绪后才跳转
+            setTimeout(function() {
+                if (!new URL(window.parent.location.href).searchParams.get('_auth')) return;
+                window.parent.location.replace(url.toString());
+            }, 800);
         }
     }
 } catch(e) {}
@@ -707,14 +728,17 @@ def _fetch_ollama_models() -> list[str]:
         return st.session_state["ollama_model_list"]
     try:
         base = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-        r = requests.get(f"{base}/api/tags", timeout=4)
+        r = requests.get(f"{base}/api/tags", timeout=5)
         if r.ok:
             models = [m["name"] for m in r.json().get("models", [])]
             if models:
                 st.session_state["ollama_model_list"] = models
+                st.session_state["ollama_online"] = True
                 return models
-    except Exception:
-        pass
+        st.session_state["ollama_online"] = False
+    except Exception as _e:
+        st.session_state["ollama_online"] = False
+        st.session_state["ollama_error"] = str(_e)
     st.session_state["ollama_model_list"] = _OLLAMA_FALLBACK_MODELS
     return _OLLAMA_FALLBACK_MODELS
 
@@ -842,21 +866,20 @@ def ocr_math_image(image_bytes):
         return f"识别失败：{e}"
 
 
-def transcribe_audio(audio_file) -> str:
-    """用 Gemini 把录音转成数学题文字（支持中英文）。"""
+def transcribe_audio(audio_file) -> tuple[str, str]:
+    """用 Gemini 把录音转成数学题文字。返回 (transcript, error_msg)。"""
     key = _secret("GEMINI_API_KEY")
     if not key:
-        return ""
+        return "", "未配置 GEMINI_API_KEY"
     try:
         raw = audio_file.read()
-        # 检测 MIME 类型（桌面 Chrome→webm，iOS Safari→mp4，桌面 Firefox→ogg）
         mime = "audio/webm"
         if raw[:4] == b"RIFF":
             mime = "audio/wav"
         elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
             mime = "audio/mp3"
         elif len(raw) > 8 and raw[4:8] == b"ftyp":
-            mime = "audio/mp4"   # iOS Safari / m4a
+            mime = "audio/mp4"
         elif raw[:4] == b"OggS":
             mime = "audio/ogg"
         b64 = base64.b64encode(raw).decode()
@@ -874,11 +897,14 @@ def transcribe_audio(audio_file) -> str:
             timeout=30,
         )
         data = resp.json()
+        if "error" in data:
+            return "", f"Gemini API 错误：{data['error'].get('message', str(data['error']))}"
         if "candidates" not in data:
-            return ""
-        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception:
-        return ""
+            return "", f"Gemini 无返回：{str(data)[:200]}"
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return text, ""
+    except Exception as _e:
+        return "", f"识别请求失败：{_e}"
 
 # ── Session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
@@ -1276,25 +1302,19 @@ if st.session_state.get("show_file"):
         st.session_state.show_file = False
         st.rerun()
 
-# ── 麦克风面板（录完立即识别，显示可编辑预览）───────────────────────────────
+# ── 麦克风面板（录完即识别，通过 JS 注入 chat_input）───────────────────────
 if st.session_state.get("show_mic"):
     _av = st.audio_input("🎙️ 说出数学题（支持中英文）", key="mic_input",
                          label_visibility="visible")
     if _av:
         with st.spinner("识别中…"):
-            _vt = transcribe_audio(_av)
+            _vt, _vt_err = transcribe_audio(_av)
         st.session_state.show_mic = False
         if _vt:
-            st.session_state["voice_transcript"] = _vt
+            st.session_state["_voice_inject"] = _vt
         else:
-            st.warning("未能识别语音，请重试（录音时长需超过1秒）")
+            st.error(f"语音识别失败：{_vt_err}" if _vt_err else "未识别到内容，请重试（录音超过1秒）")
         st.rerun()
-
-# ── 语音识别完成 → 搬运到 _vt_widget（渲染在工具栏下方，见底部）──────────
-if "voice_transcript" in st.session_state and "_vt_widget" not in st.session_state:
-    st.session_state["_vt_widget"] = st.session_state.pop("voice_transcript")
-elif "voice_transcript" in st.session_state:
-    del st.session_state["voice_transcript"]
 
 # ── 待发附件预览条（紧凑横条）────────────────────────────────────────────────
 _patt = st.session_state.get("pending_attachment")
@@ -1361,7 +1381,15 @@ with _tb_model:
         with _mrefresh:
             if st.button("↻", key="ollama_refresh", help="刷新模型列表"):
                 st.session_state.pop("ollama_model_list", None)
+                st.session_state.pop("ollama_online", None)
+                st.session_state.pop("ollama_error", None)
                 st.rerun()
+        if not st.session_state.get("ollama_online", True):
+            _oe = st.session_state.get("ollama_error", "")
+            _hint = "请运行桌面快捷方式启动 Ollama 隧道"
+            if "11434" in _oe or "Connection" in _oe:
+                _hint = "Ollama 未运行，请启动桌面快捷方式"
+            st.caption(f"⚠️ 本地模型离线 · {_hint}")
     else:
         _copts = list(CLOUD_PROVIDERS.keys())
         _def_idx = _copts.index("deepseek-chat")
@@ -1389,31 +1417,37 @@ _direct_input = st.session_state.pop("_direct_input", None)
 _panel_just_toggled = st.session_state.pop("_panel_just_toggled", False)
 _has_patt = "pending_attachment" in st.session_state
 
-# 语音识别完成时：在输入框位置显示可编辑预览，替代 chat_input
-if "_vt_widget" in st.session_state:
-    st.markdown(
-        '<p style="font-size:0.82rem;color:#2aae67;margin:4px 0 2px 2px">🎙️ 语音识别完成 · 编辑后点发送</p>',
-        unsafe_allow_html=True,
-    )
-    _vt_c, _vt_btn, _vt_x = st.columns([8, 1, 1])
-    with _vt_c:
-        st.text_input("", key="_vt_widget", label_visibility="collapsed")
-    with _vt_btn:
-        if st.button("➤", key="vt_send", type="primary", use_container_width=True):
-            _val = st.session_state.get("_vt_widget", "").strip()
-            if _val:
-                st.session_state["_direct_input"] = _val
-                del st.session_state["_vt_widget"]
-                st.rerun()
-    with _vt_x:
-        if st.button("✕", key="vt_cancel", use_container_width=True):
-            del st.session_state["_vt_widget"]
-            st.rerun()
-    typed = None
-else:
-    typed = st.chat_input(
-        "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
-    )
+typed = st.chat_input(
+    "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
+)
+
+# 语音识别完成时：通过 JS 将文字注入 chat_input 输入框（可编辑后按 Enter 发送）
+_voice_inject = st.session_state.pop("_voice_inject", None)
+if _voice_inject:
+    import json as _json_mod
+    _vi_js = _json_mod.dumps(_voice_inject)
+    _cv1.html(f"""
+<script>
+(function(){{
+    var txt = {_vi_js};
+    function inject(n) {{
+        try {{
+            var ta = window.parent.document.querySelector('[data-testid="stChatInputTextArea"]');
+            if (ta) {{
+                var setter = Object.getOwnPropertyDescriptor(
+                    window.HTMLTextAreaElement.prototype, 'value').set;
+                setter.call(ta, txt);
+                ta.dispatchEvent(new Event('input', {{bubbles: true}}));
+                ta.focus();
+            }} else if (n > 0) {{
+                setTimeout(function() {{ inject(n - 1); }}, 150);
+            }}
+        }} catch(e) {{}}
+    }}
+    inject(20);
+}})();
+</script>
+""", height=1)
 
 # 确定是否"提交"：面板刚切换时强制跳过，避免误触发
 _submitted = (not _panel_just_toggled) and (
