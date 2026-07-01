@@ -23,6 +23,7 @@ for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
             pass
 
 from agent import MathAgent, CLOUD_PROVIDERS
+from tools import get_and_clear_pending_images
 
 # ── Supabase REST（直接用 requests，无需 supabase 包）────────────────────────
 _SB_URL = os.environ.get(
@@ -1261,6 +1262,12 @@ for i, msg in enumerate(st.session_state.messages):
                 if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
                     st.session_state["_direct_input"] = msg["practice"]
                     st.rerun()
+            for _img in msg.get("images", []):
+                st.image(
+                    f"data:image/png;base64,{_img['b64']}",
+                    caption=_img.get("caption", ""),
+                    use_container_width=True,
+                )
             if msg.get("trace"):
                 with st.expander("工具调用详情", expanded=False):
                     st.code(msg["trace"], language="text")
@@ -1617,12 +1624,20 @@ if user_input:
                 st.markdown(answer)
 
             trace = "\n".join(trace_lines) or buf.getvalue().strip()
+            # 取走工具生成的图像并展示
+            _new_images = get_and_clear_pending_images()
+            for _img in _new_images:
+                st.image(
+                    f"data:image/png;base64,{_img['b64']}",
+                    caption=_img.get("caption", ""),
+                    use_container_width=True,
+                )
             if trace:
                 with st.expander("工具调用详情", expanded=False):
                     st.code(trace, language="text")
 
     st.session_state.messages.append({
         "role": "assistant", "content": answer, "tags": tags, "trace": trace,
-        "practice": practice,
+        "practice": practice, "images": _new_images if stream is not None else [],
     })
     st.rerun()  # 刷新让欢迎页消失、聊天历史正确显示

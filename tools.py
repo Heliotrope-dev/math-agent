@@ -7,7 +7,31 @@ tools.py — 工具定义 + 工具实现
   - step_decomposer 解题步骤规划
 """
 
+import io
+import base64
 import sympy as sp
+
+# ── 图像队列（工具生成图后存这里，app.py 渲染完文字后取走显示）────────────────
+_PENDING_IMAGES: list[dict] = []
+
+def get_and_clear_pending_images() -> list[dict]:
+    imgs = list(_PENDING_IMAGES)
+    _PENDING_IMAGES.clear()
+    return imgs
+
+def _save_figure(fig, caption: str = "") -> str:
+    try:
+        import matplotlib.pyplot as plt
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
+                    facecolor=fig.get_facecolor())
+        plt.close(fig)
+        buf.seek(0)
+        b64 = base64.b64encode(buf.read()).decode()
+        _PENDING_IMAGES.append({"b64": b64, "caption": caption})
+        return f"[图像已生成：{caption}]"
+    except Exception as e:
+        return f"[图像生成失败：{e}]"
 
 # ─────────────────────────────────────────
 # 1. Tool schemas（OpenAI / Ollama 格式）
@@ -79,6 +103,66 @@ TOOL_DEFINITIONS = [
                     }
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "plot_function",
+            "description": (
+                "生成函数图像并展示给用户。讲解函数性质、展示曲线形态、比较多个函数时调用。"
+                "适用：正弦/余弦/指数/对数/多项式/泰勒近似对比等一切需要可视化的情形。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expressions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Python/SymPy 语法的表达式列表，如 ['sin(x)', 'x - x**3/6']。支持多条曲线同时展示。",
+                    },
+                    "xmin": {"type": "number", "description": "x 轴最小值，默认 -10"},
+                    "xmax": {"type": "number", "description": "x 轴最大值，默认 10"},
+                    "ymin": {"type": "number", "description": "y 轴最小值（可选，不填自动）"},
+                    "ymax": {"type": "number", "description": "y 轴最大值（可选，不填自动）"},
+                    "title": {"type": "string", "description": "图像标题"},
+                    "labels": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "每条曲线的图例名称（可选，与 expressions 一一对应）",
+                    },
+                },
+                "required": ["expressions"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "draw_mindmap",
+            "description": (
+                "生成知识点思维导图。讲解一个知识点的体系结构、概念关系、重要定理分类时调用。"
+                "适用：知识框架梳理、知识点总结、概念对比分类。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "思维导图中心主题，如「泰勒展开」"},
+                    "branches": {
+                        "type": "array",
+                        "description": "主要分支，每个分支包含 label（名称）和 children（子节点列表）",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "children": {"type": "array", "items": {"type": "string"}},
+                            },
+                            "required": ["label"],
+                        },
+                    },
+                },
+                "required": ["title", "branches"],
             },
         },
     },
@@ -449,11 +533,149 @@ def _run_step_decomposer(problem_type: str, problem: str) -> str:
 
 
 # ─────────────────────────────────────────
-# 4. 统一分发入口（供 agent.py 调用）
+# 4. 可视化工具实现
+# ─────────────────────────────────────────
+
+def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
+                       title="", labels=None) -> str:
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        plt.rcParams.update({
+            "font.family": ["DejaVu Sans", "Arial Unicode MS", "sans-serif"],
+            "axes.unicode_minus": False,
+        })
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        fig.patch.set_facecolor("#FAFAF8")
+        ax.set_facecolor("#FAFAF8")
+
+        palette = ["#4A90E2", "#E24A4A", "#27AE60", "#F39C12", "#8E44AD", "#16A085"]
+        x_sym = sp.Symbol("x")
+        x_arr = np.linspace(float(xmin), float(xmax), 2000)
+
+        for i, expr_str in enumerate(expressions):
+            try:
+                sym_expr = sp.sympify(expr_str.replace("^", "**"))
+                fn = sp.lambdify(x_sym, sym_expr, "numpy")
+                y_arr = np.array(fn(x_arr), dtype=complex)
+                y_arr = np.real(y_arr)
+                y_arr[np.abs(y_arr) > 1e5] = np.nan
+                lbl = (labels[i] if labels and i < len(labels)
+                       else f"$y = {sp.latex(sym_expr)}$")
+                ax.plot(x_arr, y_arr, color=palette[i % len(palette)],
+                        lw=2.2, label=lbl)
+            except Exception as e:
+                ax.text(0.05, 0.95 - i * 0.07, f"解析失败: {expr_str}: {e}",
+                        transform=ax.transAxes, fontsize=9, color="red")
+
+        ax.axhline(0, color="#555", lw=0.8, alpha=0.5)
+        ax.axvline(0, color="#555", lw=0.8, alpha=0.5)
+        ax.grid(True, alpha=0.25, linestyle="--")
+        if ymin is not None and ymax is not None:
+            ax.set_ylim(float(ymin), float(ymax))
+        ax.legend(fontsize=11, framealpha=0.85)
+        if title:
+            ax.set_title(title, fontsize=13, fontweight="bold", color="#2D3748", pad=12)
+        ax.set_xlabel("x", fontsize=11)
+        ax.set_ylabel("y", fontsize=11)
+        ax.spines[["top", "right"]].set_visible(False)
+        fig.tight_layout()
+        return _save_figure(fig, title or "函数图像")
+    except Exception as e:
+        return f"[plot_function 错误：{e}]"
+
+
+def _run_draw_mindmap(title: str, branches: list) -> str:
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+        import numpy as np
+
+        plt.rcParams.update({
+            "font.family": ["DejaVu Sans", "Arial Unicode MS", "sans-serif"],
+            "axes.unicode_minus": False,
+        })
+
+        fig, ax = plt.subplots(figsize=(14, 9))
+        fig.patch.set_facecolor("#F7F5F0")
+        ax.set_facecolor("#F7F5F0")
+        ax.set_xlim(-7, 7)
+        ax.set_ylim(-5.5, 5.5)
+        ax.axis("off")
+
+        palette = ["#4A90E2", "#E24A4A", "#27AE60", "#F39C12", "#8E44AD",
+                   "#16A085", "#C0392B", "#2980B9"]
+
+        # 中心节点
+        center_circ = plt.Circle((0, 0), 0.75, color="#2D3748", zorder=6)
+        ax.add_patch(center_circ)
+        ax.text(0, 0, title, ha="center", va="center", fontsize=10,
+                color="white", fontweight="bold", zorder=7,
+                wrap=True, multialignment="center")
+
+        n = len(branches)
+        if n == 0:
+            return _save_figure(fig, title)
+
+        angles = np.linspace(np.pi / 6, 2 * np.pi + np.pi / 6, n, endpoint=False)
+
+        for i, (branch, angle) in enumerate(zip(branches, angles)):
+            color = palette[i % len(palette)]
+            bx = 3.0 * np.cos(angle)
+            by = 3.0 * np.sin(angle)
+
+            # 中心 → 分支 连线
+            ax.annotate("", xy=(bx, by),
+                        xytext=(0.78 * np.cos(angle), 0.78 * np.sin(angle)),
+                        arrowprops=dict(arrowstyle="-", color=color, lw=2.2),
+                        zorder=4)
+
+            # 分支节点
+            label = branch.get("label", "")
+            bbox = dict(boxstyle="round,pad=0.45", facecolor=color,
+                        alpha=0.9, edgecolor="none")
+            ax.text(bx, by, label, ha="center", va="center", fontsize=9.5,
+                    color="white", fontweight="bold", bbox=bbox, zorder=5)
+
+            # 子节点
+            children = branch.get("children", [])
+            nc = len(children)
+            if nc:
+                spread = min(0.65, 0.9 / max(nc, 1))
+                c_angles = np.linspace(angle - spread * (nc - 1) / 2,
+                                       angle + spread * (nc - 1) / 2, nc)
+                for cangle, child in zip(c_angles, children):
+                    cx = bx + 2.3 * np.cos(cangle)
+                    cy = by + 2.3 * np.sin(cangle)
+                    cx = float(np.clip(cx, -6.5, 6.5))
+                    cy = float(np.clip(cy, -5.0, 5.0))
+                    ax.plot([bx, cx], [by, cy], color=color, lw=1.3,
+                            alpha=0.55, zorder=3)
+                    cbbox = dict(boxstyle="round,pad=0.3", facecolor=color,
+                                 alpha=0.18, edgecolor=color, lw=0.8)
+                    ax.text(cx, cy, child, ha="center", va="center", fontsize=8.2,
+                            color="#2D3748", bbox=cbbox, zorder=4)
+
+        ax.set_title(f"  {title}  知识框架", fontsize=12, fontweight="bold",
+                     color="#2D3748", pad=8)
+        fig.tight_layout()
+        return _save_figure(fig, f"{title} 思维导图")
+    except Exception as e:
+        return f"[draw_mindmap 错误：{e}]"
+
+
+# ─────────────────────────────────────────
+# 5. 统一分发入口（供 agent.py 调用）
 # ─────────────────────────────────────────
 
 def execute_tool(tool_name: str, tool_input: dict) -> str:
-    """将 Claude 的 tool_use 请求分发到对应实现。"""
+    """将工具调用请求分发到对应实现。"""
     if tool_name == "calculator":
         return _run_calculator(
             expression=tool_input["expression"],
@@ -466,6 +688,21 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
         return _run_step_decomposer(
             problem_type=tool_input["problem_type"],
             problem=tool_input["problem"],
+        )
+    elif tool_name == "plot_function":
+        return _run_plot_function(
+            expressions=tool_input.get("expressions", [tool_input.get("expression", "x")]),
+            xmin=tool_input.get("xmin", -10),
+            xmax=tool_input.get("xmax", 10),
+            ymin=tool_input.get("ymin"),
+            ymax=tool_input.get("ymax"),
+            title=tool_input.get("title", ""),
+            labels=tool_input.get("labels"),
+        )
+    elif tool_name == "draw_mindmap":
+        return _run_draw_mindmap(
+            title=tool_input.get("title", ""),
+            branches=tool_input.get("branches", []),
         )
     else:
         return f"未知工具：{tool_name}"
