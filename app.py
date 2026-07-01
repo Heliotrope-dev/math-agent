@@ -315,13 +315,16 @@ p, span, label, div, li, td, th, h1, h2, h3, h4 { color: #1a1a1a !important; }
     background: #DEDAD4 !important; color: #111 !important;
 }
 
-/* ── Streamlit 顶栏改为跟随滚动（不置顶悬浮）── */
+/* ── Streamlit 顶栏：保留侧栏按钮，隐藏其余工具条 ── */
 header[data-testid="stHeader"] {
-    position: relative !important;
-    z-index: 0 !important;
     background: #F5F0EB !important;
     box-shadow: none !important;
     border-bottom: none !important;
+}
+/* 隐藏 Deploy / Star 等工具按钮，保留汉堡（侧栏开关） */
+header[data-testid="stHeader"] [data-testid="stToolbar"],
+header[data-testid="stHeader"] [data-testid="stDecoration"] {
+    display: none !important;
 }
 .main .block-container { padding-top: 0.5rem !important; }
 
