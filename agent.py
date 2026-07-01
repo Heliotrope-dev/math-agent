@@ -99,6 +99,7 @@ class MathAgent:
                 base_url=_ollama_url,
                 http_client=httpx.Client(
                     trust_env=False,
+                    verify=False,
                     limits=httpx.Limits(max_keepalive_connections=0, max_connections=100),
                 ),
             )
