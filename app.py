@@ -242,7 +242,10 @@ if _stored_token and not st.session_state.get("logged_in"):
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+/* AI 回复区域使用霞鹜文楷手写体 */
+.bubble-asst-inner { font-family: 'LXGW WenKai', 'KaiTi', 'STKaiti', serif; font-size: 1rem; line-height: 1.8; }
 
 /* ══ 全局背景：微信暖米白 ══ */
 html, body { background: #EDE5DC !important; }
@@ -340,6 +343,17 @@ p, span, label, div, li, td, th, h1, h2, h3, h4 { color: #1a1a1a !important; }
     font-size: 0.95rem;
 }
 .bubble-asst-wrap p, .bubble-asst-wrap li { color: #1a1a1a !important; }
+/* LaTeX 修复：标记元素后紧跟的 stMarkdown 就是气泡内容，注入手写字体和气泡背景 */
+.stMarkdown:has(.asst-bubble-marker) + .stMarkdown > div {
+    background: #FFFFFF;
+    border-radius: 4px 18px 18px 18px;
+    padding: 10px 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    font-family: 'LXGW WenKai', 'KaiTi', 'STKaiti', serif;
+    font-size: 1rem;
+    line-height: 1.8;
+    word-break: break-word;
+}
 
 .msg-row-user {
     display: flex; justify-content: flex-end; align-items: flex-end;
@@ -1230,10 +1244,9 @@ for i, msg in enumerate(st.session_state.messages):
         with _bubble_col2:
             st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>',
                         unsafe_allow_html=True)
-            st.markdown(
-                f'<div class="bubble-asst-wrap">\n\n{fix_latex(msg["content"])}\n\n</div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<div class="asst-bubble-marker" id="abm-{i}"></div>',
+                        unsafe_allow_html=True)
+            st.markdown(fix_latex(msg["content"]))
             if msg.get("tags"):
                 _tcols = st.columns(len(msg["tags"]))
                 for _ti, _tag in enumerate(msg["tags"]):
