@@ -1045,9 +1045,7 @@ with st.sidebar:
                         st.session_state["current_course"] = _w.get("course", "")
                         st.session_state.messages = []
                         st.session_state["_direct_input"] = (
-                            f"请重点讲解{_w.get('course','')}中的【{_w['topic']}】，"
-                            f"我之前学过{_w['visit_count']}次但还不够熟练，"
-                            f"请从易错点和考试考法角度重点讲解。"
+                            f"【知识点讲解】{_w.get('course','')} · {_w['topic']}"
                         )
                         st.rerun()
             if _recent:
@@ -1227,14 +1225,7 @@ if not st.session_state.messages:
                     _track_topic(_uemail, _cur_course, _topic)
                     st.session_state.pop("user_profile", None)  # 刷新档案缓存
                     st.session_state["_direct_input"] = (
-                        f"【知识点讲解】{_cur_course} · {_topic}\n\n"
-                        f"请用大学教材风格，按以下结构完整讲解，不得跳过任何部分：\n"
-                        f"一、核心定义（给出严格数学定义，必要时附几何/直觉解释）\n"
-                        f"二、重要定理（列出至少3个相关定理，每个附证明思路）\n"
-                        f"三、典型例题（给出2道典型题，每道附完整解题步骤）\n"
-                        f"四、常见考法（列出3-5种常见题型与解题套路）\n"
-                        f"五、易错点（列出学生最容易犯的2-3个错误及规避方法）\n\n"
-                        f"请先生成思维导图展示知识框架，再按上述结构讲解。"
+                        f"【知识点讲解】{_cur_course} · {_topic}"
                     )
 
     else:
