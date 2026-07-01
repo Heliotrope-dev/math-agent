@@ -867,21 +867,43 @@ def ocr_math_image(image_bytes):
 
 
 def transcribe_audio(audio_file) -> tuple[str, str]:
-    """用 Gemini 把录音转成数学题文字。返回 (transcript, error_msg)。"""
+    """语音转文字。优先用 SiliconFlow SenseVoice（中文优化），备用 Gemini。"""
+    raw = audio_file.read()
+    mime = "audio/webm"
+    if raw[:4] == b"RIFF":
+        mime = "audio/wav"
+    elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
+        mime = "audio/mp3"
+    elif len(raw) > 8 and raw[4:8] == b"ftyp":
+        mime = "audio/mp4"
+    elif raw[:4] == b"OggS":
+        mime = "audio/ogg"
+
+    # ── 优先：SiliconFlow SenseVoiceSmall（中英文专优，无需 Gemini）──────────
+    sf_key = _secret("SILICONFLOW_API_KEY")
+    if sf_key:
+        try:
+            ext = mime.split("/")[-1].replace("webm", "webm").replace("mp4", "m4a")
+            resp = requests.post(
+                "https://api.siliconflow.cn/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {sf_key}"},
+                files={"file": (f"audio.{ext}", raw, mime)},
+                data={"model": "FunAudioLLM/SenseVoiceSmall"},
+                timeout=30,
+            )
+            data = resp.json()
+            if "text" in data and data["text"].strip():
+                return data["text"].strip(), ""
+            if "error" in data:
+                pass  # 继续尝试 Gemini
+        except Exception:
+            pass
+
+    # ── 备用：Gemini ──────────────────────────────────────────────────────────
     key = _secret("GEMINI_API_KEY")
     if not key:
-        return "", "未配置 GEMINI_API_KEY"
+        return "", "请在 Streamlit Cloud Secrets 配置 SILICONFLOW_API_KEY 或 GEMINI_API_KEY"
     try:
-        raw = audio_file.read()
-        mime = "audio/webm"
-        if raw[:4] == b"RIFF":
-            mime = "audio/wav"
-        elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
-            mime = "audio/mp3"
-        elif len(raw) > 8 and raw[4:8] == b"ftyp":
-            mime = "audio/mp4"
-        elif raw[:4] == b"OggS":
-            mime = "audio/ogg"
         b64 = base64.b64encode(raw).decode()
         resp = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}",
@@ -898,11 +920,10 @@ def transcribe_audio(audio_file) -> tuple[str, str]:
         )
         data = resp.json()
         if "error" in data:
-            return "", f"Gemini API 错误：{data['error'].get('message', str(data['error']))}"
+            return "", f"Gemini 错误：{data['error'].get('message', str(data['error']))}"
         if "candidates" not in data:
             return "", f"Gemini 无返回：{str(data)[:200]}"
-        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        return text, ""
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip(), ""
     except Exception as _e:
         return "", f"识别请求失败：{_e}"
 
@@ -1524,14 +1545,14 @@ if user_input:
                 _solve_local = use_local  # 拍题时可能临时切到云端
                 _use_guide = guide_mode and not _img_bytes and not _sim_data
                 if _img_bytes:
-                    if _secret("GEMINI_API_KEY"):
-                        _solve_model = "gemini-2.0-flash"
-                        _solve_local = False  # 视觉模型用云端，不走 Ollama
-                        status.update(label="切换视觉模型（Gemini）…")
-                    elif _secret("SILICONFLOW_API_KEY"):
+                    if _secret("SILICONFLOW_API_KEY"):
                         _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
                         _solve_local = False
                         status.update(label="切换视觉模型（Qwen VL）…")
+                    elif _secret("GEMINI_API_KEY"):
+                        _solve_model = "gemini-2.0-flash"
+                        _solve_local = False
+                        status.update(label="切换视觉模型（Gemini）…")
                     else:
                         # 没有视觉 API，先 OCR 成文字再解题
                         status.update(label="识别图片内容…")
