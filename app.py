@@ -315,14 +315,13 @@ p, span, label, div, li, td, th, h1, h2, h3, h4 { color: #1a1a1a !important; }
     background: #DEDAD4 !important; color: #111 !important;
 }
 
-/* ── Streamlit 顶栏：保留侧栏按钮，隐藏其余工具条 ── */
+/* ── Streamlit 顶栏：与页面背景融合，保留侧栏开关 ── */
 header[data-testid="stHeader"] {
     background: #F5F0EB !important;
     box-shadow: none !important;
     border-bottom: none !important;
 }
-/* 隐藏 Deploy / Star 等工具按钮，保留汉堡（侧栏开关） */
-header[data-testid="stHeader"] [data-testid="stToolbar"],
+/* 只隐藏顶部彩色装饰条，不隐藏工具栏 */
 header[data-testid="stHeader"] [data-testid="stDecoration"] {
     display: none !important;
 }
