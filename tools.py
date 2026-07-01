@@ -544,16 +544,22 @@ def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
         import matplotlib.pyplot as plt
         import numpy as np
 
+        # 课本风格：白底黑线，简洁学术风
         plt.rcParams.update({
             "font.family": ["DejaVu Sans", "Arial Unicode MS", "sans-serif"],
             "axes.unicode_minus": False,
+            "axes.facecolor": "white",
+            "figure.facecolor": "white",
+            "axes.edgecolor": "#333333",
+            "grid.color": "#cccccc",
+            "grid.linewidth": 0.5,
         })
 
-        fig, ax = plt.subplots(figsize=(10, 6))
-        fig.patch.set_facecolor("#FAFAF8")
-        ax.set_facecolor("#FAFAF8")
+        fig, ax = plt.subplots(figsize=(9, 5.5))
 
-        palette = ["#4A90E2", "#E24A4A", "#27AE60", "#F39C12", "#8E44AD", "#16A085"]
+        # 多条曲线用实线/虚线/点划线区分，颜色只用深色系
+        line_styles = ["-", "--", "-.", ":"]
+        colors = ["#1a1a1a", "#2255aa", "#cc2200", "#228833", "#aa44bb"]
         x_sym = sp.Symbol("x")
         x_arr = np.linspace(float(xmin), float(xmax), 2000)
 
@@ -566,22 +572,27 @@ def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
                 y_arr[np.abs(y_arr) > 1e5] = np.nan
                 lbl = (labels[i] if labels and i < len(labels)
                        else f"$y = {sp.latex(sym_expr)}$")
-                ax.plot(x_arr, y_arr, color=palette[i % len(palette)],
-                        lw=2.2, label=lbl)
+                ax.plot(x_arr, y_arr,
+                        color=colors[i % len(colors)],
+                        linestyle=line_styles[i % len(line_styles)],
+                        lw=1.8, label=lbl)
             except Exception as e:
-                ax.text(0.05, 0.95 - i * 0.07, f"解析失败: {expr_str}: {e}",
+                ax.text(0.05, 0.95 - i * 0.07, f"解析失败: {expr_str}",
                         transform=ax.transAxes, fontsize=9, color="red")
 
-        ax.axhline(0, color="#555", lw=0.8, alpha=0.5)
-        ax.axvline(0, color="#555", lw=0.8, alpha=0.5)
-        ax.grid(True, alpha=0.25, linestyle="--")
+        ax.axhline(0, color="black", lw=0.8)
+        ax.axvline(0, color="black", lw=0.8)
+        ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
         if ymin is not None and ymax is not None:
             ax.set_ylim(float(ymin), float(ymax))
-        ax.legend(fontsize=11, framealpha=0.85)
+        if len(expressions) > 1 or (labels and labels[0]):
+            ax.legend(fontsize=10, frameon=True, framealpha=0.9,
+                      edgecolor="#aaaaaa", fancybox=False)
         if title:
-            ax.set_title(title, fontsize=13, fontweight="bold", color="#2D3748", pad=12)
-        ax.set_xlabel("x", fontsize=11)
-        ax.set_ylabel("y", fontsize=11)
+            ax.set_title(title, fontsize=12, fontweight="bold",
+                         color="#111111", pad=10, loc="left")
+        ax.set_xlabel("$x$", fontsize=11)
+        ax.set_ylabel("$y$", fontsize=11)
         ax.spines[["top", "right"]].set_visible(False)
         fig.tight_layout()
         return _save_figure(fig, title or "函数图像")
@@ -590,82 +601,118 @@ def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
 
 
 def _run_draw_mindmap(title: str, branches: list) -> str:
+    """课本风格层级树状思维导图：白底黑线，矩形框，从左到右层级展开。"""
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        import matplotlib.patches as mpatches
-        import numpy as np
+        import matplotlib.patches as patches
 
         plt.rcParams.update({
             "font.family": ["DejaVu Sans", "Arial Unicode MS", "sans-serif"],
             "axes.unicode_minus": False,
         })
 
-        fig, ax = plt.subplots(figsize=(14, 9))
-        fig.patch.set_facecolor("#F7F5F0")
-        ax.set_facecolor("#F7F5F0")
-        ax.set_xlim(-7, 7)
-        ax.set_ylim(-5.5, 5.5)
+        # ── 布局计算（从左到右：根 → 分支 → 子节点）────────────────────────
+        # 统计总行数（每个子节点占一行，分支至少占一行）
+        rows_per_branch = [max(1, len(b.get("children", []))) for b in branches]
+        total_rows = max(sum(rows_per_branch), 1)
+
+        ROW_H  = 0.7   # 每行高度
+        COL_W  = 3.2   # 每列宽度
+        BOX_W  = 2.8   # 文字框宽
+        BOX_H  = 0.45  # 文字框高
+        FIG_H  = max(5.0, total_rows * ROW_H + 1.5)
+        FIG_W  = 12.0
+
+        fig, ax = plt.subplots(figsize=(FIG_W, FIG_H))
+        fig.patch.set_facecolor("white")
+        ax.set_facecolor("white")
         ax.axis("off")
 
-        palette = ["#4A90E2", "#E24A4A", "#27AE60", "#F39C12", "#8E44AD",
-                   "#16A085", "#C0392B", "#2980B9"]
+        # 坐标系：x = 列，y 从上到下
+        ax.set_xlim(-0.5, FIG_W)
+        ax.set_ylim(-FIG_H, 0.5)
 
-        # 中心节点
-        center_circ = plt.Circle((0, 0), 0.75, color="#2D3748", zorder=6)
-        ax.add_patch(center_circ)
-        ax.text(0, 0, title, ha="center", va="center", fontsize=10,
-                color="white", fontweight="bold", zorder=7,
-                wrap=True, multialignment="center")
+        def draw_box(ax, cx, cy, text, is_root=False, is_branch=False):
+            """画矩形框 + 文字，返回框的左右中心坐标。"""
+            fc = "#1a1a2e" if is_root else ("#e8eef7" if is_branch else "white")
+            ec = "#1a1a2e" if is_root else "#555577"
+            tc = "white" if is_root else "#111111"
+            lw = 1.8 if is_branch else 1.0
+            rect = patches.FancyBboxPatch(
+                (cx - BOX_W / 2, cy - BOX_H / 2), BOX_W, BOX_H,
+                boxstyle="square,pad=0.05",
+                facecolor=fc, edgecolor=ec, linewidth=lw, zorder=4,
+            )
+            ax.add_patch(rect)
+            ax.text(cx, cy, text, ha="center", va="center",
+                    fontsize=9.5 if is_root else (9.0 if is_branch else 8.5),
+                    color=tc, fontweight="bold" if (is_root or is_branch) else "normal",
+                    zorder=5, clip_on=True)
+            return (cx - BOX_W / 2, cy), (cx + BOX_W / 2, cy)  # left, right mid-points
 
-        n = len(branches)
-        if n == 0:
-            return _save_figure(fig, title)
+        def hline(ax, x0, x1, y):
+            ax.plot([x0, x1], [y, y], color="#777788", lw=0.9, zorder=3)
 
-        angles = np.linspace(np.pi / 6, 2 * np.pi + np.pi / 6, n, endpoint=False)
+        def vline(ax, x, y0, y1):
+            ax.plot([x, x], [y0, y1], color="#777788", lw=0.9, zorder=3)
 
-        for i, (branch, angle) in enumerate(zip(branches, angles)):
-            color = palette[i % len(palette)]
-            bx = 3.0 * np.cos(angle)
-            by = 3.0 * np.sin(angle)
+        # ── 根节点（居中纵向）────────────────────────────────────────────────
+        root_x = 1.8
+        root_cy = -FIG_H / 2
+        draw_box(ax, root_x, root_cy, title, is_root=True)
+        root_right_x = root_x + BOX_W / 2
 
-            # 中心 → 分支 连线
-            ax.annotate("", xy=(bx, by),
-                        xytext=(0.78 * np.cos(angle), 0.78 * np.sin(angle)),
-                        arrowprops=dict(arrowstyle="-", color=color, lw=2.2),
-                        zorder=4)
+        # ── 分支 + 子节点 ────────────────────────────────────────────────────
+        branch_x   = root_x + COL_W
+        child_x    = branch_x + COL_W
 
-            # 分支节点
-            label = branch.get("label", "")
-            bbox = dict(boxstyle="round,pad=0.45", facecolor=color,
-                        alpha=0.9, edgecolor="none")
-            ax.text(bx, by, label, ha="center", va="center", fontsize=9.5,
-                    color="white", fontweight="bold", bbox=bbox, zorder=5)
+        # 计算每个分支的纵向中心 y
+        cursor = -1.0  # 从顶部开始
+        branch_centers = []
+        for rb in rows_per_branch:
+            span = rb * ROW_H
+            branch_centers.append(cursor - span / 2)
+            cursor -= span
 
-            # 子节点
+        # 根节点垂直线连到所有分支
+        if branch_centers:
+            y_top    = branch_centers[0]
+            y_bottom = branch_centers[-1]
+            vline(ax, root_right_x + 0.3, y_top, y_bottom)
+
+        for bi, (branch, bcy) in enumerate(zip(branches, branch_centers)):
+            # 根 → 分支 水平连线
+            hline(ax, root_right_x + 0.3, branch_x - BOX_W / 2, bcy)
+
+            draw_box(ax, branch_x, bcy, branch.get("label", ""), is_branch=True)
+            branch_right_x = branch_x + BOX_W / 2
+
             children = branch.get("children", [])
-            nc = len(children)
-            if nc:
-                spread = min(0.65, 0.9 / max(nc, 1))
-                c_angles = np.linspace(angle - spread * (nc - 1) / 2,
-                                       angle + spread * (nc - 1) / 2, nc)
-                for cangle, child in zip(c_angles, children):
-                    cx = bx + 2.3 * np.cos(cangle)
-                    cy = by + 2.3 * np.sin(cangle)
-                    cx = float(np.clip(cx, -6.5, 6.5))
-                    cy = float(np.clip(cy, -5.0, 5.0))
-                    ax.plot([bx, cx], [by, cy], color=color, lw=1.3,
-                            alpha=0.55, zorder=3)
-                    cbbox = dict(boxstyle="round,pad=0.3", facecolor=color,
-                                 alpha=0.18, edgecolor=color, lw=0.8)
-                    ax.text(cx, cy, child, ha="center", va="center", fontsize=8.2,
-                            color="#2D3748", bbox=cbbox, zorder=4)
+            if not children:
+                continue
 
-        ax.set_title(f"  {title}  知识框架", fontsize=12, fontweight="bold",
-                     color="#2D3748", pad=8)
-        fig.tight_layout()
-        return _save_figure(fig, f"{title} 思维导图")
+            # 子节点纵向排列
+            rb = rows_per_branch[bi]
+            top_cy = bcy + (rb - 1) / 2 * ROW_H
+            child_ys = [top_cy - j * ROW_H for j in range(len(children))]
+
+            # 分支 → 子节点 垂直线
+            if len(children) > 1:
+                vline(ax, branch_right_x + 0.3, child_ys[0], child_ys[-1])
+
+            for child_text, ccy in zip(children, child_ys):
+                hline(ax, branch_right_x + 0.3, child_x - BOX_W / 2, ccy)
+                draw_box(ax, child_x, ccy, child_text)
+
+        # 标题
+        ax.text(FIG_W / 2, -0.1, title + "  知识框架",
+                ha="center", va="bottom", fontsize=11,
+                fontweight="bold", color="#1a1a2e")
+
+        fig.tight_layout(pad=0.5)
+        return _save_figure(fig, f"{title} 知识框架")
     except Exception as e:
         return f"[draw_mindmap 错误：{e}]"
 
