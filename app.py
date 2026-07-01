@@ -22,7 +22,7 @@ for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
         except Exception:
             pass
 
-from agent import MathAgent, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, CLOUD_PROVIDERS
+from agent import MathAgent, CLOUD_PROVIDERS
 
 # ── Supabase REST（直接用 requests，无需 supabase 包）────────────────────────
 _SB_URL = os.environ.get(
@@ -712,35 +712,11 @@ if not st.session_state.get("logged_in"):
     st.stop()
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
-_USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
-
 def _secret(key):
     try:
         return st.secrets[key]
     except Exception:
         return os.environ.get(key, "")
-
-_OLLAMA_FALLBACK_MODELS = ["phi4-mini", "phi4"]
-
-def _fetch_ollama_models() -> list[str]:
-    """从 Ollama /api/tags 动态获取已安装模型列表，结果缓存在 session state。"""
-    if "ollama_model_list" in st.session_state:
-        return st.session_state["ollama_model_list"]
-    try:
-        base = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-        r = requests.get(f"{base}/api/tags", timeout=5)
-        if r.ok:
-            models = [m["name"] for m in r.json().get("models", [])]
-            if models:
-                st.session_state["ollama_model_list"] = models
-                st.session_state["ollama_online"] = True
-                return models
-        st.session_state["ollama_online"] = False
-    except Exception as _e:
-        st.session_state["ollama_online"] = False
-        st.session_state["ollama_error"] = str(_e)
-    st.session_state["ollama_model_list"] = _OLLAMA_FALLBACK_MODELS
-    return _OLLAMA_FALLBACK_MODELS
 
 # ── 示例题目池（30+ 题，每次随机抽 6 道）────────────────────────────────────
 _ALL_EXAMPLES = [
@@ -1059,9 +1035,8 @@ _ADMIN_EMAIL = "a13989358483@gmail.com"
 with _hdr_right_col:
     _is_admin = st.session_state.get("user_email", "") == _ADMIN_EMAIL
     if _is_admin:
-        use_local = st.checkbox("离线 Ollama", value=_USE_LOCAL, key="top_use_local")
-    else:
-        use_local = False
+        pass
+    use_local = False
 
 # ── 手机端弹出菜单（覆盖主内容区）────────────────────────────────────────────
 if st.session_state.show_mobile_menu:
@@ -1359,35 +1334,12 @@ with _tb_mic:
 
 with _tb_model:
     st.markdown('<div class="toolbar-model">', unsafe_allow_html=True)
-    if use_local:
-        _ollama_models = _fetch_ollama_models()
-        _prev_local = st.session_state.get("_sel_model", "")
-        _local_idx = _ollama_models.index(_prev_local) if _prev_local in _ollama_models else 0
-        _mc, _mrefresh = st.columns([8, 1])
-        with _mc:
-            selected_model = st.selectbox(
-                "模型", _ollama_models, index=_local_idx,
-                label_visibility="collapsed", key="tb_model_local",
-            )
-        with _mrefresh:
-            if st.button("↻", key="ollama_refresh", help="刷新模型列表"):
-                st.session_state.pop("ollama_model_list", None)
-                st.session_state.pop("ollama_online", None)
-                st.session_state.pop("ollama_error", None)
-                st.rerun()
-        if not st.session_state.get("ollama_online", True):
-            _oe = st.session_state.get("ollama_error", "")
-            _hint = "请运行桌面快捷方式启动 Ollama 隧道"
-            if "11434" in _oe or "Connection" in _oe:
-                _hint = "Ollama 未运行，请启动桌面快捷方式"
-            st.caption(f"⚠️ 本地模型离线 · {_hint}")
-    else:
-        _copts = list(CLOUD_PROVIDERS.keys())
-        _def_idx = _copts.index("deepseek-chat")
-        selected_model = st.selectbox(
-            "模型", _copts, index=_def_idx,
-            label_visibility="collapsed", key="tb_model_cloud",
-        )
+    _copts = list(CLOUD_PROVIDERS.keys())
+    _def_idx = _copts.index("deepseek-chat")
+    selected_model = st.selectbox(
+        "模型", _copts, index=_def_idx,
+        label_visibility="collapsed", key="tb_model_cloud",
+    )
     st.session_state["_sel_model"] = selected_model
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1512,12 +1464,11 @@ if user_input:
                         trace_lines.append(f"   → {preview}  ({elapsed:.1f}s)\n")
 
                 _solve_model = selected_model
-                _solve_local = use_local  # 拍题时可能临时切到云端
+                _solve_local = False
                 _use_guide = guide_mode and not _img_bytes and not _sim_data
                 if _img_bytes:
                     if _secret("SILICONFLOW_API_KEY"):
                         _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
-                        _solve_local = False
                         status.update(label="切换视觉模型（Qwen VL）…")
                     else:
                         # 没有视觉 API，先 OCR 成文字再解题
