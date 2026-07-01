@@ -1302,7 +1302,7 @@ if st.session_state.get("show_file"):
         st.session_state.show_file = False
         st.rerun()
 
-# ── 麦克风面板（录完即识别，通过 JS 注入 chat_input）───────────────────────
+# ── 麦克风面板（录完即识别，自动发送）──────────────────────────────────────
 if st.session_state.get("show_mic"):
     _av = st.audio_input("🎙️ 说出数学题（支持中英文）", key="mic_input",
                          label_visibility="visible")
@@ -1311,7 +1311,7 @@ if st.session_state.get("show_mic"):
             _vt, _vt_err = transcribe_audio(_av)
         st.session_state.show_mic = False
         if _vt:
-            st.session_state["_voice_inject"] = _vt
+            st.session_state["_direct_input"] = _vt
         else:
             st.error(f"语音识别失败：{_vt_err}" if _vt_err else "未识别到内容，请重试（录音超过1秒）")
         st.rerun()
@@ -1421,33 +1421,6 @@ typed = st.chat_input(
     "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
 )
 
-# 语音识别完成时：通过 JS 将文字注入 chat_input 输入框（可编辑后按 Enter 发送）
-_voice_inject = st.session_state.pop("_voice_inject", None)
-if _voice_inject:
-    import json as _json_mod
-    _vi_js = _json_mod.dumps(_voice_inject)
-    _cv1.html(f"""
-<script>
-(function(){{
-    var txt = {_vi_js};
-    function inject(n) {{
-        try {{
-            var ta = window.parent.document.querySelector('[data-testid="stChatInputTextArea"]');
-            if (ta) {{
-                var setter = Object.getOwnPropertyDescriptor(
-                    window.HTMLTextAreaElement.prototype, 'value').set;
-                setter.call(ta, txt);
-                ta.dispatchEvent(new Event('input', {{bubbles: true}}));
-                ta.focus();
-            }} else if (n > 0) {{
-                setTimeout(function() {{ inject(n - 1); }}, 150);
-            }}
-        }} catch(e) {{}}
-    }}
-    inject(20);
-}})();
-</script>
-""", height=1)
 
 # 确定是否"提交"：面板刚切换时强制跳过，避免误触发
 _submitted = (not _panel_just_toggled) and (
