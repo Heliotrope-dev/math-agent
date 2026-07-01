@@ -189,8 +189,11 @@ class MathAgent:
                     extra_body=extra,
                 )
             except Exception as e:
-                if _tools_supported and ("tool" in str(e).lower() or "function" in str(e).lower()):
-                    # 模型不支持工具调用，降级为直接对话
+                err = str(e).lower()
+                if _tools_supported and ("tool" in err or "function" in err
+                                         or "400" in err or "bad request" in err
+                                         or "502" in err):
+                    # 模型不支持工具调用（phi4:latest 等），降级为直接对话
                     _tools_supported = False
                     response = self.client.chat.completions.create(
                         model=self.model,
