@@ -240,21 +240,41 @@ st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
 import streamlit.components.v1 as _cv1
 _cv1.html("""
 <script>
+(function() {
 try {
+    // ── 1. localStorage 自动登录 ──────────────────────────────────
     var url = new URL(window.parent.location.href);
     if (!url.searchParams.get('_auth')) {
         var t = window.parent.localStorage.getItem('ma_auth_tok');
         if (t) {
             url.searchParams.set('_auth', t);
             window.parent.history.replaceState(null, '', url.toString());
-            // 用 location.replace 代替 reload，确保 Streamlit 已就绪后才跳转
             setTimeout(function() {
                 if (!new URL(window.parent.location.href).searchParams.get('_auth')) return;
                 window.parent.location.replace(url.toString());
             }, 800);
         }
     }
+
+    // ── 2. 睡眠唤醒后自动重连 ────────────────────────────────────
+    // 记录最后一次页面可见时间
+    var _lastVisible = Date.now();
+    var SLEEP_RELOAD_MS = 90 * 1000;  // 超过 90 秒不可见唤醒后重载
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') {
+            _lastVisible = Date.now();
+        } else {
+            var slept = Date.now() - _lastVisible;
+            if (slept > SLEEP_RELOAD_MS) {
+                // 保留 URL 参数（含 _auth token），只刷新页面
+                window.parent.location.reload();
+            }
+        }
+    });
+
 } catch(e) {}
+})();
 </script>
 """, height=1)
 
@@ -956,6 +976,194 @@ if "show_file" not in st.session_state:
     st.session_state.show_file = False
 if "guide_mode" not in st.session_state:
     st.session_state.guide_mode = False
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+
+# ── 暗色模式 CSS 覆盖 ─────────────────────────────────────────────────────────
+if st.session_state.dark_mode:
+    st.markdown("""
+<style>
+/* ═══ 夜间模式 — 深海蓝调 ═══ */
+:root {
+    --dm-bg:      #12121a;
+    --dm-panel:   #1c1c28;
+    --dm-card:    #252535;
+    --dm-border:  #2e2e42;
+    --dm-text:    #e0e0f0;
+    --dm-muted:   #7878a0;
+    --dm-accent:  #5a8cff;
+}
+
+html, body { background: var(--dm-bg) !important; }
+.stApp, [data-testid="stAppViewContainer"],
+[data-testid="stMain"], [data-testid="block-container"],
+section.main, .main, .block-container,
+[data-testid="stBottom"], .stBottom,
+[data-testid="stBottomBlockContainer"],
+[class*="bottom"], [class*="Bottom"],
+footer { background: var(--dm-bg) !important; }
+p, span, label, div, li, td, th, h1, h2, h3, h4 { color: var(--dm-text) !important; }
+
+/* ── 侧边栏 ── */
+[data-testid="stSidebar"] {
+    background: var(--dm-panel) !important;
+    border-right: 1px solid var(--dm-border) !important;
+}
+[data-testid="stSidebar"] * { color: var(--dm-text) !important; }
+[data-testid="stSidebar"] .stButton button {
+    background: var(--dm-card) !important;
+    border: 1px solid var(--dm-border) !important;
+    color: var(--dm-text) !important;
+}
+[data-testid="stSidebar"] .stButton button:hover {
+    background: #30304a !important; color: #fff !important;
+    border-color: var(--dm-accent) !important;
+}
+
+/* ── 顶栏 ── */
+header[data-testid="stHeader"] { background: var(--dm-panel) !important; }
+
+/* ── 课程横幅 ── */
+.course-banner { background: var(--dm-card) !important; color: var(--dm-muted) !important; }
+
+/* ── AI 气泡 ── */
+.stMarkdown:has(.asst-bubble-marker) + .stMarkdown > div {
+    background: var(--dm-card) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+    color: var(--dm-text) !important;
+}
+.bubble-asst-wrap {
+    background: var(--dm-card) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+}
+.bubble-asst-wrap p, .bubble-asst-wrap li { color: var(--dm-text) !important; }
+
+/* ── 示例卡片 ── */
+[data-testid="stVerticalBlock"] [data-testid="stButton"] button {
+    background: var(--dm-panel) !important;
+    border: 1px solid var(--dm-border) !important;
+    color: var(--dm-text) !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
+}
+[data-testid="stVerticalBlock"] [data-testid="stButton"] button:hover {
+    background: var(--dm-card) !important;
+    border-color: var(--dm-accent) !important;
+    color: #fff !important;
+}
+
+/* ── 功能卡片 ── */
+.feature-card { background: var(--dm-panel) !important; border-color: var(--dm-border) !important; }
+.feature-title { color: var(--dm-text) !important; }
+.feature-desc { color: var(--dm-muted) !important; }
+
+/* ── 欢迎语 ── */
+.greeting-main, .welcome-title { color: var(--dm-text) !important; }
+.greeting-sub, .welcome-sub { color: var(--dm-muted) !important; }
+
+/* ── 输入框 ── */
+[data-testid="stChatInputContainer"] {
+    background: var(--dm-bg) !important;
+    border-top: 1px solid var(--dm-border) !important;
+}
+[data-testid="stChatInputTextArea"] {
+    background: var(--dm-panel) !important;
+    border: 1px solid var(--dm-border) !important;
+    color: var(--dm-text) !important;
+}
+[data-testid="stChatInputTextArea"]:focus {
+    border-color: var(--dm-accent) !important;
+    box-shadow: 0 0 0 2px rgba(90,140,255,0.2) !important;
+}
+[data-testid="stChatInputSubmitButton"] button { background: #2a6edd !important; }
+
+/* ── 文件上传 ── */
+[data-testid="stFileUploaderDropzone"] button,
+[data-testid="stFileUploadDropzone"] button {
+    background: var(--dm-panel) !important;
+    border: 1px solid var(--dm-border) !important;
+    color: var(--dm-text) !important;
+}
+[data-testid="stFileUploaderDropzone"] button:hover,
+[data-testid="stFileUploadDropzone"] button:hover {
+    background: var(--dm-card) !important; border-color: var(--dm-accent) !important;
+}
+
+/* ── Selectbox / 弹出菜单 ── */
+[data-testid="stSelectbox"] > div > div,
+[data-baseweb="select"] > div {
+    background: var(--dm-panel) !important;
+    border: 1px solid var(--dm-border) !important;
+    color: var(--dm-text) !important;
+}
+[data-baseweb="popover"], [data-baseweb="menu"],
+[data-baseweb="menu"] ul { background: var(--dm-panel) !important; }
+[data-baseweb="menu"] li { color: var(--dm-text) !important; }
+[data-baseweb="menu"] li:hover { background: var(--dm-card) !important; }
+
+/* ── 底部区域 ── */
+[data-testid="stBottomBlockContainer"],
+[data-testid="stBottom"] > div,
+[data-testid="stBottom"] > div > div { background: var(--dm-bg) !important; }
+
+/* ── Plus 面板 ── */
+.plus-panel { background: var(--dm-panel) !important; border-color: var(--dm-border) !important; }
+.plus-panel .stButton button {
+    background: var(--dm-card) !important;
+    border-color: var(--dm-border) !important;
+    color: var(--dm-text) !important;
+}
+.plus-panel .stButton button:hover {
+    background: #30304a !important; border-color: var(--dm-accent) !important;
+}
+
+/* ── 工具栏 Model Selectbox ── */
+.toolbar-model [data-testid="stSelectbox"] > div > div {
+    background: rgba(28,28,40,0.95) !important;
+    border-color: var(--dm-border) !important;
+    color: var(--dm-text) !important;
+}
+
+/* ── 工具栏图标按钮 ── */
+.toolbar-btn button { color: var(--dm-muted) !important; }
+.toolbar-btn button:hover { background: var(--dm-card) !important; color: var(--dm-text) !important; }
+
+/* ── 麦克风 ── */
+[data-testid="stAudioInput"],
+[data-testid="stAudioInput"] > div {
+    background: var(--dm-panel) !important;
+    border-color: var(--dm-border) !important;
+}
+[data-testid="stAudioInput"] button { color: var(--dm-muted) !important; }
+
+/* ── 语音文本框 ── */
+[data-testid="stTextArea"] textarea {
+    background: var(--dm-panel) !important;
+    border-color: var(--dm-border) !important;
+    color: var(--dm-text) !important;
+}
+
+/* ── Guide Chip ── */
+.guide-chip { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-muted) !important; }
+.guide-chip.on { background: #2a6edd !important; border-color: #2a6edd !important; color: #fff !important; }
+
+/* ── 分割线 ── */
+hr { border-color: var(--dm-border) !important; }
+
+/* ── 登录页 ── */
+.login-logo-title { color: var(--dm-text) !important; }
+.login-logo-sub { color: var(--dm-muted) !important; }
+
+/* ── Checkbox ── */
+[data-testid="stCheckbox"] span, [data-testid="stCheckbox"] p { color: var(--dm-text) !important; }
+
+/* ── 上传横幅（文件名）── */
+[data-testid="stFileUploaderFileName"] { color: var(--dm-text) !important; }
+
+/* ── expander ── */
+[data-testid="stExpander"] { background: var(--dm-panel) !important; border-color: var(--dm-border) !important; }
+[data-testid="stExpander"] summary { color: var(--dm-text) !important; }
+</style>
+""", unsafe_allow_html=True)
 
 
 # ── 侧边栏 ────────────────────────────────────────────────────────────────────
@@ -966,29 +1174,36 @@ with st.sidebar:
         f'<p style="font-size:0.75rem;color:#888;margin:0 0 4px">👤 {_uemail}</p>',
         unsafe_allow_html=True,
     )
-    if st.button("退出登录", key="logout_btn", use_container_width=True):
-        _tok = st.session_state.pop("_token", None)
-        if _tok:
-            _invalidate_token(_tok)
-        try:
-            del st.query_params["_auth"]
-        except Exception:
-            pass
-        _cv1.html(
-            '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");}catch(e){}</script>',
-            height=1,
-        )
-        st.session_state["logged_in"] = False
-        st.session_state.pop("user_email", None)
-        st.rerun()
+    _sb_top_left, _sb_top_right = st.columns([3, 1])
+    with _sb_top_left:
+        if st.button("退出登录", key="logout_btn", use_container_width=True):
+            _tok = st.session_state.pop("_token", None)
+            if _tok:
+                _invalidate_token(_tok)
+            try:
+                del st.query_params["_auth"]
+            except Exception:
+                pass
+            _cv1.html(
+                '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");}catch(e){}</script>',
+                height=1,
+            )
+            st.session_state["logged_in"] = False
+            st.session_state.pop("user_email", None)
+            st.rerun()
+    with _sb_top_right:
+        _dm_icon = "☀️" if st.session_state.dark_mode else "🌙"
+        if st.button(_dm_icon, key="dark_mode_btn", use_container_width=True, help="切换深色/浅色模式"):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
     st.divider()
 
-    # ── 最近问题（最多显示10条，超出自动删最早）────────────────────────────────
+    # ── 最近问题（最多显示20条）─────────────────────────────────────────────────
     _user_msgs = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
     if _user_msgs:
         st.markdown('<p style="font-size:0.75rem;color:#888;margin:0 0 6px">最近问题</p>',
                     unsafe_allow_html=True)
-        for _qi, _q in enumerate(_user_msgs[-10:]):
+        for _qi, _q in enumerate(_user_msgs[-20:]):
             _q_short = _q[:28] + "…" if len(_q) > 28 else _q
             if st.button(_q_short, key=f"hist_{_qi}", use_container_width=True):
                 st.session_state["prefill"] = _q
@@ -1287,10 +1502,14 @@ for i, msg in enumerate(st.session_state.messages):
                     st.session_state["_direct_input"] = msg["practice"]
                     st.rerun()
             for _img in msg.get("images", []):
-                st.image(
-                    base64.b64decode(_img["b64"]),
-                    caption=_img.get("caption", ""),
-                    use_container_width=True,
+                _cap = _img.get("caption", "")
+                st.markdown(
+                    f'<div style="margin:8px 0">'
+                    f'<img src="data:image/png;base64,{_img["b64"]}" '
+                    f'style="width:100%;border-radius:6px;border:1px solid #DDD;" />'
+                    + (f'<p style="text-align:center;font-size:0.78rem;color:#888;margin:4px 0">{_cap}</p>' if _cap else '')
+                    + '</div>',
+                    unsafe_allow_html=True,
                 )
             if msg.get("trace"):
                 with st.expander("工具调用详情", expanded=False):
@@ -1666,10 +1885,14 @@ if user_input:
             # 取走工具生成的图像并展示
             _new_images = get_and_clear_pending_images()
             for _img in _new_images:
-                st.image(
-                    base64.b64decode(_img["b64"]),
-                    caption=_img.get("caption", ""),
-                    use_container_width=True,
+                _cap = _img.get("caption", "")
+                st.markdown(
+                    f'<div style="margin:8px 0">'
+                    f'<img src="data:image/png;base64,{_img["b64"]}" '
+                    f'style="width:100%;border-radius:6px;border:1px solid #DDD;" />'
+                    + (f'<p style="text-align:center;font-size:0.78rem;color:#888;margin:4px 0">{_cap}</p>' if _cap else '')
+                    + '</div>',
+                    unsafe_allow_html=True,
                 )
             if trace:
                 with st.expander("工具调用详情", expanded=False):
