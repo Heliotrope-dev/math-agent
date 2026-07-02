@@ -1243,47 +1243,33 @@ div[data-testid="stPills"] button[aria-selected="true"] {
 </style>
 """, unsafe_allow_html=True)
 
-    # CSS 无法覆盖 Streamlit 原生组件内联样式，用 JS 强制注入
+    # 把暗色覆盖 CSS 注入到父页面 <head>，绕过 React 重渲染覆盖问题
     _cv1.html("""<script>
 (function() {
-    function _dmFix() {
-        try {
-            var p = window.parent.document;
-            // 底栏背景
-            p.querySelectorAll(
-                '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]'
-            ).forEach(function(el) {
-                el.style.setProperty('background','#0f0f17','important');
-            });
-            // 输入框外框
-            p.querySelectorAll(
-                '[data-testid="stChatInputContainer"],[data-testid="stChatInput"]'
-            ).forEach(function(el) {
-                el.style.setProperty('background','#18182a','important');
-                el.style.setProperty('border','1.5px solid #32325a','important');
-                el.style.setProperty('border-radius','24px','important');
-                el.style.setProperty('box-shadow','none','important');
-            });
-            // textarea 透明
-            p.querySelectorAll('[data-testid="stChatInputTextArea"]').forEach(function(el) {
-                el.style.setProperty('background','transparent','important');
-                el.style.setProperty('border','none','important');
-                el.style.setProperty('box-shadow','none','important');
-                el.style.setProperty('color','#dde0f5','important');
-            });
-            // 工具栏背景
-            p.querySelectorAll('[data-testid="stHorizontalBlock"]').forEach(function(el) {
-                if (el.querySelector('.toolbar-btn')) {
-                    el.style.setProperty('background','#0f0f17','important');
-                }
-            });
-        } catch(e) {}
-    }
-    _dmFix();
-    setTimeout(_dmFix, 400);
-    setTimeout(_dmFix, 1200);
-    var _obs = new MutationObserver(_dmFix);
-    try { _obs.observe(window.parent.document.body,{childList:true,subtree:true}); } catch(e) {}
+    try {
+        var doc = window.parent.document;
+        var existing = doc.getElementById('_dm_override_css');
+        if (!existing) {
+            var s = doc.createElement('style');
+            s.id = '_dm_override_css';
+            s.textContent = [
+                /* 底栏 */
+                '[data-testid="stBottom"]{background:#0f0f17!important}',
+                '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
+                '[data-testid="stBottom"]>div{background:#0f0f17!important}',
+                /* 输入框外框变深色 */
+                '[data-testid="stChatInputContainer"]{background:#18182a!important;border:1.5px solid #32325a!important;border-radius:24px!important;box-shadow:none!important}',
+                '[data-testid="stChatInput"]{background:#0f0f17!important}',
+                /* textarea 透明 */
+                '[data-testid="stChatInputTextArea"]{background:transparent!important;border:none!important;box-shadow:none!important;color:#dde0f5!important}',
+                /* placeholder */
+                '[data-testid="stChatInputTextArea"]::placeholder{color:#5050708!important}',
+                /* 发送按钮 */
+                '[data-testid="stChatInputSubmitButton"] button{background:#2a6edd!important}',
+            ].join('');
+            doc.head.appendChild(s);
+        }
+    } catch(e) {}
 })();
 </script>""", height=1)
 
