@@ -1243,6 +1243,50 @@ div[data-testid="stPills"] button[aria-selected="true"] {
 </style>
 """, unsafe_allow_html=True)
 
+    # CSS 无法覆盖 Streamlit 原生组件内联样式，用 JS 强制注入
+    _cv1.html("""<script>
+(function() {
+    function _dmFix() {
+        try {
+            var p = window.parent.document;
+            // 底栏背景
+            p.querySelectorAll(
+                '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]'
+            ).forEach(function(el) {
+                el.style.setProperty('background','#0f0f17','important');
+            });
+            // 输入框外框
+            p.querySelectorAll(
+                '[data-testid="stChatInputContainer"],[data-testid="stChatInput"]'
+            ).forEach(function(el) {
+                el.style.setProperty('background','#18182a','important');
+                el.style.setProperty('border','1.5px solid #32325a','important');
+                el.style.setProperty('border-radius','24px','important');
+                el.style.setProperty('box-shadow','none','important');
+            });
+            // textarea 透明
+            p.querySelectorAll('[data-testid="stChatInputTextArea"]').forEach(function(el) {
+                el.style.setProperty('background','transparent','important');
+                el.style.setProperty('border','none','important');
+                el.style.setProperty('box-shadow','none','important');
+                el.style.setProperty('color','#dde0f5','important');
+            });
+            // 工具栏背景
+            p.querySelectorAll('[data-testid="stHorizontalBlock"]').forEach(function(el) {
+                if (el.querySelector('.toolbar-btn')) {
+                    el.style.setProperty('background','#0f0f17','important');
+                }
+            });
+        } catch(e) {}
+    }
+    _dmFix();
+    setTimeout(_dmFix, 400);
+    setTimeout(_dmFix, 1200);
+    var _obs = new MutationObserver(_dmFix);
+    try { _obs.observe(window.parent.document.body,{childList:true,subtree:true}); } catch(e) {}
+})();
+</script>""", height=1)
+
 
 # ── 侧边栏 ────────────────────────────────────────────────────────────────────
 with st.sidebar:
