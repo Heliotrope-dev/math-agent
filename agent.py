@@ -96,7 +96,7 @@ VISION_MODELS = {
 }
 
 LOCAL_MODELS = ["phi4-mini", "phi4"]
-DEFAULT_LOCAL_MODEL = "phi4-mini"
+DEFAULT_LOCAL_MODEL = os.environ.get("MATH_AGENT_MODEL", "qwen3.5:9b")
 
 CLOUD_PROVIDERS = {
     # 硅基流动视觉模型（拍题用）
@@ -120,6 +120,7 @@ class MathAgent:
         self.use_local = use_local
         self.guide_mode = guide_mode
         self.max_iterations = max_iterations
+        self._own_client = False
         if use_local:
             _ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/") + "/v1"
             self.client = OpenAI(
@@ -128,9 +129,10 @@ class MathAgent:
                 http_client=httpx.Client(
                     trust_env=False,
                     verify=False,
-                    limits=httpx.Limits(max_keepalive_connections=0, max_connections=100),
+                    limits=httpx.Limits(max_keepalive_connections=5, max_connections=100),
                 ),
             )
+            self._own_client = True
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
             self.model = model or "deepseek-chat"
@@ -143,6 +145,11 @@ class MathAgent:
     @property
     def supports_vision(self) -> bool:
         return self.model in VISION_MODELS
+
+    def close(self):
+        if self._own_client:
+            self.client.close()
+            self._own_client = False
 
     @staticmethod
     def _trim_history(history: list) -> list:

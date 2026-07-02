@@ -335,7 +335,8 @@ _STEP_TEMPLATES: dict[str, list[str]] = {
 def _run_calculator(expression: str, operation: str, variable: str = "x") -> str:
     """SymPy 符号计算引擎。"""
     # 预处理：将 ^ 替换为 **（用户常犯的写法）
-    expr_str = expression.replace("^", "**")
+    import re
+    expr_str = re.sub(r'(?<=[\d)a-zA-Z])\^(?=[\d(\-a-zA-Z])', '**', expression)
 
     try:
         var = sp.Symbol(variable)

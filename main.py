@@ -65,6 +65,7 @@ def main() -> None:
 
             history.append({"role": "user",      "content": f"请解题：{problem}"})
             history.append({"role": "assistant",  "content": solution})
+            history = agent._trim_history(history)
 
         except KeyboardInterrupt:
             print("\n\n已中断，再见！")

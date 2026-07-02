@@ -27,13 +27,9 @@ from tools import get_and_clear_pending_images
 
 # ── Supabase REST（直接用 requests，无需 supabase 包）────────────────────────
 _SB_URL = os.environ.get(
-    "SUPABASE_URL", "https://jqfvgpeyzghnuznjjwio.supabase.co"
-).rstrip("/") + "/rest/v1"
-_SB_KEY = os.environ.get("SUPABASE_KEY", (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-    ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxZnZncGV5emdobnV6bmpqd2lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDUxNjUsImV4cCI6MjA5ODM4MTE2NX0"
-    ".8DcpQHEsOsjlwzBdYWX_3PaIcFlYgpm_YzbKpFBapqQ"
-))
+    "SUPABASE_URL", ""
+).rstrip("/") + "/rest/v1" if os.environ.get("SUPABASE_URL") else ""
+_SB_KEY = os.environ.get("SUPABASE_KEY", "")
 _SB_HDR = {
     "apikey": _SB_KEY,
     "Authorization": f"Bearer {_SB_KEY}",
@@ -41,6 +37,8 @@ _SB_HDR = {
 }
 
 def _sb_get(table: str, params: dict) -> list:
+    if not _SB_URL or not _SB_KEY:
+        return []
     try:
         r = requests.get(f"{_SB_URL}/{table}", headers=_SB_HDR, params=params, timeout=8)
         return r.json() if r.ok else []
@@ -48,12 +46,16 @@ def _sb_get(table: str, params: dict) -> list:
         return []
 
 def _sb_post(table: str, data: dict | list):
+    if not _SB_URL or not _SB_KEY:
+        return
     try:
         requests.post(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, timeout=8)
     except Exception:
         pass
 
 def _sb_delete(table: str, params: dict):
+    if not _SB_URL or not _SB_KEY:
+        return
     try:
         requests.delete(f"{_SB_URL}/{table}", headers=_SB_HDR, params=params, timeout=8)
     except Exception:
@@ -100,15 +102,27 @@ def _load_user_profile(email: str) -> dict:
 _TOKEN_DAYS = 7
 
 def _hash_pw(pw: str) -> str:
-    return hashlib.sha256(pw.encode()).hexdigest()
+    salt = _secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000)
+    return f"{salt}${h.hex()}"
+
+def _check_pw(pw: str, stored: str) -> bool:
+    try:
+        salt, h = stored.split("$", 1)
+        return hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hexdigest() == h
+    except Exception:
+        return False
 
 def _user_exists(email: str) -> bool:
     return len(_sb_get("users", {"email": f"eq.{email}", "select": "email"})) > 0
 
-def _check_user(email: str, pw_hash: str) -> bool:
-    return len(_sb_get("users", {
-        "email": f"eq.{email}", "password_hash": f"eq.{pw_hash}", "select": "email"
-    })) > 0
+def _check_user(email: str, pw: str) -> bool:
+    rows = _sb_get("users", {
+        "email": f"eq.{email}", "select": "email,password_hash"
+    })
+    if not rows:
+        return False
+    return _check_pw(pw, rows[0]["password_hash"])
 
 def _register_user(email: str, pw_hash: str):
     _sb_post("users", {"email": email, "password_hash": pw_hash})
@@ -251,9 +265,11 @@ try {
             window.parent.history.replaceState(null, '', url.toString());
             setTimeout(function() {
                 if (!new URL(window.parent.location.href).searchParams.get('_auth')) return;
+                window.parent.sessionStorage.setItem("ma_reloaded", "1");
                 window.parent.location.replace(url.toString());
             }, 800);
         }
+    }
     }
 
     // ── 2. 睡眠唤醒后自动重连 ────────────────────────────────────
