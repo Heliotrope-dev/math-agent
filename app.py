@@ -985,26 +985,30 @@ if st.session_state.dark_mode:
 <style>
 /* ═══ 夜间模式 — 深海蓝调 ═══ */
 :root {
-    --dm-bg:      #12121a;
-    --dm-panel:   #1c1c28;
-    --dm-card:    #252535;
-    --dm-border:  #2e2e42;
-    --dm-text:    #e0e0f0;
-    --dm-muted:   #7878a0;
-    --dm-accent:  #5a8cff;
+    --dm-bg:        #0f0f17;
+    --dm-panel:     #18182a;
+    --dm-card:      #20203a;
+    --dm-card2:     #252540;
+    --dm-border:    #32325a;
+    --dm-text:      #dde0f5;
+    --dm-muted:     #7070a0;
+    --dm-accent:    #5a8cff;
+    --dm-user-bg:   #1a3a5e;
+    --dm-user-text: #a8d0f0;
+    --dm-user-av:   #1e4880;
 }
 
+/* ══ 全局背景 & 文字 ══ */
 html, body { background: var(--dm-bg) !important; }
 .stApp, [data-testid="stAppViewContainer"],
 [data-testid="stMain"], [data-testid="block-container"],
-section.main, .main, .block-container,
+section.main, .main, .block-container, footer,
 [data-testid="stBottom"], .stBottom,
 [data-testid="stBottomBlockContainer"],
-[class*="bottom"], [class*="Bottom"],
-footer { background: var(--dm-bg) !important; }
-p, span, label, div, li, td, th, h1, h2, h3, h4 { color: var(--dm-text) !important; }
+[class*="bottom"], [class*="Bottom"] { background: var(--dm-bg) !important; }
+p, span, label, div, li, td, th, h1, h2, h3, h4, h5, h6 { color: var(--dm-text) !important; }
 
-/* ── 侧边栏 ── */
+/* ══ 侧边栏 ══ */
 [data-testid="stSidebar"] {
     background: var(--dm-panel) !important;
     border-right: 1px solid var(--dm-border) !important;
@@ -1016,29 +1020,63 @@ p, span, label, div, li, td, th, h1, h2, h3, h4 { color: var(--dm-text) !importa
     color: var(--dm-text) !important;
 }
 [data-testid="stSidebar"] .stButton button:hover {
-    background: #30304a !important; color: #fff !important;
+    background: var(--dm-card2) !important; color: #fff !important;
     border-color: var(--dm-accent) !important;
 }
 
-/* ── 顶栏 ── */
+/* ══ 顶栏 ══ */
 header[data-testid="stHeader"] { background: var(--dm-panel) !important; }
 
-/* ── 课程横幅 ── */
+/* ══ 课程横幅 & 退出按钮容器 ══ */
 .course-banner { background: var(--dm-card) !important; color: var(--dm-muted) !important; }
+[data-testid="stHorizontalBlock"] { background: transparent !important; }
+[data-testid="stColumn"] { background: transparent !important; }
 
-/* ── AI 气泡 ── */
+/* ══ 用户气泡 — 深蓝调代替微信绿 ══ */
+.bubble-user {
+    background: var(--dm-user-bg) !important;
+    color: var(--dm-user-text) !important;
+    border-radius: 18px 4px 18px 18px !important;
+}
+.av-user { background: var(--dm-user-av) !important; }
+.av-ai   { background: #1a5c3a !important; }
+
+/* ══ AI 气泡 ══ */
 .stMarkdown:has(.asst-bubble-marker) + .stMarkdown > div {
     background: var(--dm-card) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.6) !important;
     color: var(--dm-text) !important;
 }
 .bubble-asst-wrap {
     background: var(--dm-card) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.6) !important;
 }
 .bubble-asst-wrap p, .bubble-asst-wrap li { color: var(--dm-text) !important; }
 
-/* ── 示例卡片 ── */
+/* ══ 代码块（文字思维导图等）══ */
+pre, pre code, code {
+    background: #12122a !important;
+    color: #b8c8e8 !important;
+    border: 1px solid var(--dm-border) !important;
+}
+[data-testid="stCodeBlock"], [data-testid="stCode"],
+[data-testid="stCodeBlock"] > div, [data-testid="stCode"] > div,
+.stCodeBlock, .stCodeBlock > div { background: #12122a !important; }
+[data-testid="stCodeBlock"] pre, [data-testid="stCode"] pre { background: #12122a !important; }
+/* 代码块复制按钮 */
+[data-testid="stCodeBlock"] button, [data-testid="stCode"] button {
+    background: var(--dm-card) !important; color: var(--dm-muted) !important;
+    border: 1px solid var(--dm-border) !important;
+}
+
+/* ══ 思维导图/函数图像（matplotlib PNG）── 轻度暗化 ══ */
+.stMarkdown img, [data-testid="stMarkdownContainer"] img {
+    filter: brightness(0.88) contrast(1.05) !important;
+    border-color: var(--dm-border) !important;
+    border-radius: 6px !important;
+}
+
+/* ══ 示例卡片 ══ */
 [data-testid="stVerticalBlock"] [data-testid="stButton"] button {
     background: var(--dm-panel) !important;
     border: 1px solid var(--dm-border) !important;
@@ -1046,22 +1084,25 @@ header[data-testid="stHeader"] { background: var(--dm-panel) !important; }
     box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
 }
 [data-testid="stVerticalBlock"] [data-testid="stButton"] button:hover {
-    background: var(--dm-card) !important;
-    border-color: var(--dm-accent) !important;
-    color: #fff !important;
+    background: var(--dm-card2) !important;
+    border-color: var(--dm-accent) !important; color: #fff !important;
 }
 
-/* ── 功能卡片 ── */
+/* ══ 功能卡片 ══ */
 .feature-card { background: var(--dm-panel) !important; border-color: var(--dm-border) !important; }
 .feature-title { color: var(--dm-text) !important; }
 .feature-desc { color: var(--dm-muted) !important; }
 
-/* ── 欢迎语 ── */
+/* ══ 欢迎语 ══ */
 .greeting-main, .welcome-title { color: var(--dm-text) !important; }
 .greeting-sub, .welcome-sub { color: var(--dm-muted) !important; }
 
-/* ── 输入框 ── */
-[data-testid="stChatInputContainer"] {
+/* ══ 输入框 & 底栏 ══ */
+[data-testid="stChatInputContainer"],
+[data-testid="stBottom"],
+[data-testid="stBottomBlockContainer"],
+[data-testid="stBottom"] > div,
+[data-testid="stBottom"] > div > div {
     background: var(--dm-bg) !important;
     border-top: 1px solid var(--dm-border) !important;
 }
@@ -1076,7 +1117,7 @@ header[data-testid="stHeader"] { background: var(--dm-panel) !important; }
 }
 [data-testid="stChatInputSubmitButton"] button { background: #2a6edd !important; }
 
-/* ── 文件上传 ── */
+/* ══ 文件上传 ══ */
 [data-testid="stFileUploaderDropzone"] button,
 [data-testid="stFileUploadDropzone"] button {
     background: var(--dm-panel) !important;
@@ -1085,10 +1126,11 @@ header[data-testid="stHeader"] { background: var(--dm-panel) !important; }
 }
 [data-testid="stFileUploaderDropzone"] button:hover,
 [data-testid="stFileUploadDropzone"] button:hover {
-    background: var(--dm-card) !important; border-color: var(--dm-accent) !important;
+    background: var(--dm-card2) !important; border-color: var(--dm-accent) !important;
 }
+[data-testid="stFileUploaderFileName"] { color: var(--dm-text) !important; }
 
-/* ── Selectbox / 弹出菜单 ── */
+/* ══ Selectbox / 下拉菜单 ══ */
 [data-testid="stSelectbox"] > div > div,
 [data-baseweb="select"] > div {
     background: var(--dm-panel) !important;
@@ -1096,72 +1138,78 @@ header[data-testid="stHeader"] { background: var(--dm-panel) !important; }
     color: var(--dm-text) !important;
 }
 [data-baseweb="popover"], [data-baseweb="menu"],
-[data-baseweb="menu"] ul { background: var(--dm-panel) !important; }
-[data-baseweb="menu"] li { color: var(--dm-text) !important; }
-[data-baseweb="menu"] li:hover { background: var(--dm-card) !important; }
+[data-baseweb="menu"] ul, [data-baseweb="list"] { background: var(--dm-panel) !important; }
+[data-baseweb="menu"] li, [data-baseweb="option"] { color: var(--dm-text) !important; }
+[data-baseweb="menu"] li:hover, [data-baseweb="option"]:hover { background: var(--dm-card2) !important; }
 
-/* ── 底部区域 ── */
-[data-testid="stBottomBlockContainer"],
-[data-testid="stBottom"] > div,
-[data-testid="stBottom"] > div > div { background: var(--dm-bg) !important; }
-
-/* ── Plus 面板 ── */
+/* ══ Plus 面板 ══ */
 .plus-panel { background: var(--dm-panel) !important; border-color: var(--dm-border) !important; }
 .plus-panel .stButton button {
     background: var(--dm-card) !important;
-    border-color: var(--dm-border) !important;
-    color: var(--dm-text) !important;
+    border-color: var(--dm-border) !important; color: var(--dm-text) !important;
 }
 .plus-panel .stButton button:hover {
-    background: #30304a !important; border-color: var(--dm-accent) !important;
+    background: var(--dm-card2) !important; border-color: var(--dm-accent) !important;
 }
 
-/* ── 工具栏 Model Selectbox ── */
+/* ══ 工具栏 ══ */
 .toolbar-model [data-testid="stSelectbox"] > div > div {
-    background: rgba(28,28,40,0.95) !important;
-    border-color: var(--dm-border) !important;
-    color: var(--dm-text) !important;
+    background: rgba(24,24,42,0.98) !important;
+    border-color: var(--dm-border) !important; color: var(--dm-text) !important;
 }
-
-/* ── 工具栏图标按钮 ── */
 .toolbar-btn button { color: var(--dm-muted) !important; }
 .toolbar-btn button:hover { background: var(--dm-card) !important; color: var(--dm-text) !important; }
 
-/* ── 麦克风 ── */
+/* ══ 麦克风 ══ */
 [data-testid="stAudioInput"],
 [data-testid="stAudioInput"] > div {
-    background: var(--dm-panel) !important;
-    border-color: var(--dm-border) !important;
+    background: var(--dm-panel) !important; border-color: var(--dm-border) !important;
 }
 [data-testid="stAudioInput"] button { color: var(--dm-muted) !important; }
 
-/* ── 语音文本框 ── */
+/* ══ 语音/文字输入 ══ */
 [data-testid="stTextArea"] textarea {
     background: var(--dm-panel) !important;
-    border-color: var(--dm-border) !important;
-    color: var(--dm-text) !important;
+    border-color: var(--dm-border) !important; color: var(--dm-text) !important;
 }
 
-/* ── Guide Chip ── */
+/* ══ Guide Chip ══ */
 .guide-chip { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-muted) !important; }
 .guide-chip.on { background: #2a6edd !important; border-color: #2a6edd !important; color: #fff !important; }
 
-/* ── 分割线 ── */
-hr { border-color: var(--dm-border) !important; }
+/* ══ Checkbox / Toggle ══ */
+[data-testid="stCheckbox"] span, [data-testid="stCheckbox"] p { color: var(--dm-text) !important; }
+[data-testid="stToggle"] { color: var(--dm-text) !important; }
 
-/* ── 登录页 ── */
+/* ══ Info / Warning / Error 提示块 ══ */
+[data-testid="stAlert"] { background: var(--dm-card) !important; border-color: var(--dm-border) !important; }
+[data-testid="stAlert"] p { color: var(--dm-text) !important; }
+
+/* ══ Expander ══ */
+[data-testid="stExpander"] { background: var(--dm-panel) !important; border-color: var(--dm-border) !important; }
+[data-testid="stExpander"] summary { color: var(--dm-text) !important; }
+details, details summary { background: var(--dm-panel) !important; color: var(--dm-text) !important; }
+
+/* ══ 分割线 & 小字 ══ */
+hr { border-color: var(--dm-border) !important; }
+small, .caption { color: var(--dm-muted) !important; }
+
+/* ══ 登录页 ══ */
 .login-logo-title { color: var(--dm-text) !important; }
 .login-logo-sub { color: var(--dm-muted) !important; }
 
-/* ── Checkbox ── */
-[data-testid="stCheckbox"] span, [data-testid="stCheckbox"] p { color: var(--dm-text) !important; }
+/* ══ Pills（知识点标签）══ */
+div[data-testid="stPills"] button {
+    background: var(--dm-card) !important;
+    border-color: var(--dm-border) !important; color: var(--dm-text) !important;
+}
+div[data-testid="stPills"] button:hover,
+div[data-testid="stPills"] button[aria-selected="true"] {
+    background: var(--dm-accent) !important; color: #fff !important;
+}
 
-/* ── 上传横幅（文件名）── */
-[data-testid="stFileUploaderFileName"] { color: var(--dm-text) !important; }
-
-/* ── expander ── */
-[data-testid="stExpander"] { background: var(--dm-panel) !important; border-color: var(--dm-border) !important; }
-[data-testid="stExpander"] summary { color: var(--dm-text) !important; }
+/* ══ 元素容器通用 ══ */
+[data-testid="element-container"] { background: transparent !important; }
 </style>
 """, unsafe_allow_html=True)
 
