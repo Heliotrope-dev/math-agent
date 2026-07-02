@@ -398,7 +398,12 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
 }
 .refresh-btn button:hover { border-color: #999 !important; color: #444 !important; }
 
-/* ── 微信气泡：用户（右）── */
+/* ── 用户气泡（右对齐，无头像）── */
+.msg-row-user {
+    display: flex;
+    justify-content: flex-end;
+    margin: 6px 0 6px;
+}
 .bubble-user {
     background: #95EC69;
     color: #111;
@@ -408,9 +413,9 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
     line-height: 1.6;
     font-size: 0.95rem;
     display: inline-block;
-    max-width: 100%;
+    max-width: 72%;
 }
-/* ── 微信气泡：AI（左）── */
+/* ── AI 回答（左对齐，无头像，全宽）── */
 .bubble-asst-wrap {
     background: #FFFFFF;
     border-radius: 4px 18px 18px 18px;
@@ -421,7 +426,6 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
     font-size: 0.95rem;
 }
 .bubble-asst-wrap p, .bubble-asst-wrap li { color: #1a1a1a !important; }
-/* LaTeX 修复：标记元素后紧跟的 stMarkdown 就是气泡内容，注入手写字体和气泡背景 */
 .stMarkdown:has(.asst-bubble-marker) + .stMarkdown > div {
     background: #FFFFFF;
     border-radius: 4px 18px 18px 18px;
@@ -432,23 +436,6 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
     line-height: 1.8;
     word-break: break-word;
 }
-
-.msg-row-user {
-    display: flex; justify-content: flex-end; align-items: flex-end;
-    gap: 8px; margin: 8px 0;
-}
-.msg-row-asst {
-    display: flex; justify-content: flex-start; align-items: flex-end;
-    gap: 8px; margin: 8px 0;
-}
-/* 头像圆角方块（微信风格）*/
-.av {
-    width: 36px; height: 36px; border-radius: 6px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.1rem; flex-shrink: 0;
-}
-.av-ai   { background: #5CBE6E; }
-.av-user { background: #7BC47B; }
 
 /* ── 引导模式开关条 ── */
 .guide-bar { display: flex; align-items: center; gap: 8px; padding: 2px 0 4px; }
@@ -484,23 +471,54 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
 }
 .toolbar-btn button:hover { background: #D8D0C8 !important; color: #222 !important; }
 
-/* ── 输入框 ── */
+/* ── 输入框：外框即输入区，内部 textarea 透明（去掉套娃黑块）── */
+[data-testid="stBottomBlockContainer"],
+[data-testid="stBottom"] > div,
+[data-testid="stBottom"] > div > div { background: #EDE5DC !important; }
 [data-testid="stChatInputContainer"] {
-    background: #EDE5DC !important;
-    border-top: 1px solid #D4CEC8 !important;
-    padding: 8px 16px 14px !important;
+    background: #FFFFFF !important;
+    border: 1.5px solid #C8C0B8 !important;
+    border-radius: 24px !important;
+    padding: 8px 14px 8px !important;
+    margin: 0 0 10px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07) !important;
 }
-[data-testid="stChatInputTextArea"] {
-    background: #FFFFFF !important; border: 1px solid #C8C0B8 !important;
-    border-radius: 24px !important; color: #1a1a1a !important;
-    font-size: 0.95rem !important; padding: 10px 16px !important;
-}
-[data-testid="stChatInputTextArea"]:focus {
+[data-testid="stChatInputContainer"]:focus-within {
     border-color: #2aae67 !important;
     box-shadow: 0 0 0 2px rgba(42,174,103,0.15) !important;
 }
+[data-testid="stChatInputTextArea"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    color: #1a1a1a !important;
+    font-size: 0.95rem !important;
+    padding: 2px 0 !important;
+}
+[data-testid="stChatInputTextArea"]:focus {
+    box-shadow: none !important;
+    border: none !important;
+    outline: none !important;
+}
 [data-testid="stChatInputSubmitButton"] button {
     background: #2aae67 !important; border-radius: 50% !important;
+}
+/* ── 工具栏与横幅：随内容区等宽，sticky 吸附在输入框上方 ── */
+[data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
+    position: sticky !important;
+    bottom: 72px !important;
+    z-index: 200 !important;
+    background: #EDE5DC !important;
+    padding: 4px 0 2px !important;
+    margin: 0 !important;
+}
+.course-banner-row [data-testid="stHorizontalBlock"],
+[data-testid="stHorizontalBlock"]:has(.course-banner) {
+    align-items: stretch !important;
+}
+[data-testid="stHorizontalBlock"]:has(.course-banner) [data-testid="stButton"] button {
+    height: 100% !important; min-height: 42px !important;
 }
 
 /* ── 知识点 pills（全覆盖，优先级最高）── */
@@ -1038,8 +1056,6 @@ header[data-testid="stHeader"] { background: var(--dm-panel) !important; }
     color: var(--dm-user-text) !important;
     border-radius: 18px 4px 18px 18px !important;
 }
-.av-user { background: var(--dm-user-av) !important; }
-.av-ai   { background: #1a5c3a !important; }
 
 /* ══ AI 气泡 ══ */
 .stMarkdown:has(.asst-bubble-marker) + .stMarkdown > div {
@@ -1097,25 +1113,39 @@ pre, pre code, code {
 .greeting-main, .welcome-title { color: var(--dm-text) !important; }
 .greeting-sub, .welcome-sub { color: var(--dm-muted) !important; }
 
-/* ══ 输入框 & 底栏 ══ */
-[data-testid="stChatInputContainer"],
+/* ══ 输入框 & 底栏（去掉套娃黑块：外框为可见盒子，内部 textarea 透明）══ */
 [data-testid="stBottom"],
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
-[data-testid="stBottom"] > div > div {
-    background: var(--dm-bg) !important;
-    border-top: 1px solid var(--dm-border) !important;
-}
-[data-testid="stChatInputTextArea"] {
+[data-testid="stBottom"] > div > div { background: var(--dm-bg) !important; }
+[data-testid="stChatInputContainer"] {
     background: var(--dm-panel) !important;
-    border: 1px solid var(--dm-border) !important;
-    color: var(--dm-text) !important;
+    border: 1.5px solid var(--dm-border) !important;
+    border-radius: 24px !important;
+    padding: 8px 14px 8px !important;
+    margin: 0 0 10px !important;
+    box-shadow: none !important;
 }
-[data-testid="stChatInputTextArea"]:focus {
+[data-testid="stChatInputContainer"]:focus-within {
     border-color: var(--dm-accent) !important;
     box-shadow: 0 0 0 2px rgba(90,140,255,0.2) !important;
 }
+[data-testid="stChatInputTextArea"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    color: var(--dm-text) !important;
+    padding: 2px 0 !important;
+}
+[data-testid="stChatInputTextArea"]:focus {
+    box-shadow: none !important; border: none !important;
+}
 [data-testid="stChatInputSubmitButton"] button { background: #2a6edd !important; }
+/* 工具栏 sticky */
+[data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
+    background: var(--dm-bg) !important;
+}
 
 /* ══ 文件上传 ══ */
 [data-testid="stFileUploaderDropzone"] button,
@@ -1506,75 +1536,66 @@ for i, msg in enumerate(st.session_state.messages):
     role = msg["role"]
 
     if role == "user":
-        # 右侧：空白 + 内容 + 头像
-        _, _bubble_col, _av_col = st.columns([2, 5, 1])
-        with _bubble_col:
-            _img_html = ""
-            if msg.get("image_b64"):
-                _img_html = (
-                    f'<img src="data:image/jpeg;base64,{msg["image_b64"]}" '
-                    f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'
-                )
-            _safe_txt = msg["content"].replace("<", "&lt;").replace(">", "&gt;")
-            st.markdown(
-                f'<div class="msg-row-user">'
-                f'<div class="bubble-user">{_img_html}{_safe_txt}</div>'
-                f'</div>',
-                unsafe_allow_html=True,
+        _img_html = ""
+        if msg.get("image_b64"):
+            _img_html = (
+                f'<img src="data:image/jpeg;base64,{msg["image_b64"]}" '
+                f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'
             )
-        with _av_col:
-            st.markdown('<div class="av av-user">👤</div>', unsafe_allow_html=True)
+        _safe_txt = msg["content"].replace("<", "&lt;").replace(">", "&gt;")
+        st.markdown(
+            f'<div class="msg-row-user">'
+            f'<div class="bubble-user">{_img_html}{_safe_txt}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
     else:
         _asst_turn += 1
-        _av_col2, _bubble_col2, _ = st.columns([1, 6, 1])
-        with _av_col2:
-            st.markdown('<div class="av av-ai">🧮</div>', unsafe_allow_html=True)
-        with _bubble_col2:
-            st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>',
-                        unsafe_allow_html=True)
-            st.markdown(f'<div class="asst-bubble-marker" id="abm-{i}"></div>',
-                        unsafe_allow_html=True)
-            st.markdown(fix_latex(msg["content"]))
-            if msg.get("tags"):
-                _tcols = st.columns(len(msg["tags"]))
-                for _ti, _tag in enumerate(msg["tags"]):
-                    with _tcols[_ti]:
-                        if st.button(_tag, key=f"tag_{i}_{_ti}", use_container_width=True):
-                            st.session_state["_direct_input"] = f"请详细讲解「{_tag}」：定义、推导过程和典型例题"
-            if msg.get("practice"):
-                st.markdown(
-                    '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
-                    unsafe_allow_html=True,
-                )
-                if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
-                    st.session_state["_direct_input"] = msg["practice"]
-                    st.rerun()
-            for _img in msg.get("images", []):
-                _cap = _img.get("caption", "")
-                st.markdown(
-                    f'<div style="margin:8px 0">'
-                    f'<img src="data:image/png;base64,{_img["b64"]}" '
-                    f'style="width:100%;border-radius:6px;border:1px solid #DDD;" />'
-                    + (f'<p style="text-align:center;font-size:0.78rem;color:#888;margin:4px 0">{_cap}</p>' if _cap else '')
-                    + '</div>',
-                    unsafe_allow_html=True,
-                )
-            if msg.get("trace"):
-                with st.expander("工具调用详情", expanded=False):
-                    st.code(msg["trace"], language="text")
-            # ── 存入错题本按钮 ──
-            _prev_msg = next((m for m in reversed(st.session_state.messages[:i])
-                              if m["role"] == "user"), None)
-            _prev_q = _prev_msg["content"] if _prev_msg else ""
-            if _prev_q and not any(w["question"] == _prev_q for w in st.session_state.wrong_book):
-                if st.button("📌 存入错题本", key=f"wb_add_{i}", use_container_width=False):
-                    st.session_state.wrong_book.append({
-                        "question": _prev_q,
-                        "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "image_b64": _prev_msg.get("image_b64", "") if _prev_msg else "",
-                    })
-                    _save_wrong_book(st.session_state.get("user_email",""), st.session_state.wrong_book)
-                    st.rerun()
+        st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>',
+                    unsafe_allow_html=True)
+        st.markdown(f'<div class="asst-bubble-marker" id="abm-{i}"></div>',
+                    unsafe_allow_html=True)
+        st.markdown(fix_latex(msg["content"]))
+        if msg.get("tags"):
+            _tcols = st.columns(len(msg["tags"]))
+            for _ti, _tag in enumerate(msg["tags"]):
+                with _tcols[_ti]:
+                    if st.button(_tag, key=f"tag_{i}_{_ti}", use_container_width=True):
+                        st.session_state["_direct_input"] = f"请详细讲解「{_tag}」：定义、推导过程和典型例题"
+        if msg.get("practice"):
+            st.markdown(
+                '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
+                unsafe_allow_html=True,
+            )
+            if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
+                st.session_state["_direct_input"] = msg["practice"]
+                st.rerun()
+        for _img in msg.get("images", []):
+            _cap = _img.get("caption", "")
+            st.markdown(
+                f'<div style="margin:8px 0">'
+                f'<img src="data:image/png;base64,{_img["b64"]}" '
+                f'style="width:100%;border-radius:6px;border:1px solid #DDD;" />'
+                + (f'<p style="text-align:center;font-size:0.78rem;color:#888;margin:4px 0">{_cap}</p>' if _cap else '')
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+        if msg.get("trace"):
+            with st.expander("工具调用详情", expanded=False):
+                st.code(msg["trace"], language="text")
+        # ── 存入错题本按钮 ──
+        _prev_msg = next((m for m in reversed(st.session_state.messages[:i])
+                          if m["role"] == "user"), None)
+        _prev_q = _prev_msg["content"] if _prev_msg else ""
+        if _prev_q and not any(w["question"] == _prev_q for w in st.session_state.wrong_book):
+            if st.button("📌 存入错题本", key=f"wb_add_{i}", use_container_width=False):
+                st.session_state.wrong_book.append({
+                    "question": _prev_q,
+                    "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "image_b64": _prev_msg.get("image_b64", "") if _prev_msg else "",
+                })
+                _save_wrong_book(st.session_state.get("user_email",""), st.session_state.wrong_book)
+                st.rerun()
 
 # ── 新消息占位容器（必须在工具栏之前声明，确保新消息渲染在工具栏上方）────────
 _new_turn = st.container()
@@ -1793,27 +1814,20 @@ if user_input:
 
     with _new_turn:
         # 用户气泡
-        _, _ub_col, _uav_col = st.columns([2, 5, 1])
-        with _ub_col:
-            _safe_disp = (display_text or user_input).replace("<", "&lt;").replace(">", "&gt;")
-            _new_img_html = ""
-            if _img_bytes and "_img_b64_bubble" in dir():
-                _new_img_html = (
-                    f'<img src="data:image/jpeg;base64,{_img_b64_bubble}" '
-                    f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'
-                )
-            st.markdown(
-                f'<div class="msg-row-user"><div class="bubble-user">{_new_img_html}{_safe_disp}</div></div>',
-                unsafe_allow_html=True,
+        _safe_disp = (display_text or user_input).replace("<", "&lt;").replace(">", "&gt;")
+        _new_img_html = ""
+        if _img_bytes and "_img_b64_bubble" in dir():
+            _new_img_html = (
+                f'<img src="data:image/jpeg;base64,{_img_b64_bubble}" '
+                f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'
             )
-        with _uav_col:
-            st.markdown('<div class="av av-user">👤</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="msg-row-user"><div class="bubble-user">{_new_img_html}{_safe_disp}</div></div>',
+            unsafe_allow_html=True,
+        )
 
         # AI 回答
-        _aav_col, _ai_col, _ = st.columns([1, 6, 1])
-        with _aav_col:
-            st.markdown('<div class="av av-ai">🧮</div>', unsafe_allow_html=True)
-        with _ai_col:
+        with st.container():
             history = [
                 {"role": m["role"], "content": m["content"]}
                 for m in st.session_state.messages[:-1]
