@@ -1519,6 +1519,51 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
                 '.stMarkdownContainer .math,.stMarkdown .math{background:transparent!important}',
                 '[data-testid="stMarkdownContainer"]>div{background:transparent!important}',
             ].join('');
+
+        /* ── JS 直接覆盖元素内联样式（打赢 Streamlit style.setProperty）── */
+        function fixDark() {
+            /* 输入框区域变深色 */
+            [
+                ['[data-testid="stBottom"]',             '#0f0f17'],
+                ['[data-testid="stBottomBlockContainer"]','#0f0f17'],
+                ['[data-testid="stBottom"]>div',         '#0f0f17'],
+                ['[data-testid="stBottom"]>div>div',     '#0f0f17'],
+                ['[data-testid="stChatInputContainer"]', '#18182a'],
+                ['[data-testid="stChatInput"]',          '#0f0f17'],
+            ].forEach(function(p) {
+                doc.querySelectorAll(p[0]).forEach(function(el) {
+                    el.style.setProperty('background-color', p[1], 'important');
+                });
+            });
+            /* textarea 字体颜色可见 */
+            doc.querySelectorAll('[data-testid="stChatInputTextArea"]').forEach(function(el) {
+                el.style.setProperty('color', '#dde0f5', 'important');
+                el.style.setProperty('background', 'transparent', 'important');
+            });
+            /* 工具栏：fixed 吸附在输入框上方，left 跟侧边栏宽度对齐 */
+            var sb = doc.querySelector('[data-testid="stSidebar"]');
+            var leftPx = (sb && sb.getBoundingClientRect().right > 10)
+                         ? sb.getBoundingClientRect().right : 0;
+            doc.querySelectorAll('[data-testid="stHorizontalBlock"]:has(.toolbar-btn)').forEach(function(tb) {
+                tb.style.setProperty('position', 'fixed',         'important');
+                tb.style.setProperty('bottom',   '72px',          'important');
+                tb.style.setProperty('left',     leftPx + 'px',   'important');
+                tb.style.setProperty('right',    '0',             'important');
+                tb.style.setProperty('z-index',  '200',           'important');
+                tb.style.setProperty('background-color', '#0f0f17', 'important');
+                tb.style.setProperty('padding',  '4px 1rem 2px',  'important');
+            });
+        }
+
+        fixDark();
+
+        /* 每次 Streamlit 重渲染后重新执行（MutationObserver 监听子节点变化）*/
+        if (!doc._dmFixObserver) {
+            doc._dmFixObserver = new MutationObserver(function() { fixDark(); });
+            var main = doc.querySelector('[data-testid="stMain"]') || doc.body;
+            doc._dmFixObserver.observe(main, { childList: true, subtree: true });
+        }
+
     } catch(e) {}
 })();
 </script>""", height=1)
