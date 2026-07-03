@@ -1490,9 +1490,10 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
                 '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
                 '[data-testid="stBottom"]>div{background:#0f0f17!important}',
                 '[data-testid="stBottom"]>div>div{background:#0f0f17!important}',
-                /* 输入框外框变深色 */
-                '[data-testid="stChatInputContainer"]{background:#18182a!important;border:1.5px solid #32325a!important;border-radius:24px!important;box-shadow:none!important}',
-                '[data-testid="stChatInput"]{background:#0f0f17!important}',
+                /* 大圆角输入框（合并工具栏后的容器）暗色 */
+                '[data-testid="stChatInputContainer"]{background:#1e1e2e!important;border:1px solid #32325a!important;border-radius:20px!important;box-shadow:none!important}',
+                '[data-testid="stChatInput"]{background:transparent!important}',
+                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:transparent!important;border-top-color:rgba(255,255,255,0.08)!important}',
                 /* 所有白色背景通用兜底 */
                 '.stApp *{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important}',
                 /* textarea 透明 */
@@ -2050,6 +2051,54 @@ typed = st.chat_input(
     "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
 )
 
+# ── 把工具栏合并进输入框（Claude 风格大圆角框，手机/电脑均适配）──────────────
+_cv1.html("""<script>
+(function(){
+  try {
+    var doc = window.parent.document;
+    function mergeUI() {
+      var box = doc.querySelector('[data-testid="stChatInputContainer"]');
+      var tb  = doc.querySelector('[data-testid="stHorizontalBlock"]:has(.toolbar-btn)');
+      if (!box || !tb) return;
+      if (box.contains(tb)) return;          // 已合并，跳过
+
+      /* 容器变大圆角框 */
+      box.style.setProperty('border-radius',   '20px',              'important');
+      box.style.setProperty('padding',         '10px 14px 6px',     'important');
+      box.style.setProperty('display',         'flex',              'important');
+      box.style.setProperty('flex-direction',  'column',            'important');
+      box.style.setProperty('box-sizing',      'border-box',        'important');
+
+      /* 工具栏取消 sticky/fixed，变回 inline */
+      ['position','top','bottom','left','right','z-index'].forEach(function(p){
+        tb.style.removeProperty(p);
+      });
+      tb.style.setProperty('width',       '100%',                       'important');
+      tb.style.setProperty('margin',      '4px 0 0',                    'important');
+      tb.style.setProperty('padding',     '4px 0 0',                    'important');
+      tb.style.setProperty('border-top',  '1px solid rgba(128,128,128,0.18)', 'important');
+      tb.style.setProperty('background',  'transparent',                'important');
+
+      box.appendChild(tb);   // 移入容器
+    }
+
+    mergeUI();
+
+    /* Streamlit 每次重渲染后重新合并 */
+    if (!doc._mergeObs) {
+      doc._mergeObs = new MutationObserver(function(muts){
+        for (var m of muts) {
+          if (!m.addedNodes.length) continue;
+          var tb2 = doc.querySelector('[data-testid="stHorizontalBlock"]:has(.toolbar-btn)');
+          var box2 = doc.querySelector('[data-testid="stChatInputContainer"]');
+          if (tb2 && box2 && !box2.contains(tb2)) { setTimeout(mergeUI, 60); break; }
+        }
+      });
+      doc._mergeObs.observe(doc.body, {childList:true, subtree:true});
+    }
+  } catch(e){}
+})();
+</script>""", height=1)
 
 # 确定是否"提交"：面板刚切换时强制跳过，避免误触发
 _submitted = (not _panel_just_toggled) and (
