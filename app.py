@@ -1483,6 +1483,8 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
         s.textContent = [
                 /* 覆盖 Streamlit 主题颜色变量 */
                 ':root{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important;--text-color:#dde0f5!important}',
+                /* 工具栏暗色背景 */
+                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:#0f0f17!important;position:sticky!important;bottom:72px!important}',
                 /* 底栏 */
                 '[data-testid="stBottom"]{background:#0f0f17!important}',
                 '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
