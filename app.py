@@ -658,13 +658,14 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
 [data-testid="stChatInputSubmitButton"] button {
     background: #2aae67 !important; border-radius: 50% !important;
 }
-/* ── 工具栏与横幅：随内容区等宽，sticky 吸附在输入框上方 ── */
+/* ── 工具栏：fixed 吸附在视口底部输入框上方 ── */
 [data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
-    position: sticky !important;
+    position: fixed !important;
     bottom: 72px !important;
+    left: 0 !important; right: 0 !important;
     z-index: 200 !important;
     background: var(--app-bg) !important;
-    padding: 4px 0 2px !important;
+    padding: 4px 1rem 2px !important;
     margin: 0 !important;
 }
 .course-banner-row [data-testid="stHorizontalBlock"],
@@ -828,7 +829,7 @@ hr { border-color: #D4CEC8 !important; }
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div {
-    background: #EDE5DC !important;
+    background: var(--app-bg) !important;
 }
 
 /* ── 工具栏容器透明 ── */
@@ -1349,9 +1350,12 @@ pre, pre code, code {
     box-shadow: none !important; border: none !important;
 }
 [data-testid="stChatInputSubmitButton"] button { background: #2a6edd !important; }
-/* 工具栏 sticky */
+/* 工具栏 fixed */
 [data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
     background: var(--dm-bg) !important;
+    position: fixed !important;
+    bottom: 72px !important;
+    left: 0 !important; right: 0 !important;
 }
 
 /* ══ 文件上传 ══ */
@@ -1475,19 +1479,19 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-    # 把暗色覆盖 CSS 注入到父页面 <head>，绕过 React 重渲染覆盖问题
+    # 把暗色覆盖 CSS 追加到父页面 <body> 末尾，确保比 st.markdown() 样式更晚，覆盖所有亮色残留
     _cv1.html("""<script>
 (function() {
     try {
         var doc = window.parent.document;
         var existing = doc.getElementById('_dm_override_css');
         var s = existing || doc.createElement('style');
-        if (!existing) { s.id = '_dm_override_css'; doc.head.appendChild(s); }
+        if (!existing) { s.id = '_dm_override_css'; doc.body.appendChild(s); }
         s.textContent = [
-                /* 覆盖 Streamlit 主题颜色变量 */
-                ':root{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important;--text-color:#dde0f5!important}',
-                /* 工具栏暗色背景 */
-                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:#0f0f17!important;position:sticky!important;bottom:72px!important}',
+                /* 覆盖 Streamlit 主题颜色变量 + app-bg */
+                ':root{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important;--text-color:#dde0f5!important;--app-bg:#0f0f17!important;--app-panel:#18182a!important}',
+                /* 工具栏：fixed 悬浮在视口底部 */
+                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:#0f0f17!important;position:fixed!important;bottom:72px!important;left:0!important;right:0!important;padding:4px 1rem 2px!important;z-index:200!important}',
                 /* 底栏 */
                 '[data-testid="stBottom"]{background:#0f0f17!important}',
                 '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
