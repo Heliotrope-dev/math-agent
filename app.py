@@ -2082,6 +2082,7 @@ _patt_send = st.session_state.pop("pending_attachment", None) if _submitted else
 user_input = None
 display_text = None
 _img_bytes = None
+_img_b64_bubble = None
 
 if _submitted:
     if _similar_ctx:

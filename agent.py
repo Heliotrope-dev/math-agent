@@ -1,9 +1,9 @@
 """
-agent.py — 核心 Agent 循环
+agent.py — Core Agent Loop
 
-支持两种模式：
-  DeepSeek 模式（默认）：需要 DEEPSEEK_API_KEY 环境变量
-  Ollama 本地模式：设置 USE_LOCAL=1 或传入 use_local=True，使用本地 qwen3.5:9b
+Two modes:
+  DeepSeek (default): requires DEEPSEEK_API_KEY env var
+  Ollama local: set USE_LOCAL=1 or pass use_local=True, uses local qwen3.5:9b
 """
 
 import os
@@ -14,12 +14,12 @@ import httpx
 from openai import OpenAI
 from tools import TOOL_DEFINITIONS, execute_tool
 
-# macOS 系统代理会被 httpx 自动读取并拦截 localhost 请求，需要显式禁用
-# 注：不能在模块级别共享 httpx.Client，每个 agent 实例单独创建避免连接池冲突
+# macOS system proxy is auto-detected by httpx and blocks localhost; disable explicitly
+# NOTE: Do not share httpx.Client at module level; create per-instance to avoid pool conflicts
 
 _USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
 _DEFAULT_MAX_ITERATIONS = 20
-_MAX_HISTORY_TURNS = 10  # 保留最近 N 轮对话（user+assistant 算一轮）
+_MAX_HISTORY_TURNS = 10  # keep last N turns (user+assistant = 1 turn)
 
 _SYSTEM = """你是一位大学数学课本风格的助教，行文严谨清晰。
 
@@ -147,13 +147,15 @@ class MathAgent:
         return self.model in VISION_MODELS
 
     def close(self):
-        if self._own_client:
+        try:
             self.client.close()
-            self._own_client = False
+        except Exception:
+            pass
+        self._own_client = False
 
     @staticmethod
     def _trim_history(history: list) -> list:
-        """保留最近 _MAX_HISTORY_TURNS 轮（每轮 = user + assistant），避免 context 过长。"""
+        """Keep last _MAX_HISTORY_TURNS turns (each = user + assistant) to avoid context overflow."""
         turns = []
         buf = []
         for msg in reversed(history):
@@ -175,7 +177,7 @@ class MathAgent:
         if history:
             messages.extend(self._trim_history(history))
 
-        # 视觉模式：压缩图片（减少 token）+ 单次直接调用
+        # vision mode: compress image (reduce tokens) + single direct call
         if image_bytes and self.supports_vision:
             image_bytes = _compress_image(image_bytes, max_size=768)
             b64 = base64.b64encode(image_bytes).decode()
@@ -198,7 +200,7 @@ class MathAgent:
                 max_tokens=8192,
             )
 
-        # 引导模式：无工具调用，直接流式对话
+        # guide mode: no tool calls, direct streaming conversation
         if self.guide_mode:
             messages.append({"role": "user", "content": problem})
             return self.client.chat.completions.create(
@@ -208,18 +210,18 @@ class MathAgent:
                 max_tokens=2048,
             )
 
-        # 只有 app 发的 【知识点讲解】 前缀才进入知识讲解模式
-        # 普通的"讲解一下"/"介绍一下"属于解题上下文，走正常解题流程
+        # only "【知识点讲解】" prefix from app enters explain mode
+        # plain "讲解一下"/"介绍一下" is solving context, follows normal flow
         is_explain = problem.lstrip().startswith("【知识点讲解】")
         messages.append({"role": "user", "content": problem if is_explain else f"请解题：{problem}"})
         extra = {}  # think:False 会导致 Ollama 挂起，去掉
 
-        # 知识讲解模式只给 calculator，不给 draw_mindmap/plot_function
-        # 防止 AI 提前调用可视化工具打断五节结构输出
+        # explain mode: only calculator tool, no draw_mindmap/plot_function
+        # prevent AI from calling viz tools early and breaking the 5-section structure
         _EXPLAIN_TOOLS = [t for t in TOOL_DEFINITIONS if t["function"]["name"] == "calculator"]
         _tools_supported = True
 
-        # 收集 tool-calling 轮次里模型同步输出的文字（例如讲解内容），防止被丢弃
+        # accumulate text from tool-calling rounds to avoid loss
         _accumulated: list[str] = []
 
         for iteration in range(self.max_iterations):
@@ -251,13 +253,13 @@ class MathAgent:
             finish_reason = response.choices[0].finish_reason
 
             if finish_reason != "tool_calls" or not msg.tool_calls:
-                # 最终回复：把之前轮次积累的文字拼到最前面
+                # final reply: prepend accumulated text from earlier rounds
                 final = msg.content or "（无输出）"
                 if _accumulated:
                     final = "\n\n".join(_accumulated) + "\n\n" + final
                 return final
 
-            # 工具调用轮次：保存同轮输出的文字（会被下一轮 API 调用覆盖，否则丢失）
+            # tool-calling round: save same-round text (next call would overwrite)
             if msg.content:
                 _accumulated.append(msg.content)
 
@@ -268,7 +270,7 @@ class MathAgent:
                 try:
                     args = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
-                    # 模型有时在 JSON 后附加多余内容，用 raw_decode 取第一个完整对象
+                    # model sometimes appends junk after JSON; raw_decode for first valid object
                     try:
                         args, _ = json.JSONDecoder().raw_decode(tc.function.arguments.strip())
                     except Exception:
@@ -293,7 +295,7 @@ class MathAgent:
                     "content":      result,
                 })
 
-        # 迭代超限：让模型根据已有工具结果直接给出答案
+        # iteration limit: ask model to give final answer based on accumulated results
         messages.append({"role": "user", "content": "请根据上面的计算结果，直接给出最终答案，不要再调用工具。"})
         try:
             resp = self.client.chat.completions.create(
@@ -304,7 +306,7 @@ class MathAgent:
             return "⚠️ 解题超时，请尝试把题目拆分成更小的步骤发送。"
 
     def solve_stream(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None):
-        """运行完整 agentic loop，返回可迭代的 stream 对象（视觉/引导模式为真实流式）。"""
+        """Run the full agentic loop, returning an iterable stream object (real streaming for vision/guide)."""
         result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
         if isinstance(result, str):
             return _fake_stream(result)
@@ -312,7 +314,7 @@ class MathAgent:
 
 
 def _compress_image(image_bytes: bytes, max_size: int = 768) -> bytes:
-    """压缩图片，减少图片 token 数量。"""
+    """Compress image to reduce token count."""
     try:
         from PIL import Image
         img = Image.open(BytesIO(image_bytes)).convert("RGB")

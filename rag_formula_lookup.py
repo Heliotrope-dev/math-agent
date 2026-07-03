@@ -15,14 +15,16 @@ tools.py 里的 _run_formula_lookup 是关键字查字典：必须先猜中 topi
 """
 
 import math
+import os
 
 import requests
 
 from tools import _FORMULAS
 
-OLLAMA_URL = "http://localhost:11434/api"
+_base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+OLLAMA_URL = _base + "/api"
 EMBED_MODEL = "nomic-embed-text"
-GEN_MODEL = "qwen3.5:9b"
+GEN_MODEL = os.environ.get("MATH_AGENT_MODEL", "qwen3.5:9b")
 
 # 调试发现：nomic-embed-text 对"中文 query vs 英文公式 notation"跨语言匹配很弱
 # （英文 query 测试时 Product Rule 能排进前 5，中文 query 完全检索不到）。
