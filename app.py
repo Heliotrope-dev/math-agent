@@ -109,9 +109,9 @@ def _hash_pw(pw: str) -> str:
 def _check_pw(pw: str, stored: str) -> bool:
     try:
         salt, h = stored.split("$", 1)
-        return hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hexdigest() == h
+        return hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hex() == h
     except Exception:
-        return False
+        return hashlib.sha256(pw.encode()).hexdigest() == stored
 
 def _user_exists(email: str) -> bool:
     return len(_sb_get("users", {"email": f"eq.{email}", "select": "email"})) > 0
@@ -204,7 +204,7 @@ def _show_login_page():
                 _wait_secs = int(_lockout_until - time.time()) + 1
                 st.error(f"密码错误次数过多，请等待 {_wait_secs} 秒后重试")
             if st.button("登录", type="primary", use_container_width=True, key="do_login", disabled=_locked):
-                if _check_user(_em, _hash_pw(_pw)):
+                if _check_user(_em, _pw):
                     st.session_state["_login_attempts"] = 0
                     st.session_state["_login_lockout_until"] = 0
                     _tok = _create_token(_em)
