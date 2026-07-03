@@ -1,22 +1,28 @@
 """
-tools.py — 工具定义 + 工具实现
+tools.py — Tool definitions + implementations
 
-三个工具：
-  - calculator      基于 SymPy 的符号计算 / 数值计算
-  - formula_lookup  数学公式查询库
-  - step_decomposer 解题步骤规划
+Three tools:
+  - calculator      SymPy-based symbolic/numeric computation
+  - formula_lookup  Math formula reference library
+  - step_decomposer Problem solving step planner
 """
 
 import io
 import base64
 import sympy as sp
 
-# ── 图像队列（工具生成图后存这里，app.py 渲染完文字后取走显示）────────────────
-_PENDING_IMAGES: list[dict] = []
+# ── 图像队列（per-thread，防止多用户共享进程时串用）─────────────────────────────
+import threading as _threading
+_tls = _threading.local()
+
+def _pending_images() -> list:
+    if not hasattr(_tls, "images"):
+        _tls.images = []
+    return _tls.images
 
 def get_and_clear_pending_images() -> list[dict]:
-    imgs = list(_PENDING_IMAGES)
-    _PENDING_IMAGES.clear()
+    imgs = list(_pending_images())
+    _pending_images().clear()
     return imgs
 
 def _save_figure(fig, caption: str = "") -> str:
@@ -28,7 +34,7 @@ def _save_figure(fig, caption: str = "") -> str:
         plt.close(fig)
         buf.seek(0)
         b64 = base64.b64encode(buf.read()).decode()
-        _PENDING_IMAGES.append({"b64": b64, "caption": caption})
+        _pending_images().append({"b64": b64, "caption": caption})
         return f"[图像已生成：{caption}]"
     except Exception as e:
         return f"[图像生成失败：{e}]"
@@ -404,14 +410,16 @@ def _run_calculator(expression: str, operation: str, variable: str = "x") -> str
         )
 
 
-# RAG 懒加载索引（首次调用时构建，需要 Ollama 在线）
+# RAG 懒加载索引（首次调用时构建，需要 Ollama 在线；失败后 5 分钟重试）
+import time as _time
 _rag_index: "list[dict] | None" = None
 _rag_available: "bool | None" = None
+_rag_next_retry: float = 0
 
 
 def _get_rag_index():
-    global _rag_index, _rag_available
-    if _rag_available is False:
+    global _rag_index, _rag_available, _rag_next_retry
+    if _rag_available is False and _time.time() < _rag_next_retry:
         return None
     if _rag_index is not None:
         return _rag_index
@@ -419,9 +427,11 @@ def _get_rag_index():
         from rag_formula_lookup import build_index
         _rag_index = build_index()
         _rag_available = True
+        _rag_next_retry = 0
         return _rag_index
     except Exception:
         _rag_available = False
+        _rag_next_retry = _time.time() + 300  # 5 分钟后重试
         return None
 
 

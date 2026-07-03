@@ -25,9 +25,9 @@ def calculator(expression: str, operation: str, variable: str = "x") -> str:
 
 
 @mcp.tool()
-def formula_lookup(topic: str) -> str:
-    """查询数学公式库。topic: algebra / geometry / calculus / trigonometry / statistics / number_theory。"""
-    return _run_formula_lookup(topic)
+def formula_lookup(query: str) -> str:
+    """查询数学公式库。query: algebra / geometry / calculus / trigonometry / statistics / number_theory。"""
+    return _run_formula_lookup(query)
 
 
 @mcp.tool()

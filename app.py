@@ -62,6 +62,8 @@ def _sb_delete(table: str, params: dict):
         pass
 
 def _sb_patch(table: str, data: dict, params: dict):
+    if not _SB_URL or not _SB_KEY:
+        return
     try:
         requests.patch(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, params=params, timeout=8)
     except Exception:
@@ -122,7 +124,22 @@ def _check_user(email: str, pw: str) -> bool:
     })
     if not rows:
         return False
-    return _check_pw(pw, rows[0]["password_hash"])
+    stored = rows[0]["password_hash"]
+    # 新格式 PBKDF2
+    try:
+        salt, h = stored.split("$", 1)
+        if hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hex() == h:
+            return True
+    except Exception:
+        pass
+    # 旧格式 SHA256 无盐 — 验证通过后自动升级
+    if hashlib.sha256(pw.encode()).hexdigest() == stored:
+        import os as _os
+        new_salt = _os.urandom(16).hex()
+        new_hash = hashlib.pbkdf2_hmac("sha256", pw.encode(), new_salt.encode(), 100000).hex()
+        _sb_patch("users", {"password_hash": f"{new_salt}${new_hash}"}, {"email": f"eq.{email}"})
+        return True
+    return False
 
 def _register_user(email: str, pw_hash: str):
     _sb_post("users", {"email": email, "password_hash": pw_hash})
@@ -162,24 +179,25 @@ def _save_wrong_book(email: str, wb: list):
         }
         for item in wb
     ] if wb else []
-    # 先备份现有数据，delete 后 insert 失败时可以恢复
+    backup = []
     try:
-        _backup = _load_wrong_book(email)
+        backup = _load_wrong_book(email)
     except Exception:
-        _backup = []
+        pass
+    deleted = False
     try:
         _sb_delete("wrong_book", {"email": f"eq.{email}"})
+        deleted = True
         if rows:
             _sb_post("wrong_book", rows)
     except Exception:
-        # insert 失败，尝试恢复备份数据
-        if _backup:
+        # 只有 delete 成功但 insert 失败时才需要恢复，避免二次 delete 导致数据双重丢失
+        if deleted and backup:
             try:
-                _sb_delete("wrong_book", {"email": f"eq.{email}"})
                 _sb_post("wrong_book", [
                     {"email": email, "question": x["question"],
                      "saved_at": x.get("saved_at", ""), "image_b64": x.get("image_b64", "")}
-                    for x in _backup
+                    for x in backup
                 ])
             except Exception:
                 pass
@@ -2088,7 +2106,7 @@ if _submitted:
 if user_input:
     _sim_data = _similar_ctx if _similar_ctx else None
     _msg_record = {"role": "user", "content": display_text or user_input}
-    if _img_bytes and "_img_b64_bubble" in dir():
+    if _img_bytes and "_img_b64_bubble" in locals():
         _msg_record["image_b64"] = _img_b64_bubble
     st.session_state.messages.append(_msg_record)
 
@@ -2096,7 +2114,7 @@ if user_input:
         # 用户气泡
         _safe_disp = (display_text or user_input).replace("<", "&lt;").replace(">", "&gt;")
         _new_img_html = ""
-        if _img_bytes and "_img_b64_bubble" in dir():
+        if _img_bytes and "_img_b64_bubble" in locals():
             _new_img_html = (
                 f'<img src="data:image/jpeg;base64,{_img_b64_bubble}" '
                 f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'

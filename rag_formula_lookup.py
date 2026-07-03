@@ -89,7 +89,7 @@ _DESCRIPTIONS: dict[str, str] = {
 
 
 def embed(text: str) -> list[float]:
-    resp = requests.post(f"{OLLAMA_URL}/embeddings", json={"model": EMBED_MODEL, "prompt": text})
+    resp = requests.post(f"{OLLAMA_URL}/embeddings", json={"model": EMBED_MODEL, "prompt": text}, timeout=10)
     resp.raise_for_status()
     return resp.json()["embedding"]
 
