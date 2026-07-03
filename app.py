@@ -458,16 +458,15 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 /* AI 回复区域使用霞鹜文楷手写体 */
 .bubble-asst-inner { font-family: 'LXGW WenKai', 'KaiTi', 'STKaiti', serif; font-size: 1rem; line-height: 1.8; }
 
-/* ══ 全局背景：用变量控制，暗色模式覆盖 ══ */
-:root { --app-bg: #EDE5DC; --app-panel: #F0EBE5; }
-html, body { background: var(--app-bg) !important; }
+/* ══ 全局背景：微信暖米白 ══ */
+html, body { background: #EDE5DC !important; }
 .stApp, [data-testid="stAppViewContainer"],
 [data-testid="stMain"], [data-testid="block-container"],
 section.main, .main, .block-container,
 [data-testid="stBottom"], .stBottom,
 [data-testid="stBottomBlockContainer"],
 [class*="bottom"], [class*="Bottom"],
-footer { background: var(--app-bg) !important; }
+footer { background: #EDE5DC !important; }
 p, span, label, div, li, td, th, h1, h2, h3, h4 { color: #1a1a1a !important; }
 #MainMenu, header { visibility: hidden; }
 [data-testid="block-container"] { padding-bottom: 180px !important; }
@@ -628,7 +627,7 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
 /* ── 输入框：外框即输入区，内部 textarea 透明（去掉套娃黑块）── */
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
-[data-testid="stBottom"] > div > div { background: var(--app-bg) !important; }
+[data-testid="stBottom"] > div > div { background: #EDE5DC !important; }
 [data-testid="stChatInputContainer"] {
     background: #FFFFFF !important;
     border: 1.5px solid #C8C0B8 !important;
@@ -658,14 +657,13 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
 [data-testid="stChatInputSubmitButton"] button {
     background: #2aae67 !important; border-radius: 50% !important;
 }
-/* ── 工具栏：fixed 吸附在视口底部输入框上方 ── */
+/* ── 工具栏与横幅：随内容区等宽，sticky 吸附在输入框上方 ── */
 [data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
-    position: fixed !important;
+    position: sticky !important;
     bottom: 72px !important;
-    left: 0 !important; right: 0 !important;
     z-index: 200 !important;
-    background: var(--app-bg) !important;
-    padding: 4px 1rem 2px !important;
+    background: #EDE5DC !important;
+    padding: 4px 0 2px !important;
     margin: 0 !important;
 }
 .course-banner-row [data-testid="stHorizontalBlock"],
@@ -829,7 +827,7 @@ hr { border-color: #D4CEC8 !important; }
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div {
-    background: var(--app-bg) !important;
+    background: #EDE5DC !important;
 }
 
 /* ── 工具栏容器透明 ── */
@@ -1209,8 +1207,6 @@ if st.session_state.dark_mode:
 <style>
 /* ═══ 夜间模式 — 深海蓝调 ═══ */
 :root {
-    --app-bg:       #0f0f17;
-    --app-panel:    #18182a;
     --dm-bg:        #0f0f17;
     --dm-panel:     #18182a;
     --dm-card:      #20203a;
@@ -1350,12 +1346,9 @@ pre, pre code, code {
     box-shadow: none !important; border: none !important;
 }
 [data-testid="stChatInputSubmitButton"] button { background: #2a6edd !important; }
-/* 工具栏 fixed */
+/* 工具栏 sticky */
 [data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
     background: var(--dm-bg) !important;
-    position: fixed !important;
-    bottom: 72px !important;
-    left: 0 !important; right: 0 !important;
 }
 
 /* ══ 文件上传 ══ */
@@ -1479,21 +1472,19 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-    # 暗色模式：注入到 body 末尾 + 用 JS style.setProperty 覆盖 Streamlit 内联主题 + MutationObserver 防反弹
+    # 把暗色覆盖 CSS 注入到父页面 <head>，绕过 React 重渲染覆盖问题
     _cv1.html("""<script>
 (function() {
     try {
         var doc = window.parent.document;
-
-        /* ── 1. 暗色 CSS 样式表（追加到 body 末尾，优先于所有 st.markdown 样式）── */
         var existing = doc.getElementById('_dm_override_css');
         var s = existing || doc.createElement('style');
-        if (!existing) { s.id = '_dm_override_css'; doc.body.appendChild(s); }
+        if (!existing) { s.id = '_dm_override_css'; doc.head.appendChild(s); }
         s.textContent = [
-                /* 直接覆盖背景 */
-                'html,body,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"],[data-testid="block-container"]{background:#0f0f17!important}',
-                /* 工具栏：fixed 悬浮，left 由 JS 动态设置 */
-                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:#0f0f17!important;position:fixed!important;bottom:72px!important;right:0!important;padding:4px 1rem 2px!important;z-index:200!important}',
+                /* 覆盖 Streamlit 主题颜色变量 */
+                ':root{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important;--text-color:#dde0f5!important}',
+                /* 工具栏暗色背景 */
+                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:#0f0f17!important;position:sticky!important;bottom:72px!important}',
                 /* 底栏 */
                 '[data-testid="stBottom"]{background:#0f0f17!important}',
                 '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
@@ -1528,37 +1519,6 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
                 '.stMarkdownContainer .math,.stMarkdown .math{background:transparent!important}',
                 '[data-testid="stMarkdownContainer"]>div{background:transparent!important}',
             ].join('');
-
-        /* ── 2. 用 JS style.setProperty 直接覆盖 Streamlit 内联主题变量 ── */
-        function applyDark() {
-            var r = doc.documentElement;
-            r.style.setProperty('--background-color', '#0f0f17');
-            r.style.setProperty('--secondary-background-color', '#18182a');
-            r.style.setProperty('--text-color', '#dde0f5');
-            r.style.setProperty('--app-bg', '#0f0f17');
-            var app = doc.querySelector('.stApp');
-            if (app) { app.style.setProperty('background-color', '#0f0f17', 'important'); }
-        }
-        applyDark();
-
-        /* ── 3. MutationObserver 防止 Streamlit 重渲染时覆盖回亮色 ── */
-        if (!doc._dmObserver) {
-            doc._dmObserver = new MutationObserver(function(muts) {
-                for (var m of muts) { if (m.attributeName === 'style') { applyDark(); break; } }
-            });
-            doc._dmObserver.observe(doc.documentElement, { attributes: true, attributeFilter: ['style'] });
-        }
-
-        /* ── 4. 工具栏 left 跟随侧边栏宽度 ── */
-        function fixToolbarLeft() {
-            var sb = doc.querySelector('[data-testid="stSidebar"]');
-            var left = sb ? sb.getBoundingClientRect().right : 0;
-            var tb = doc.querySelector('[data-testid="stHorizontalBlock"]:has(.toolbar-btn)');
-            if (tb) tb.style.setProperty('left', left + 'px', 'important');
-        }
-        fixToolbarLeft();
-        window.parent.addEventListener('resize', fixToolbarLeft);
-
     } catch(e) {}
 })();
 </script>""", height=1)
