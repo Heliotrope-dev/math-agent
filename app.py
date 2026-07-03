@@ -1481,17 +1481,22 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
         var s = existing || doc.createElement('style');
         if (!existing) { s.id = '_dm_override_css'; doc.head.appendChild(s); }
         s.textContent = [
+                /* 覆盖 Streamlit 主题颜色变量 */
+                ':root{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important;--text-color:#dde0f5!important}',
                 /* 底栏 */
                 '[data-testid="stBottom"]{background:#0f0f17!important}',
                 '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
                 '[data-testid="stBottom"]>div{background:#0f0f17!important}',
+                '[data-testid="stBottom"]>div>div{background:#0f0f17!important}',
                 /* 输入框外框变深色 */
                 '[data-testid="stChatInputContainer"]{background:#18182a!important;border:1.5px solid #32325a!important;border-radius:24px!important;box-shadow:none!important}',
                 '[data-testid="stChatInput"]{background:#0f0f17!important}',
+                /* 所有白色背景通用兜底 */
+                '.stApp *{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important}',
                 /* textarea 透明 */
                 '[data-testid="stChatInputTextArea"]{background:transparent!important;border:none!important;box-shadow:none!important;color:#dde0f5!important}',
                 /* placeholder */
-                '[data-testid="stChatInputTextArea"]::placeholder{color:#5050708!important}',
+                '[data-testid="stChatInputTextArea"]::placeholder{color:#707090!important}',
                 /* 发送按钮 */
                 '[data-testid="stChatInputSubmitButton"] button{background:#2a6edd!important}',
                 /* KaTeX 暗色 */
