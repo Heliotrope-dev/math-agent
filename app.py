@@ -1479,19 +1479,21 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-    # 把暗色覆盖 CSS 追加到父页面 <body> 末尾，确保比 st.markdown() 样式更晚，覆盖所有亮色残留
+    # 暗色模式：注入到 body 末尾 + 用 JS style.setProperty 覆盖 Streamlit 内联主题 + MutationObserver 防反弹
     _cv1.html("""<script>
 (function() {
     try {
         var doc = window.parent.document;
+
+        /* ── 1. 暗色 CSS 样式表（追加到 body 末尾，优先于所有 st.markdown 样式）── */
         var existing = doc.getElementById('_dm_override_css');
         var s = existing || doc.createElement('style');
         if (!existing) { s.id = '_dm_override_css'; doc.body.appendChild(s); }
         s.textContent = [
-                /* 覆盖 Streamlit 主题颜色变量 + app-bg */
-                ':root{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important;--text-color:#dde0f5!important;--app-bg:#0f0f17!important;--app-panel:#18182a!important}',
-                /* 工具栏：fixed 悬浮在视口底部 */
-                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:#0f0f17!important;position:fixed!important;bottom:72px!important;left:0!important;right:0!important;padding:4px 1rem 2px!important;z-index:200!important}',
+                /* 直接覆盖背景 */
+                'html,body,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"],[data-testid="block-container"]{background:#0f0f17!important}',
+                /* 工具栏：fixed 悬浮，left 由 JS 动态设置 */
+                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:#0f0f17!important;position:fixed!important;bottom:72px!important;right:0!important;padding:4px 1rem 2px!important;z-index:200!important}',
                 /* 底栏 */
                 '[data-testid="stBottom"]{background:#0f0f17!important}',
                 '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
@@ -1526,6 +1528,37 @@ mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
                 '.stMarkdownContainer .math,.stMarkdown .math{background:transparent!important}',
                 '[data-testid="stMarkdownContainer"]>div{background:transparent!important}',
             ].join('');
+
+        /* ── 2. 用 JS style.setProperty 直接覆盖 Streamlit 内联主题变量 ── */
+        function applyDark() {
+            var r = doc.documentElement;
+            r.style.setProperty('--background-color', '#0f0f17');
+            r.style.setProperty('--secondary-background-color', '#18182a');
+            r.style.setProperty('--text-color', '#dde0f5');
+            r.style.setProperty('--app-bg', '#0f0f17');
+            var app = doc.querySelector('.stApp');
+            if (app) { app.style.setProperty('background-color', '#0f0f17', 'important'); }
+        }
+        applyDark();
+
+        /* ── 3. MutationObserver 防止 Streamlit 重渲染时覆盖回亮色 ── */
+        if (!doc._dmObserver) {
+            doc._dmObserver = new MutationObserver(function(muts) {
+                for (var m of muts) { if (m.attributeName === 'style') { applyDark(); break; } }
+            });
+            doc._dmObserver.observe(doc.documentElement, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        /* ── 4. 工具栏 left 跟随侧边栏宽度 ── */
+        function fixToolbarLeft() {
+            var sb = doc.querySelector('[data-testid="stSidebar"]');
+            var left = sb ? sb.getBoundingClientRect().right : 0;
+            var tb = doc.querySelector('[data-testid="stHorizontalBlock"]:has(.toolbar-btn)');
+            if (tb) tb.style.setProperty('left', left + 'px', 'important');
+        }
+        fixToolbarLeft();
+        window.parent.addEventListener('resize', fixToolbarLeft);
+
     } catch(e) {}
 })();
 </script>""", height=1)
