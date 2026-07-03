@@ -294,6 +294,143 @@ try {
 </script>
 """, height=1)
 
+# ── KaTeX 数学公式渲染（比 Streamlit 内置 MathJax 更稳定）────────────────────
+_cv1.html("""
+<script>
+(function() {
+try {
+    var doc = window.parent.document;
+    if (doc.getElementById('_katex_css')) return;  // 避免重复加载
+
+    var link = doc.createElement('link');
+    link.id = '_katex_css';
+    link.rel = 'stylesheet';
+    link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+    doc.head.appendChild(link);
+
+    function loadScript(src, onload) {
+        var s = doc.createElement('script');
+        s.src = src;
+        s.onload = onload;
+        doc.head.appendChild(s);
+    }
+
+    loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js', function() {
+        loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js', function() {
+            var _timer = null;
+            function doRender() {
+                try {
+                    renderMathInElement(doc.body, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$',  right: '$',  display: false},
+                            {left: '\\[', right: '\\]', display: true},
+                            {left: '\\(', right: '\\)', display: false}
+                        ],
+                        throwOnError: false,
+                        trust: true
+                    });
+                } catch(e) {}
+            }
+            doRender();
+            // Streamlit 每次重渲染后自动补充 render
+            var obs = new MutationObserver(function() {
+                clearTimeout(_timer);
+                _timer = setTimeout(doRender, 250);
+            });
+            obs.observe(doc.body, {childList: true, subtree: true});
+        });
+    });
+} catch(e) {}
+})();
+</script>
+""", height=1)
+
+# ── 手机端汉堡菜单（侧边栏滑出覆盖层）──────────────────────────────────────
+_cv1.html("""
+<script>
+(function() {
+try {
+    var doc = window.parent.document;
+    if (doc.getElementById('ma-hamburger')) return;  // 避免重复注入
+
+    // ── 汉堡按钮 ──────────────────────────────────────────────────────────
+    var btn = doc.createElement('div');
+    btn.id = 'ma-hamburger';
+    btn.innerHTML = '&#9776;';  // ☰
+    doc.body.appendChild(btn);
+
+    // ── 半透明遮罩 ────────────────────────────────────────────────────────
+    var backdrop = doc.createElement('div');
+    backdrop.id = 'ma-backdrop';
+    doc.body.appendChild(backdrop);
+
+    function getSidebar() {
+        return doc.querySelector('[data-testid="stSidebar"]');
+    }
+
+    function openSidebar() {
+        var sb = getSidebar();
+        if (sb) sb.classList.add('ma-sb-open');
+        backdrop.classList.add('active');
+        btn.innerHTML = '&#10005;';  // ✕
+    }
+
+    function closeSidebar() {
+        var sb = getSidebar();
+        if (sb) sb.classList.remove('ma-sb-open');
+        backdrop.classList.remove('active');
+        btn.innerHTML = '&#9776;';  // ☰
+    }
+
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var sb = getSidebar();
+        if (sb && sb.classList.contains('ma-sb-open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+
+    // 点遮罩关闭
+    backdrop.addEventListener('click', closeSidebar);
+
+    // 点侧边栏里的按钮后延迟关闭（给 Streamlit 时间处理点击）
+    doc.addEventListener('click', function(e) {
+        var sb = getSidebar();
+        if (!sb || !sb.classList.contains('ma-sb-open')) return;
+        if (e.target === btn) return;
+        if (sb.contains(e.target)) {
+            setTimeout(closeSidebar, 200);
+        }
+    });
+
+    // 暗色模式下汉堡按钮样式
+    function applyDarkHamburger() {
+        var isDark = doc.documentElement.getAttribute('data-theme') === 'dark'
+            || doc.body.style.background === 'rgb(15, 15, 23)'
+            || doc.querySelector('.stApp') &&
+               getComputedStyle(doc.querySelector('.stApp')).backgroundColor === 'rgb(15, 15, 23)';
+        if (isDark) {
+            btn.style.background = 'rgba(24,24,42,0.95)';
+            btn.style.borderColor = '#32325a';
+            btn.style.color = '#dde0f5';
+        } else {
+            btn.style.background = 'rgba(255,255,255,0.93)';
+            btn.style.borderColor = '#D4CEC8';
+            btn.style.color = '#333';
+        }
+    }
+    applyDarkHamburger();
+    // 切换主题时更新按钮颜色
+    new MutationObserver(applyDarkHamburger).observe(doc.body, {attributes: true, subtree: false});
+
+} catch(e) {}
+})();
+</script>
+""", height=1)
+
 # ── URL 参数持久化（7 天免登录）──────────────────────────────────────────────
 _stored_token = st.query_params.get("_auth", "") or ""
 if _stored_token and not st.session_state.get("logged_in"):
@@ -595,6 +732,15 @@ pre, code {
 
 hr { border-color: #D4CEC8 !important; }
 
+/* ── KaTeX 公式样式（课本感）── */
+.katex-display {
+    margin: 0.8em 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+}
+.katex { font-size: 1.05em !important; }
+.katex-display > .katex { font-size: 1.1em !important; }
+
 /* ── 麦克风 ── */
 [data-testid="stAudioInput"],
 [data-testid="stAudioInput"] > div {
@@ -772,8 +918,50 @@ button[kind="secondary"][data-testid*="wb_add"] {
 
 /* ══ 手机端响应式 ══ */
 @media (max-width: 768px) {
-    /* 侧边栏折叠 */
-    [data-testid="stSidebar"] { display: none !important; }
+    /* 侧边栏：改为左滑覆盖层，默认隐藏在屏幕左侧 */
+    [data-testid="stSidebar"] {
+        display: block !important;
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        width: 82vw !important; max-width: 300px !important;
+        height: 100vh !important;
+        z-index: 9998 !important;
+        overflow-y: auto !important;
+        transform: translateX(-110%) !important;
+        transition: transform 0.26s cubic-bezier(.4,0,.2,1) !important;
+    }
+    [data-testid="stSidebar"].ma-sb-open {
+        transform: translateX(0) !important;
+        box-shadow: 6px 0 32px rgba(0,0,0,0.32) !important;
+    }
+    /* 汉堡按钮 */
+    #ma-hamburger {
+        display: flex !important;
+        position: fixed !important;
+        top: 10px !important; left: 10px !important;
+        z-index: 9999 !important;
+        width: 40px !important; height: 40px !important;
+        background: rgba(255,255,255,0.93) !important;
+        border: 1px solid #D4CEC8 !important;
+        border-radius: 11px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        font-size: 1.2rem !important;
+        user-select: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+    /* 半透明遮罩 */
+    #ma-backdrop {
+        display: none;
+        position: fixed !important;
+        inset: 0 !important;
+        background: rgba(0,0,0,0.42) !important;
+        z-index: 9997 !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+    #ma-backdrop.active { display: block !important; }
     /* 强制所有列横排，不折行 */
     [data-testid="stHorizontalBlock"] {
         flex-wrap: nowrap !important;
@@ -1256,6 +1444,31 @@ div[data-testid="stPills"] button[aria-selected="true"] {
 
 /* ══ 元素容器通用 ══ */
 [data-testid="element-container"] { background: transparent !important; }
+
+/* ══ KaTeX 暗色适配 ══ */
+.katex-display { background: transparent !important; color: #dde0f5 !important; }
+.katex, .katex * { color: #dde0f5 !important; background: transparent !important; }
+.katex .fbox, .katex .fbox > .katex-html { border-color: #7a7ab8 !important; background: transparent !important; }
+.katex .frac-line { background: #dde0f5 !important; border-color: #dde0f5 !important; }
+.katex svg path, .katex .svg-align path { fill: #dde0f5 !important; stroke: #dde0f5 !important; }
+.katex .delimsizing path, .katex .stretchy path { fill: #dde0f5 !important; }
+
+/* ══ MathJax 3（Streamlit 内置）暗色适配 ══ */
+mjx-container { background: transparent !important; color: #dde0f5 !important; }
+mjx-container * { color: #dde0f5 !important; background: transparent !important; }
+mjx-container svg, mjx-container svg * { fill: #dde0f5 !important; }
+mjx-container[jax="CHTML"] { color: #dde0f5 !important; }
+/* \boxed{} 边框 */
+mjx-menclose { border-color: #7a7ab8 !important; }
+mjx-mfrac > mjx-frac > mjx-line { border-color: #dde0f5 !important; }
+
+/* ══ MathJax 2 降级兼容 ══ */
+.MathJax_Display, .MathJax, .MJXc-display { background: transparent !important; color: #dde0f5 !important; }
+.MathJax svg { fill: #dde0f5 !important; }
+
+/* ══ Streamlit 数学块容器 ══ */
+.stMarkdownContainer .math, .stMarkdown .math { background: transparent !important; }
+[data-testid="stMarkdownContainer"] > div { background: transparent !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1265,10 +1478,9 @@ div[data-testid="stPills"] button[aria-selected="true"] {
     try {
         var doc = window.parent.document;
         var existing = doc.getElementById('_dm_override_css');
-        if (!existing) {
-            var s = doc.createElement('style');
-            s.id = '_dm_override_css';
-            s.textContent = [
+        var s = existing || doc.createElement('style');
+        if (!existing) { s.id = '_dm_override_css'; doc.head.appendChild(s); }
+        s.textContent = [
                 /* 底栏 */
                 '[data-testid="stBottom"]{background:#0f0f17!important}',
                 '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
@@ -1282,9 +1494,24 @@ div[data-testid="stPills"] button[aria-selected="true"] {
                 '[data-testid="stChatInputTextArea"]::placeholder{color:#5050708!important}',
                 /* 发送按钮 */
                 '[data-testid="stChatInputSubmitButton"] button{background:#2a6edd!important}',
+                /* KaTeX 暗色 */
+                '.katex,.katex *{color:#dde0f5!important;background:transparent!important}',
+                '.katex-display{background:transparent!important;color:#dde0f5!important}',
+                '.katex .frac-line{background:#dde0f5!important;border-color:#dde0f5!important}',
+                '.katex .fbox{border-color:#7a7ab8!important;background:transparent!important}',
+                '.katex svg path,.katex .svg-align path,.katex .delimsizing path,.katex .stretchy path{fill:#dde0f5!important;stroke:#dde0f5!important}',
+                /* MathJax 3 暗色 */
+                'mjx-container,mjx-container *{color:#dde0f5!important;background:transparent!important}',
+                'mjx-container svg,mjx-container svg *{fill:#dde0f5!important}',
+                'mjx-menclose{border-color:#7a7ab8!important}',
+                'mjx-mfrac>mjx-frac>mjx-line{border-color:#dde0f5!important}',
+                /* MathJax 2 兼容 */
+                '.MathJax_Display,.MathJax,.MJXc-display{background:transparent!important;color:#dde0f5!important}',
+                '.MathJax svg{fill:#dde0f5!important}',
+                /* Streamlit 数学容器 */
+                '.stMarkdownContainer .math,.stMarkdown .math{background:transparent!important}',
+                '[data-testid="stMarkdownContainer"]>div{background:transparent!important}',
             ].join('');
-            doc.head.appendChild(s);
-        }
     } catch(e) {}
 })();
 </script>""", height=1)
