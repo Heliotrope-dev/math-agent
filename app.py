@@ -458,15 +458,16 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 /* AI 回复区域使用霞鹜文楷手写体 */
 .bubble-asst-inner { font-family: 'LXGW WenKai', 'KaiTi', 'STKaiti', serif; font-size: 1rem; line-height: 1.8; }
 
-/* ══ 全局背景：微信暖米白 ══ */
-html, body { background: #EDE5DC !important; }
+/* ══ 全局背景：用变量控制，暗色模式覆盖 ══ */
+:root { --app-bg: #EDE5DC; --app-panel: #F0EBE5; }
+html, body { background: var(--app-bg) !important; }
 .stApp, [data-testid="stAppViewContainer"],
 [data-testid="stMain"], [data-testid="block-container"],
 section.main, .main, .block-container,
 [data-testid="stBottom"], .stBottom,
 [data-testid="stBottomBlockContainer"],
 [class*="bottom"], [class*="Bottom"],
-footer { background: #EDE5DC !important; }
+footer { background: var(--app-bg) !important; }
 p, span, label, div, li, td, th, h1, h2, h3, h4 { color: #1a1a1a !important; }
 #MainMenu, header { visibility: hidden; }
 [data-testid="block-container"] { padding-bottom: 180px !important; }
@@ -627,7 +628,7 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
 /* ── 输入框：外框即输入区，内部 textarea 透明（去掉套娃黑块）── */
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
-[data-testid="stBottom"] > div > div { background: #EDE5DC !important; }
+[data-testid="stBottom"] > div > div { background: var(--app-bg) !important; }
 [data-testid="stChatInputContainer"] {
     background: #FFFFFF !important;
     border: 1.5px solid #C8C0B8 !important;
@@ -662,7 +663,7 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] {
     position: sticky !important;
     bottom: 72px !important;
     z-index: 200 !important;
-    background: #EDE5DC !important;
+    background: var(--app-bg) !important;
     padding: 4px 0 2px !important;
     margin: 0 !important;
 }
@@ -1207,6 +1208,8 @@ if st.session_state.dark_mode:
 <style>
 /* ═══ 夜间模式 — 深海蓝调 ═══ */
 :root {
+    --app-bg:       #0f0f17;
+    --app-panel:    #18182a;
     --dm-bg:        #0f0f17;
     --dm-panel:     #18182a;
     --dm-card:      #20203a;
