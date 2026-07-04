@@ -587,8 +587,8 @@ try{{
         '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
         '[data-testid="stChatInputContainer"]>div,[data-testid="stChatInputContainer"]>div>div{{background:#16162A!important}}' +
         '[data-testid="stChatInput"]{{background:#16162A!important}}' +
-        '[data-testid="stChatInputTextArea"]{{background:transparent!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important}}' +
-        '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
+        '[data-testid="stChatInputTextArea"]{{background:transparent!important;border:none!important;box-shadow:none!important;color:#1A1A2E!important}}' +
+        '[data-testid="stChatInputTextArea"]::placeholder{{color:#999!important}}' +
         '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}';
     function applyInline() {{
         var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
@@ -600,10 +600,10 @@ try{{
             inp.querySelectorAll('*').forEach(function(el) {{
                 var tag = el.tagName.toLowerCase();
                 if (tag==='textarea'||tag==='input') {{
-                    el.style.setProperty('color','#DEE1F5','important');
+                    el.style.setProperty('color','#1A1A2E','important');
                     el.style.setProperty('background','transparent','important');
-                    el.style.setProperty('-webkit-text-fill-color','#DEE1F5','important');
-                    el.style.setProperty('caret-color','#DEE1F5','important');
+                    el.style.setProperty('-webkit-text-fill-color','#1A1A2E','important');
+                    el.style.setProperty('caret-color','#1A1A2E','important');
                 }} else if (tag!=='button'&&tag!=='svg'&&tag!=='path') {{
                     el.style.setProperty('background','#16162A','important');
                 }}
