@@ -455,38 +455,49 @@ def ocr_math_image(image_bytes):
 
 def transcribe_audio(audio_file) -> tuple[str, str]:
     """语音转文字，使用 SiliconFlow SenseVoiceSmall（中英文优化）。"""
-    raw = audio_file.read()
-    mime = "audio/webm"
-    if raw[:4] == b"RIFF":
-        mime = "audio/wav"
-    elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
-        mime = "audio/mp3"
-    elif len(raw) > 8 and raw[4:8] == b"ftyp":
-        mime = "audio/mp4"
-    elif raw[:4] == b"OggS":
-        mime = "audio/ogg"
-
-    # SiliconFlow SenseVoiceSmall（中英文专优）
     sf_key = _secret("SILICONFLOW_API_KEY")
-    if sf_key:
-        try:
-            ext = mime.split("/")[-1].replace("webm", "webm").replace("mp4", "m4a")
-            resp = requests.post(
-                "https://api.siliconflow.cn/v1/audio/transcriptions",
-                headers={"Authorization": f"Bearer {sf_key}"},
-                files={"file": (f"audio.{ext}", raw, mime)},
-                data={"model": "FunAudioLLM/SenseVoiceSmall"},
-                timeout=30,
-            )
-            data = resp.json()
-            if "text" in data and data["text"].strip():
-                return data["text"].strip(), ""
-            if "error" in data:
-                pass
-        except Exception:
-            pass
+    if not sf_key:
+        return "", "未配置 SILICONFLOW_API_KEY，请在 .streamlit/secrets.toml 添加"
 
-    return "", "请在 Streamlit Cloud Secrets 配置 SILICONFLOW_API_KEY"
+    raw = audio_file.read()
+    if len(raw) < 1000:
+        return "", "录音太短，请说话后再松开（至少1秒）"
+
+    # 检测音频格式
+    if raw[:4] == b"RIFF":
+        mime, ext = "audio/wav", "wav"
+    elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
+        mime, ext = "audio/mpeg", "mp3"
+    elif len(raw) > 8 and raw[4:8] == b"ftyp":
+        mime, ext = "audio/mp4", "m4a"
+    elif raw[:4] == b"OggS":
+        mime, ext = "audio/ogg", "ogg"
+    elif raw[:4] == b"\x1a\x45\xdf\xa3":  # EBML header = webm/matroska
+        mime, ext = "audio/webm", "webm"
+    else:
+        mime, ext = "audio/webm", "webm"  # 浏览器默认录音格式
+
+    try:
+        resp = requests.post(
+            "https://api.siliconflow.cn/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {sf_key}"},
+            files={"file": (f"audio.{ext}", raw, mime)},
+            data={"model": "FunAudioLLM/SenseVoiceSmall"},
+            timeout=30,
+        )
+        if not resp.ok:
+            return "", f"API 错误 {resp.status_code}：{resp.text[:200]}"
+        data = resp.json()
+        if "error" in data:
+            return "", f"识别失败：{data['error']}"
+        text = data.get("text", "").strip()
+        if not text:
+            return "", "未识别到语音内容，请靠近麦克风重试"
+        return text, ""
+    except requests.Timeout:
+        return "", "识别超时（30s），请检查网络后重试"
+    except Exception as e:
+        return "", f"识别出错：{e}"
 
 # ── Session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
