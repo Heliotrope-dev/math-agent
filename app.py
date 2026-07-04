@@ -581,13 +581,15 @@ try{{
         var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
         if (inp) {{
             ['background','border','border-radius','box-shadow'].forEach(function(p){{ inp.style.removeProperty(p); }});
-            inp.querySelectorAll('div').forEach(function(d){{ d.style.removeProperty('background'); }});
+            inp.querySelectorAll('*').forEach(function(d){{ d.style.removeProperty('background'); }});
             inp.querySelectorAll('textarea,input').forEach(function(t){{
                 ['color','background','-webkit-text-fill-color','caret-color'].forEach(function(p){{ t.style.removeProperty(p); }});
             }});
         }}
-        var bot = doc.querySelector('[data-testid="stBottom"]');
-        if (bot) bot.style.removeProperty('background');
+        doc.querySelectorAll('[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]').forEach(function(bt){{
+            bt.style.removeProperty('background');
+            bt.querySelectorAll('*').forEach(function(el2){{ el2.style.removeProperty('background'); }});
+        }});
         return;
     }}
     var s = el || doc.createElement('style');
@@ -595,14 +597,18 @@ try{{
     var CSS =
         ':root{{--background-color:#0D0D14!important;--secondary-background-color:#16162A!important;--text-color:#DEE1F5!important}}' +
         'body,html,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"]{{background:#0D0D14!important}}' +
+        '[data-testid="stSidebar"] *,[data-testid="stSidebar"] [data-testid="stSidebarCollapsedButton"] *{{color:#DEE1F5!important;font-size:15px!important;white-space:normal!important;word-break:break-word!important}}' +
+        '[data-testid="stSidebarCollapsedButton"] svg,[data-testid="stSidebarCollapsedButton"] path{{fill:#DEE1F5!important;color:#DEE1F5!important}}' +
+        'button[data-testid="stSidebarCollapsedButton"]{{background:transparent!important}}' +
+        '[data-testid="stSidebarCollapsedButton"]:hover{{background:rgba(255,255,255,0.1)!important}}' +
         '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
         '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}' +
         '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){{background:#0D0D14!important}}' +
         '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
         '[data-testid="stChatInputContainer"]>div,[data-testid="stChatInputContainer"]>div>div{{background:#16162A!important}}' +
         '[data-testid="stChatInput"]{{background:#16162A!important}}' +
-        '[data-testid="stChatInputTextArea"]{{background:transparent!important;border:none!important;box-shadow:none!important;color:#1A1A2E!important}}' +
-        '[data-testid="stChatInputTextArea"]::placeholder{{color:#888!important}}' +
+        '[data-testid="stChatInputTextArea"]{{background:#16162A!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important;-webkit-text-fill-color:#DEE1F5!important;caret-color:#DEE1F5!important}}' +
+        '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
         '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}' +
         /* 下拉框弹出层（Streamlit 渲染在 document 根部的 portal） */
         '[data-baseweb="popover"],[data-baseweb="menu"],[data-baseweb="list"]{{background:#1E1E35!important;border:1px solid #2E2E50!important}}' +
@@ -619,26 +625,20 @@ try{{
             inp.style.setProperty('border','1.5px solid #282845','important');
             inp.style.setProperty('border-radius','24px','important');
             inp.style.setProperty('box-shadow','none','important');
-            inp.querySelectorAll('div').forEach(function(d){{
+            inp.querySelectorAll('*').forEach(function(d){{
                 d.style.setProperty('background','#16162A','important');
             }});
             inp.querySelectorAll('textarea,input').forEach(function(t){{
-                t.style.setProperty('color','#1A1A2E','important');
-                t.style.setProperty('background','transparent','important');
-                t.style.setProperty('-webkit-text-fill-color','#1A1A2E','important');
-                t.style.setProperty('caret-color','#1A1A2E','important');
+                t.style.setProperty('color','#DEE1F5','important');
+                t.style.setProperty('background','#16162A','important');
+                t.style.setProperty('-webkit-text-fill-color','#DEE1F5','important');
+                t.style.setProperty('caret-color','#DEE1F5','important');
             }});
         }}
-        /* 底部容器 */
-        var bot = doc.querySelector('[data-testid="stBottom"]');
-        if (bot) bot.style.setProperty('background','#0D0D14','important');
-        /* 下拉框弹出层 */
-        doc.querySelectorAll('[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"]').forEach(function(p){{
-            p.style.setProperty('background','#1E1E35','important');
-            p.style.setProperty('border','1px solid #2E2E50','important');
-            p.querySelectorAll('[data-baseweb="option"],[role="option"]').forEach(function(o){{
-                o.style.setProperty('background','#1E1E35','important');
-                o.style.setProperty('color','#DEE1F5','important');
+        doc.querySelectorAll('[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]').forEach(function(bt){{
+            bt.style.setProperty('background','#0D0D14','important');
+            bt.querySelectorAll('*').forEach(function(el2){{
+                el2.style.setProperty('background','#0D0D14','important');
             }});
         }});
     }}
