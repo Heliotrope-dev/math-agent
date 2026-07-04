@@ -9,7 +9,10 @@ Three tools:
 
 import io
 import base64
+import logging
 import sympy as sp
+
+_log = logging.getLogger(__name__)
 
 # ── 图像队列（per-thread，防止多用户共享进程时串用）─────────────────────────────
 import threading as _threading
@@ -24,6 +27,23 @@ def get_and_clear_pending_images() -> list[dict]:
     imgs = list(_pending_images())
     _pending_images().clear()
     return imgs
+
+
+def compress_image(image_bytes: bytes, max_size: int = 800, quality: int = 85) -> bytes:
+    """压缩图片以减少 token 与带宽；失败时降级返回原图而不中断流程。"""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        w, h = img.size
+        if max(w, h) > max_size:
+            ratio = max_size / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+        return buf.getvalue()
+    except Exception as e:
+        _log.warning("图片压缩失败，使用原图：%s", e)
+        return image_bytes
 
 def _save_figure(fig, caption: str = "") -> str:
     try:
@@ -415,24 +435,31 @@ import time as _time
 _rag_index: "list[dict] | None" = None
 _rag_available: "bool | None" = None
 _rag_next_retry: float = 0
+_rag_lock = _threading.Lock()  # build_index 耗时数十秒，加锁防止多用户并发重复构建
 
 
-def _get_rag_index():
+def _get_rag_index() -> "list[dict] | None":
     global _rag_index, _rag_available, _rag_next_retry
-    if _rag_available is False and _time.time() < _rag_next_retry:
-        return None
+    # 快路径不加锁；慢路径（构建）持锁并二次检查
     if _rag_index is not None:
         return _rag_index
-    try:
-        from rag_formula_lookup import build_index
-        _rag_index = build_index()
-        _rag_available = True
-        _rag_next_retry = 0
-        return _rag_index
-    except Exception:
-        _rag_available = False
-        _rag_next_retry = _time.time() + 300  # 5 分钟后重试
+    if _rag_available is False and _time.time() < _rag_next_retry:
         return None
+    with _rag_lock:
+        if _rag_index is not None:
+            return _rag_index
+        if _rag_available is False and _time.time() < _rag_next_retry:
+            return None
+        try:
+            from rag_formula_lookup import build_index
+            _rag_index = build_index()
+            _rag_available = True
+            _rag_next_retry = 0
+            return _rag_index
+        except Exception:
+            _rag_available = False
+            _rag_next_retry = _time.time() + 300  # 5 分钟后重试
+            return None
 
 
 # 关键词 → 主题映射（扩展版，用于 RAG 不可用时的 fallback）

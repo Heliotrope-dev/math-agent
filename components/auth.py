@@ -34,31 +34,35 @@ def _sb_get(table: str, params: dict) -> list:
         return []
 
 
-def _sb_post(table: str, data):
+def _sb_post(table: str, data) -> bool:
+    """写入成功返回 True；网络异常/配置缺失/HTTP 错误都返回 False，调用方可据此回滚。"""
     if not _SB_URL or not _SB_KEY:
-        return
+        return False
     try:
-        requests.post(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, timeout=8)
+        r = requests.post(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, timeout=8)
+        return r.ok
     except Exception:
-        pass
+        return False
 
 
-def _sb_delete(table: str, params: dict):
+def _sb_delete(table: str, params: dict) -> bool:
     if not _SB_URL or not _SB_KEY:
-        return
+        return False
     try:
-        requests.delete(f"{_SB_URL}/{table}", headers=_SB_HDR, params=params, timeout=8)
+        r = requests.delete(f"{_SB_URL}/{table}", headers=_SB_HDR, params=params, timeout=8)
+        return r.ok
     except Exception:
-        pass
+        return False
 
 
-def _sb_patch(table: str, data: dict, params: dict):
+def _sb_patch(table: str, data: dict, params: dict) -> bool:
     if not _SB_URL or not _SB_KEY:
-        return
+        return False
     try:
-        requests.patch(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, params=params, timeout=8)
+        r = requests.patch(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, params=params, timeout=8)
+        return r.ok
     except Exception:
-        pass
+        return False
 
 
 # ── 学习记录（user_topics 表）────────────────────────────────────────────────
@@ -173,9 +177,10 @@ def _load_wrong_book(email: str) -> list:
     return _sb_get("wrong_book", {"email": f"eq.{email}", "select": "*", "order": "id"})
 
 
-def _save_wrong_book(email: str, wb: list):
+def _save_wrong_book(email: str, wb: list) -> bool:
+    """全量覆盖式保存；delete 成功但 insert 失败时用备份回滚，避免数据丢失。"""
     if not email:
-        return
+        return False
     rows = [
         {
             "email": email,
@@ -185,25 +190,18 @@ def _save_wrong_book(email: str, wb: list):
         }
         for item in wb
     ] if wb else []
-    backup = []
-    try:
-        backup = _load_wrong_book(email)
-    except Exception:
-        pass
-    deleted = False
-    try:
-        _sb_delete("wrong_book", {"email": f"eq.{email}"})
-        deleted = True
-        if rows:
-            _sb_post("wrong_book", rows)
-    except Exception:
-        # 只有 delete 成功但 insert 失败时才需要恢复，避免二次 delete 导致数据双重丢失
-        if deleted and backup:
-            try:
-                _sb_post("wrong_book", [
-                    {"email": email, "question": x["question"],
-                     "saved_at": x.get("saved_at", ""), "image_b64": x.get("image_b64", "")}
-                    for x in backup
-                ])
-            except Exception:
-                pass
+    backup = _load_wrong_book(email)
+    if not _sb_delete("wrong_book", {"email": f"eq.{email}"}):
+        return False  # 删除失败，远端数据未动，无需回滚
+    if not rows:
+        return True
+    if _sb_post("wrong_book", rows):
+        return True
+    # delete 成功但 insert 失败 → 尝试恢复备份
+    if backup:
+        _sb_post("wrong_book", [
+            {"email": email, "question": x["question"],
+             "saved_at": x.get("saved_at", ""), "image_b64": x.get("image_b64", "")}
+            for x in backup
+        ])
+    return False

@@ -6,13 +6,19 @@ Launch:
   USE_LOCAL=1 streamlit run app.py
 """
 
-import os, sys, base64, requests, re, time, random, json, contextlib
+import os, sys, base64, requests, re, time, random, json, contextlib, logging
 from io import StringIO, BytesIO
 from datetime import datetime
 import tempfile
 
 from PIL import Image
 import streamlit as st
+
+# 默认日志级别是 WARNING，INFO/DEBUG 全被过滤；显式配置一次（重复调用无副作用）
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
 
 for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
            "OLLAMA_BASE_URL", "SUPABASE_URL", "SUPABASE_KEY"):
@@ -22,8 +28,8 @@ for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
         except Exception:
             pass
 
-from agent import MathAgent, CLOUD_PROVIDERS
-from tools import get_and_clear_pending_images
+from agent import MathAgent, CLOUD_PROVIDERS, route_model
+from tools import get_and_clear_pending_images, compress_image
 from components.auth import (
     _sb_get, _sb_post, _sb_delete, _sb_patch,
     _track_topic, _load_user_profile,
@@ -97,6 +103,15 @@ def _show_login_page():
                         st.error(f"注册失败：{_e}")
 
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
+
+# ── 启动环境校验：至少配置一个云端 API Key，否则友好提示而非运行时崩溃 ────────
+if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("SILICONFLOW_API_KEY")):
+    st.error(
+        "⚠️ 未检测到可用的模型 API Key。\n\n"
+        "请配置环境变量（或 Streamlit Secrets）中的 **DEEPSEEK_API_KEY** "
+        "或 **SILICONFLOW_API_KEY** 至少一个，然后刷新页面。"
+    )
+    st.stop()
 
 # ── localStorage 读取（关闭浏览器后用桌面快捷打开也能恢复登录）─────────────
 # 总是渲染，让 Streamlit 组件树稳定；JS 内部判断是否需要注入
@@ -419,20 +434,6 @@ def extract_practice(text):
     practice = match.group(1).strip()
     return text[:match.start()].rstrip(), practice
 
-def _compress_image(image_bytes, max_size=800):
-    try:
-        img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        w, h = img.size
-        if max(w, h) > max_size:
-            ratio = max_size / max(w, h)
-            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
-        buf = BytesIO()
-        img.save(buf, format="JPEG", quality=85)
-        return buf.getvalue()
-    except Exception as e:
-        st.warning(f"图片压缩失败: {e}")
-        return image_bytes
-
 def ocr_math_image(image_bytes):
     """拍题 OCR：用 SiliconFlow Qwen-VL 识别图片中的数学题文字。"""
     key = _secret("SILICONFLOW_API_KEY")
@@ -609,6 +610,25 @@ with st.sidebar:
         if not wrong_book:
             st.caption("解完题后点「存入错题本」")
         else:
+            # ── 一键复习：随机抽一道错题重新发给 Agent ──
+            if st.button("🎲 随机复习一题", key="wb_review", use_container_width=True,
+                         type="primary"):
+                _rw = random.choice(wrong_book)
+                _rw_img = _rw.get("image_b64", "")
+                if _rw_img:
+                    st.session_state["pending_attachment"] = {
+                        "type": "image",
+                        "bytes": base64.b64decode(_rw_img),
+                        "name": "错题图片",
+                    }
+                    _rw_txt = _rw["question"].lstrip("📷").strip()
+                    if _rw_txt and _rw_txt != "图片题目":
+                        st.session_state["prefill"] = _rw_txt
+                else:
+                    st.session_state["_direct_input"] = (
+                        f"【错题复习】请重新完整解答这道我之前做错的题：{_rw['question']}"
+                    )
+                st.rerun()
             for wi, wp in enumerate(wrong_book):
                 q_preview = wp["question"][:48] + ("…" if len(wp["question"]) > 48 else "")
                 st.markdown(f"**{wi+1}.** {q_preview}")
@@ -1008,7 +1028,7 @@ if st.session_state.get("show_mic"):
 _patt = st.session_state.get("pending_attachment")
 if _patt:
     if _patt["type"] == "image":
-        _thumb_b64 = base64.b64encode(_compress_image(_patt["bytes"], max_size=80)).decode()
+        _thumb_b64 = base64.b64encode(compress_image(_patt["bytes"], max_size=80)).decode()
         _icon_html = (
             f'<img src="data:image/jpeg;base64,{_thumb_b64}" '
             f'style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0">'
@@ -1110,7 +1130,7 @@ if _submitted:
         att = _patt_send
         if att["type"] == "image":
             _img_bytes = att["bytes"]
-            _img_b64_bubble = base64.b64encode(_compress_image(_img_bytes, max_size=400)).decode()
+            _img_b64_bubble = base64.b64encode(compress_image(_img_bytes, max_size=400)).decode()
             user_input = _eff_text.strip() or "请解答图片中的数学题"
             display_text = ("📷 " + _eff_text.strip()) if _eff_text.strip() else "📷 图片题目"
         elif att["type"] == "file":
@@ -1187,29 +1207,35 @@ if user_input:
                     ts = datetime.now().strftime("%H:%M:%S")
                     if result is None:
                         _tool_start[name] = time.time()
-                        status.update(label=f"{label}…")
+                        status.update(label=f"正在调用 {label}…")
                         trace_lines.append(f"[{ts}] {label}\n   参数: {args}")
                     else:
                         elapsed = time.time() - _tool_start.get(name, time.time())
+                        status.update(label=f"✓ {label} 完成（{elapsed:.1f}s）")
                         preview = str(result)[:120] + ("…" if len(str(result)) > 120 else "")
                         trace_lines.append(f"   → {preview}  ({elapsed:.1f}s)\n")
 
                 _solve_model = selected_model
                 _solve_local = False
                 _use_guide = guide_mode and not _img_bytes and not _sim_data
-                if _img_bytes:
-                    if _secret("SILICONFLOW_API_KEY"):
-                        _solve_model = "Qwen/Qwen3-VL-30B-A3B-Instruct"
-                        status.update(label="切换视觉模型（Qwen VL）…")
-                    else:
-                        # 没有视觉 API，先 OCR 成文字再解题
-                        status.update(label="识别图片内容…")
-                        _ocr = ocr_math_image(_img_bytes)
-                        if _ocr and not _ocr.startswith("（"):
-                            solve_input = f"请解答以下题目：{_ocr}"
-                            if user_input and user_input != "请解答图片中的数学题":
-                                solve_input += f"\n（补充说明：{user_input}）"
-                        _img_bytes = None  # 已转为文字，不再发图
+                if _img_bytes and not _secret("SILICONFLOW_API_KEY"):
+                    # 没有视觉 API，先 OCR 成文字再解题
+                    status.update(label="识别图片内容…")
+                    _ocr = ocr_math_image(_img_bytes)
+                    if _ocr and not _ocr.startswith("（"):
+                        solve_input = f"请解答以下题目：{_ocr}"
+                        if user_input and user_input != "请解答图片中的数学题":
+                            solve_input += f"\n（补充说明：{user_input}）"
+                    _img_bytes = None  # 已转为文字，不再发图
+                # 智能路由：有图 → 视觉模型；短闲聊 → 轻量模型
+                # 仅在用户处于默认模型（或必须切视觉）时生效，不覆盖用户的显式选择
+                if _img_bytes or selected_model == "deepseek-chat":
+                    _routed = route_model(solve_input, image_bytes=_img_bytes,
+                                          default=selected_model)
+                    if _routed != _solve_model:
+                        _solve_model = _routed
+                        status.update(label="切换视觉模型（Qwen VL）…" if _img_bytes
+                                      else "简单问题，切换轻量模型…")
                 _agent = get_agent(_solve_local, _solve_model, guide_mode=_use_guide)
 
                 buf = StringIO()

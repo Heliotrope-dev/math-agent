@@ -7,15 +7,16 @@ Two modes:
 """
 
 import os
+import re
 import json
 import base64
 import logging
-from io import BytesIO
+from typing import Callable, Iterator, Optional, Union
 import httpx
 
 _log = logging.getLogger(__name__)
 from openai import OpenAI
-from tools import TOOL_DEFINITIONS, execute_tool
+from tools import TOOL_DEFINITIONS, execute_tool, compress_image
 
 # macOS system proxy is auto-detected by httpx and blocks localhost; disable explicitly
 # NOTE: Do not share httpx.Client at module level; create per-instance to avoid pool conflicts
@@ -111,15 +112,39 @@ CLOUD_PROVIDERS = {
     "deepseek-chat":                 ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
 }
 
+# ── 智能模型路由 ──────────────────────────────────────────────────────────────
+_DEFAULT_VISION_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+_LIGHT_MODEL = "Qwen/Qwen3-VL-8B-Instruct"  # SiliconFlow 8B：闲聊类短消息用，快且便宜
+_CHITCHAT_MAX_LEN = 60
+# 含数字/运算符/数学关键词 → 视为数学问题，不降级到轻量模型
+_MATH_HINT_RE = re.compile(
+    r"[0-9=+*/^_∫∑√π\\$-]|求|解|证|算|极限|积分|导数|微分|方程|矩阵|行列式|概率|公式|化简|不等式|级数|向量"
+)
+
+
+def route_model(problem: str, image_bytes: Optional[bytes] = None,
+                default: str = "deepseek-chat") -> str:
+    """按输入复杂度路由模型：有图 → 视觉模型；短且无数学特征 → 轻量模型；其余用默认强模型。
+
+    轻量路由只在配置了 SILICONFLOW_API_KEY 时生效，避免路由到不可用的 provider。
+    """
+    has_sf = bool(os.environ.get("SILICONFLOW_API_KEY"))
+    if image_bytes:
+        return _DEFAULT_VISION_MODEL if has_sf else default
+    text = (problem or "").strip()
+    if has_sf and text and len(text) < _CHITCHAT_MAX_LEN and not _MATH_HINT_RE.search(text):
+        return _LIGHT_MODEL
+    return default
+
 
 class MathAgent:
     def __init__(
         self,
         use_local: bool = _USE_LOCAL,
-        model: str = None,
+        model: Optional[str] = None,
         guide_mode: bool = False,
         max_iterations: int = _DEFAULT_MAX_ITERATIONS,
-    ):
+    ) -> None:
         self.use_local = use_local
         self.guide_mode = guide_mode
         self.max_iterations = max_iterations
@@ -149,7 +174,7 @@ class MathAgent:
     def supports_vision(self) -> bool:
         return self.model in VISION_MODELS
 
-    def close(self):
+    def close(self) -> None:
         try:
             self.client.close()
         except Exception:
@@ -170,19 +195,50 @@ class MathAgent:
                     break
         return [m for turn in turns for m in turn]
 
-    def solve(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None) -> str:
+    @staticmethod
+    def _compress_history(history: list) -> list:
+        """长对话压缩：保留最近轮次原文，更早的轮次摘要成一条 system 消息。
+
+        直接丢弃早期轮次会让模型忘记前文；全部保留则最终撑爆 context window。
+        摘要方案在两者之间取平衡，且不需要额外一次 LLM 调用。
+        """
+        recent = MathAgent._trim_history(history)
+        dropped = history[: len(history) - len(recent)]
+        if not dropped:
+            return recent
+        lines = []
+        for m in dropped:
+            content = m.get("content")
+            if not isinstance(content, str) or not content.strip():
+                continue
+            prefix = "用户" if m.get("role") == "user" else "助教"
+            snippet = content.strip().replace("\n", " ")[:60]
+            lines.append(f"{prefix}：{snippet}")
+        if not lines:
+            return recent
+        summary = "（以下是早前对话的摘要，供参考，不必逐条回应）\n" + "\n".join(lines[-40:])
+        return [{"role": "system", "content": summary[:2000]}] + recent
+
+    def solve(
+        self,
+        problem: str,
+        history: Optional[list] = None,
+        on_tool_call: Optional[Callable] = None,
+        image_bytes: Optional[bytes] = None,
+    ) -> Union[str, Iterator]:
         """运行完整的 agentic loop，支持多轮对话历史。
 
         on_tool_call(name, args, result): 每次工具调用后回调，result=None 表示调用前。
+        返回值：普通模式返回 str；vision/guide 模式返回流式响应对象。
         """
         system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
         messages = [{"role": "system", "content": system}]
         if history:
-            messages.extend(self._trim_history(history))
+            messages.extend(self._compress_history(history))
 
         # vision mode: compress image (reduce tokens) + single direct call
         if image_bytes and self.supports_vision:
-            image_bytes = _compress_image(image_bytes, max_size=768)
+            image_bytes = compress_image(image_bytes, max_size=768, quality=80)
             b64 = base64.b64encode(image_bytes).decode()
             _default_prompt = "请解答图片中的数学题"
             if problem and problem.strip() != _default_prompt:
@@ -306,7 +362,13 @@ class MathAgent:
         except Exception:
             return "⚠️ 解题超时，请尝试把题目拆分成更小的步骤发送。"
 
-    def solve_stream(self, problem: str, history: list = None, on_tool_call=None, image_bytes: bytes = None):
+    def solve_stream(
+        self,
+        problem: str,
+        history: Optional[list] = None,
+        on_tool_call: Optional[Callable] = None,
+        image_bytes: Optional[bytes] = None,
+    ) -> Iterator:
         """Run the full agentic loop, returning an iterable stream object (real streaming for vision/guide)."""
         result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
         if isinstance(result, str):
@@ -314,25 +376,7 @@ class MathAgent:
         return result
 
 
-def _compress_image(image_bytes: bytes, max_size: int = 768) -> bytes:
-    """Compress image to reduce token count."""
-    try:
-        from PIL import Image
-        img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        w, h = img.size
-        if max(w, h) > max_size:
-            r = max_size / max(w, h)
-            img = img.resize((int(w * r), int(h * r)), Image.LANCZOS)
-        buf = BytesIO()
-        img.save(buf, format="JPEG", quality=80)
-        return buf.getvalue()
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("图片压缩失败，使用原图：%s", e)
-        return image_bytes
-
-
-def _fake_stream(text: str, chunk_size: int = 10):
+def _fake_stream(text: str, chunk_size: int = 10) -> Iterator:
     """Yield text in fixed-size chunks that mimic the OpenAI streaming response format."""
     class _Delta:
         def __init__(self, c): self.content = c
