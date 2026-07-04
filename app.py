@@ -315,11 +315,11 @@ try {
             /* 侧边栏：自身不加 padding，内层 div 顶部留出汉堡按钮空间 */
             '[data-testid="stSidebar"]{padding-top:0!important}' +
             '[data-testid="stSidebar"]>div:first-child{padding:52px 10px 12px!important}' +
-            /* 侧边栏各区块间距压缩 */
-            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:2px!important}' +
+            /* 侧边栏各区块间距 */
+            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:6px!important}' +
             '[data-testid="stSidebar"] [data-testid="element-container"]{margin-bottom:0!important}' +
-            /* divider 最小化 */
-            '[data-testid="stSidebar"] hr{margin:4px 0!important;border-width:0.5px!important}' +
+            /* divider 收紧但保留存在感 */
+            '[data-testid="stSidebar"] hr{margin:6px 0!important;border-width:0.5px!important}' +
             /* 邮件省略 */
             '[data-testid="stSidebar"] p{' +
                 'font-size:0.78rem!important;overflow:hidden!important;' +
@@ -334,12 +334,11 @@ try {
             '[data-testid="stSidebar"] details summary,' +
             '[data-testid="stSidebar"] [data-testid="stExpander"] summary{' +
                 'font-size:0.82rem!important;padding:6px 10px!important;min-height:34px!important}' +
-            '[data-testid="stSidebar"] [data-testid="stExpander"]{margin:0 0 2px!important}' +
-            /* 隐藏列块的 +- 工具栏按钮 */
-            '[data-testid="stSidebar"] [data-testid="stElementToolbar"],' +
-            '[data-testid="stSidebar"] [data-testid="stToolbar"],' +
-            '[data-testid="stSidebar"] [class*="ToolbarActions"],' +
-            '[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] button{display:none!important}' +
+            '[data-testid="stSidebar"] [data-testid="stExpander"]{margin:0 0 4px!important}' +
+            /* 隐藏列块工具栏（精准定位，不碰业务按钮） */
+            '[data-testid="stSidebar"] [data-testid="stElementToolbar"]{display:none!important}' +
+            '[data-testid="stSidebar"] [data-testid="stToolbar"]{display:none!important}' +
+            '[data-testid="stSidebar"] [class*="ToolbarActions"]{display:none!important}' +
             /* 课程 pills */
             '[data-testid="stSidebar"] [data-testid="stPills"] button{display:inline-flex!important;font-size:0.72rem!important;padding:2px 8px!important}' +
             /* 主页：换一批按钮不换行 */
