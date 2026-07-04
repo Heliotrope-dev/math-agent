@@ -362,7 +362,7 @@ class MathAgent:
         return result
 
 
-def _fake_stream(text: str, chunk_size: int = 4) -> Iterator:
+def _fake_stream(text: str, chunk_size: int = 2) -> Iterator:
     """Yield text in fixed-size chunks with delay to produce visible streaming effect."""
     import time
 
@@ -375,4 +375,4 @@ def _fake_stream(text: str, chunk_size: int = 4) -> Iterator:
 
     for i in range(0, len(text), chunk_size):
         yield _Chunk(text[i:i + chunk_size])
-        time.sleep(0.012)
+        time.sleep(0.025)
