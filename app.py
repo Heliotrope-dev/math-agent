@@ -102,7 +102,7 @@ def _show_login_page():
                     except Exception as _e:
                         st.error(f"注册失败：{_e}")
 
-st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide")
+st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide", initial_sidebar_state="expanded")
 
 # ── 启动环境校验：至少配置一个云端 API Key，否则友好提示而非运行时崩溃 ────────
 if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("SILICONFLOW_API_KEY")):
@@ -305,10 +305,10 @@ try {
     var s = doc.createElement('style');
     s.id = '_mobile_css';
     s.textContent =
-        '[data-testid="stSidebarCollapseButton"]{display:none!important}' +
-        '[data-testid="collapsedControl"]{display:none!important}' +
         'button[data-testid="stBaseButton-headerNoPadding"]{display:none!important}' +
         '@media(max-width:768px){' +
+            '[data-testid="stSidebarCollapseButton"]{display:none!important}' +
+            '[data-testid="collapsedControl"]{display:none!important}' +
             /* 主内容顶部留白，防止汉堡按钮遮住内容 */
             '[data-testid="stAppViewContainer"],[data-testid="stMain"]{padding-top:56px!important}' +
             '.block-container{padding-top:8px!important}' +
