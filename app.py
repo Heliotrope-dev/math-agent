@@ -294,6 +294,44 @@ try {
 </script>
 """, height=1)
 
+# ── 手机端 CSS 强制注入父页面 head（绕过 Streamlit 组件 CSS 作用域）──────────
+_cv1.html("""
+<script>
+(function() {
+try {
+    var doc = window.parent.document;
+    if (doc.getElementById('_mobile_css')) return;
+    var s = doc.createElement('style');
+    s.id = '_mobile_css';
+    s.textContent =
+        /* 隐藏 Streamlit 原生侧边栏折叠/展开按钮 */
+        '[data-testid="stSidebarCollapseButton"]{display:none!important}' +
+        '[data-testid="collapsedControl"]{display:none!important}' +
+        'button[data-testid="stBaseButton-headerNoPadding"]{display:none!important}' +
+        /* 只在手机端生效 */
+        '@media(max-width:768px){' +
+            /* 侧边栏按钮紧凑 */
+            '[data-testid="stSidebar"] .stButton>button{' +
+                'min-height:36px!important;height:36px!important;' +
+                'font-size:0.84rem!important;padding:0 12px!important;' +
+                'border-radius:8px!important;margin-bottom:4px!important}' +
+            /* expander header 缩小 */
+            '[data-testid="stSidebar"] details summary,' +
+            '[data-testid="stSidebar"] [data-testid="stExpander"] summary{' +
+                'font-size:0.84rem!important;padding:8px 10px!important;min-height:36px!important}' +
+            /* expander 卡片间距 */
+            '[data-testid="stSidebar"] [data-testid="stExpander"]{margin-bottom:6px!important}' +
+            /* 侧边栏整体内边距 */
+            '[data-testid="stSidebar"]>div:first-child{padding:8px 10px!important}' +
+            /* 侧边栏顶部留给汉堡按钮 */
+            '[data-testid="stSidebar"]{padding-top:52px!important}' +
+        '}';
+    doc.head.appendChild(s);
+} catch(e) {}
+})();
+</script>
+""", height=1)
+
 # ── URL 参数持久化（7 天免登录）──────────────────────────────────────────────
 _stored_token = st.query_params.get("_auth", "") or ""
 if _stored_token and not st.session_state.get("logged_in"):
