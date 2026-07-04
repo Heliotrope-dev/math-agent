@@ -1026,8 +1026,8 @@ if st.session_state.get("show_file"):
         st.session_state.show_file = False
         st.rerun()
 
-# ── 麦克风面板（录完识别 → 放入预览框，用户确认后才发送）──────────────────
-if st.session_state.get("show_mic") and not st.session_state.get("_voice_preview"):
+# ── 麦克风面板（录完直接识别发送）───────────────────────────────────────────
+if st.session_state.get("show_mic"):
     _av = st.audio_input("🎙️ 说出数学题（支持中英文）", key="mic_input",
                          label_visibility="visible")
     if _av:
@@ -1035,30 +1035,10 @@ if st.session_state.get("show_mic") and not st.session_state.get("_voice_preview
             _vt, _vt_err = transcribe_audio(_av)
         st.session_state.show_mic = False
         if _vt:
-            st.session_state["_voice_preview"] = _vt   # 进预览，不直接发
+            st.session_state["_direct_input"] = _vt
         else:
             st.error(f"语音识别失败：{_vt_err}" if _vt_err else "未识别到内容，请重试（录音超过1秒）")
         st.rerun()
-
-# ── 语音识别结果预览（可编辑，确认后发送）────────────────────────────────────
-_vp = st.session_state.get("_voice_preview")
-if _vp is not None:
-    _edited = st.text_area(
-        "🎙️ 识别结果 — 可编辑，确认无误后发送",
-        value=_vp, key="_voice_edit", height=80,
-    )
-    _vc1, _vc2 = st.columns(2)
-    with _vc1:
-        if st.button("✓ 确认发送", type="primary", use_container_width=True, key="voice_confirm"):
-            st.session_state.pop("_voice_preview", None)
-            if _edited.strip():
-                st.session_state["_direct_input"] = _edited.strip()
-            st.rerun()
-    with _vc2:
-        if st.button("↩ 重新录音", use_container_width=True, key="voice_retry"):
-            st.session_state.pop("_voice_preview", None)
-            st.session_state["show_mic"] = True
-            st.rerun()
 
 # ── 待发附件预览条（紧凑横条）────────────────────────────────────────────────
 _patt = st.session_state.get("pending_attachment")
@@ -1101,11 +1081,10 @@ _tb_mic, _tb_model, _tb_plus = st.columns([1, 8, 1], gap="small")
 
 with _tb_mic:
     st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
-    _mic_active = st.session_state.get("show_mic") or st.session_state.get("_voice_preview") is not None
+    _mic_active = st.session_state.get("show_mic")
     if st.button("✕" if _mic_active else "🎙️", key="tb_mic"):
         if _mic_active:
             st.session_state.show_mic = False
-            st.session_state.pop("_voice_preview", None)
         else:
             st.session_state.show_mic = True
         st.session_state.show_plus = False
