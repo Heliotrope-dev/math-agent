@@ -314,7 +314,7 @@ try {
             '.block-container{padding-top:8px!important}' +
             /* 侧边栏：X 按钮绝对定位不占流，inner div 只留正常内边距 */
             '[data-testid="stSidebar"]{padding-top:0!important}' +
-            '[data-testid="stSidebar"]>div:first-child{padding:8px 10px 12px!important}' +
+            '[data-testid="stSidebar"]>div:first-child{padding:48px 10px 12px!important}' +
             /* 侧边栏各区块间距 */
             '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:6px!important}' +
             '[data-testid="stSidebar"] [data-testid="element-container"]{margin-bottom:0!important}' +
