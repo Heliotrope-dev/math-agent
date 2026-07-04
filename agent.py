@@ -362,8 +362,10 @@ class MathAgent:
         return result
 
 
-def _fake_stream(text: str, chunk_size: int = 10) -> Iterator:
-    """Yield text in fixed-size chunks that mimic the OpenAI streaming response format."""
+def _fake_stream(text: str, chunk_size: int = 4) -> Iterator:
+    """Yield text in fixed-size chunks with delay to produce visible streaming effect."""
+    import time
+
     class _Delta:
         def __init__(self, c): self.content = c
     class _Choice:
@@ -373,3 +375,4 @@ def _fake_stream(text: str, chunk_size: int = 10) -> Iterator:
 
     for i in range(0, len(text), chunk_size):
         yield _Chunk(text[i:i + chunk_size])
+        time.sleep(0.012)
