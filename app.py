@@ -42,7 +42,6 @@ from components.ui_helpers import _BASE_CSS, _DARK_CSS
 def _show_login_page():
     st.markdown("""
     <div class="login-logo">
-        <div class="login-logo-icon">🧮</div>
         <div class="login-logo-title">Math Agent</div>
         <div class="login-logo-sub">AI 数学助教 · 登录后开始使用</div>
     </div>
