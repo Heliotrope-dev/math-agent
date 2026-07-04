@@ -314,14 +314,17 @@ try {
             '.block-container{padding-top:8px!important}' +
             /* 侧边栏：X 按钮绝对定位不占流，inner div 只留正常内边距 */
             '[data-testid="stSidebar"]{padding-top:0!important}' +
-            '[data-testid="stSidebar"]>div:first-child{padding:48px 10px 12px!important}' +
-            /* 侧边栏各区块间距 */
-            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:6px!important}' +
-            '[data-testid="stSidebar"] [data-testid="element-container"]{margin-bottom:0!important}' +
-            /* divider 收紧但保留存在感 */
+            '[data-testid="stSidebar"]>div:first-child{padding:6px 12px 12px!important}' +
+            /* 手机 email 压到 X 按钮下方 */
+            '[data-testid="stSidebar"] [data-testid="stMarkdown"]:first-of-type p{margin-top:48px!important}' +
+            /* expander 内容不裁剪，防止 caption 文字上缘被截断 */
+            '[data-testid="stSidebar"] details>div{overflow:visible!important;padding-top:4px!important}' +
+            /* 区块间距宽松一点 */
+            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:8px!important}' +
+            /* divider */
             '[data-testid="stSidebar"] hr{margin:6px 0!important;border-width:0.5px!important}' +
-            /* 侧栏文字自然换行，不截断 */
-            '[data-testid="stSidebar"] p{font-size:0.82rem!important;margin:0 0 6px!important}' +
+            /* 侧栏文字 */
+            '[data-testid="stSidebar"] p{font-size:0.84rem!important;margin:0 0 4px!important;line-height:1.5!important}' +
             /* 按钮：高度自适应，字号小一点防止课程名称溢出 */
             '[data-testid="stSidebar"] .stButton>button{' +
                 'height:auto!important;min-height:36px!important;' +
