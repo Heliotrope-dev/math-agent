@@ -607,7 +607,8 @@ try{{
     var CSS =
         ':root{{--background-color:#0D0D14!important;--secondary-background-color:#16162A!important;--text-color:#DEE1F5!important}}' +
         'body,html,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"]{{background:#0D0D14!important}}' +
-        '[data-testid="stSidebar"] *,[data-testid="stSidebar"] [data-testid="stSidebarCollapsedButton"] *{{color:#DEE1F5!important;font-size:15px!important;white-space:normal!important;word-break:break-word!important}}' +
+        '[data-testid="stSidebar"] *,[data-testid="stSidebar"] [data-testid="stSidebarCollapsedButton"] *{{color:#DEE1F5!important}}' +
+        '[data-testid="stSidebar"] .stButton button{{font-size:0.78rem!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}}' +
         '[data-testid="stSidebarCollapsedButton"] svg,[data-testid="stSidebarCollapsedButton"] path{{fill:#DEE1F5!important;color:#DEE1F5!important}}' +
         'button[data-testid="stSidebarCollapsedButton"]{{background:transparent!important}}' +
         '[data-testid="stSidebarCollapsedButton"]:hover{{background:rgba(255,255,255,0.1)!important}}' +

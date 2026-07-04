@@ -240,6 +240,8 @@ div[data-testid="stPills"] span { color: inherit !important; background: transpa
 
 pre, code { background: #F0F1F3 !important; border: 1px solid var(--border) !important; border-radius: 8px !important; font-size: 0.82rem !important; color: #333 !important; }
 hr { border-color: var(--border) !important; }
+[data-testid="stSidebar"] hr { margin: 4px 0 !important; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 6px !important; }
 
 .katex-display { margin: 0.8em 0 !important; overflow-x: auto !important; overflow-y: hidden !important; }
 .katex { font-size: 1.05em !important; }
