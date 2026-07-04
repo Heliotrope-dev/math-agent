@@ -312,9 +312,9 @@ try {
             /* 主内容顶部留白，防止汉堡按钮遮住内容 */
             '[data-testid="stAppViewContainer"],[data-testid="stMain"]{padding-top:56px!important}' +
             '.block-container{padding-top:8px!important}' +
-            /* 侧边栏：自身不加 padding，内层 div 顶部留出汉堡按钮空间 */
+            /* 侧边栏：X 按钮绝对定位不占流，inner div 只留正常内边距 */
             '[data-testid="stSidebar"]{padding-top:0!important}' +
-            '[data-testid="stSidebar"]>div:first-child{padding:52px 10px 12px!important}' +
+            '[data-testid="stSidebar"]>div:first-child{padding:8px 10px 12px!important}' +
             /* 侧边栏各区块间距 */
             '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:6px!important}' +
             '[data-testid="stSidebar"] [data-testid="element-container"]{margin-bottom:0!important}' +
@@ -335,10 +335,10 @@ try {
             '[data-testid="stSidebar"] [data-testid="stExpander"] summary{' +
                 'font-size:0.82rem!important;padding:6px 10px!important;min-height:34px!important}' +
             '[data-testid="stSidebar"] [data-testid="stExpander"]{margin:0 0 4px!important}' +
-            /* 隐藏列块工具栏（精准定位，不碰业务按钮） */
+            /* 隐藏列块 +- 控制行：只要不是 [data-testid="column"] 的直接子 div 都隐藏 */
+            '[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]>div:not([data-testid="column"]){display:none!important}' +
             '[data-testid="stSidebar"] [data-testid="stElementToolbar"]{display:none!important}' +
             '[data-testid="stSidebar"] [data-testid="stToolbar"]{display:none!important}' +
-            '[data-testid="stSidebar"] [class*="ToolbarActions"]{display:none!important}' +
             /* 课程 pills */
             '[data-testid="stSidebar"] [data-testid="stPills"] button{display:inline-flex!important;font-size:0.72rem!important;padding:2px 8px!important}' +
             /* 主页：换一批按钮不换行 */
