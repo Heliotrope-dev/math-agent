@@ -9,8 +9,11 @@ Two modes:
 import os
 import json
 import base64
+import logging
 from io import BytesIO
 import httpx
+
+_log = logging.getLogger(__name__)
 from openai import OpenAI
 from tools import TOOL_DEFINITIONS, execute_tool
 
@@ -276,15 +279,13 @@ class MathAgent:
                     except Exception:
                         args = {}
 
-                print(f"🔧 调用工具：{name}")
-                print(f"   参数：{args}")
+                _log.debug("tool call: %s args=%s", name, args)
 
                 if on_tool_call:
                     on_tool_call(name, args, None)
 
                 result = execute_tool(name, args)
-                preview = result[:120] + ("…" if len(result) > 120 else "")
-                print(f"   结果：{preview}\n")
+                _log.debug("tool result: %s", result[:120])
 
                 if on_tool_call:
                     on_tool_call(name, args, result)

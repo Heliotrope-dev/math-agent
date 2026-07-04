@@ -106,9 +106,11 @@ def _hash_pw(pw: str) -> str:
 def _check_pw(pw: str, stored: str) -> bool:
     try:
         salt, h = stored.split("$", 1)
-        return hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hex() == h
+        computed = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hex()
+        return _secrets.compare_digest(computed, h)
     except Exception:
-        return hashlib.sha256(pw.encode()).hexdigest() == stored
+        computed = hashlib.sha256(pw.encode()).hexdigest()
+        return _secrets.compare_digest(computed, stored)
 
 
 def _user_exists(email: str) -> bool:
@@ -125,12 +127,13 @@ def _check_user(email: str, pw: str) -> bool:
     # 新格式 PBKDF2
     try:
         salt, h = stored.split("$", 1)
-        if hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hex() == h:
+        computed = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hex()
+        if _secrets.compare_digest(computed, h):
             return True
     except Exception:
         pass
     # 旧格式 SHA256 无盐 — 验证通过后自动升级
-    if hashlib.sha256(pw.encode()).hexdigest() == stored:
+    if _secrets.compare_digest(hashlib.sha256(pw.encode()).hexdigest(), stored):
         new_salt = os.urandom(16).hex()
         new_hash = hashlib.pbkdf2_hmac("sha256", pw.encode(), new_salt.encode(), 100000).hex()
         _sb_patch("users", {"password_hash": f"{new_salt}${new_hash}"}, {"email": f"eq.{email}"})
