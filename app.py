@@ -304,27 +304,36 @@ try {
     var s = doc.createElement('style');
     s.id = '_mobile_css';
     s.textContent =
-        /* 隐藏 Streamlit 原生侧边栏折叠/展开按钮 */
         '[data-testid="stSidebarCollapseButton"]{display:none!important}' +
         '[data-testid="collapsedControl"]{display:none!important}' +
         'button[data-testid="stBaseButton-headerNoPadding"]{display:none!important}' +
-        /* 只在手机端生效 */
         '@media(max-width:768px){' +
-            /* 侧边栏按钮紧凑 */
+            /* 主内容顶部留白，防止汉堡按钮遮住内容 */
+            '[data-testid="stAppViewContainer"],[data-testid="stMain"]{padding-top:56px!important}' +
+            '.block-container{padding-top:8px!important}' +
+            /* 侧边栏顶部留给汉堡按钮，内边距紧凑 */
+            '[data-testid="stSidebar"]{padding-top:56px!important}' +
+            '[data-testid="stSidebar"]>div:first-child{padding:0 10px 12px!important}' +
+            /* 侧边栏各区块间距压缩 */
+            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:4px!important}' +
+            '[data-testid="stSidebar"] [data-testid="element-container"]{margin-bottom:0!important}' +
+            /* 邮件不截断 */
+            '[data-testid="stSidebar"] p{' +
+                'font-size:0.78rem!important;overflow:hidden!important;' +
+                'text-overflow:ellipsis!important;white-space:nowrap!important;' +
+                'margin:0 0 6px!important}' +
+            /* 按钮紧凑 */
             '[data-testid="stSidebar"] .stButton>button{' +
-                'min-height:36px!important;height:36px!important;' +
-                'font-size:0.84rem!important;padding:0 12px!important;' +
-                'border-radius:8px!important;margin-bottom:4px!important}' +
-            /* expander header 缩小 */
+                'min-height:34px!important;height:34px!important;' +
+                'font-size:0.82rem!important;padding:0 10px!important;' +
+                'border-radius:8px!important;margin:0!important}' +
+            /* expander header */
             '[data-testid="stSidebar"] details summary,' +
             '[data-testid="stSidebar"] [data-testid="stExpander"] summary{' +
-                'font-size:0.84rem!important;padding:8px 10px!important;min-height:36px!important}' +
-            /* expander 卡片间距 */
-            '[data-testid="stSidebar"] [data-testid="stExpander"]{margin-bottom:6px!important}' +
-            /* 侧边栏整体内边距 */
-            '[data-testid="stSidebar"]>div:first-child{padding:8px 10px!important}' +
-            /* 侧边栏顶部留给汉堡按钮 */
-            '[data-testid="stSidebar"]{padding-top:52px!important}' +
+                'font-size:0.82rem!important;padding:6px 10px!important;min-height:34px!important}' +
+            '[data-testid="stSidebar"] [data-testid="stExpander"]{margin:0 0 4px!important}' +
+            /* 课程 pills 在侧边栏显示正常 */
+            '[data-testid="stSidebar"] [data-testid="stPills"] button{font-size:0.72rem!important;padding:2px 8px!important}' +
         '}';
     doc.head.appendChild(s);
 } catch(e) {}
