@@ -336,7 +336,7 @@ try {
                 'font-size:0.82rem!important;padding:6px 10px!important;min-height:34px!important}' +
             '[data-testid="stSidebar"] [data-testid="stExpander"]{margin:0 0 4px!important}' +
             /* 隐藏列块 +- 控制行：只要不是 [data-testid="column"] 的直接子 div 都隐藏 */
-            '[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]>div:not([data-testid="column"]){display:none!important}' +
+            '[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]>div:not([data-testid="stColumn"]){display:none!important}' +
             '[data-testid="stSidebar"] [data-testid="stElementToolbar"]{display:none!important}' +
             '[data-testid="stSidebar"] [data-testid="stToolbar"]{display:none!important}' +
             /* 课程 pills */
