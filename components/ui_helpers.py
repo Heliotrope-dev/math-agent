@@ -304,6 +304,11 @@ button[kind="secondary"][data-testid*="wb_add"] {
 .login-logo-sub { font-size: 0.85rem; color: var(--text-muted) !important; }
 
 @media (max-width: 768px) {
+    /* 隐藏 Streamlit 原生侧边栏折叠按钮 */
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"],
+    button[kind="header"] { display: none !important; }
+
     [data-testid="stSidebar"] {
         display: block !important; position: fixed !important;
         top: 0 !important; left: 0 !important;
@@ -311,8 +316,24 @@ button[kind="secondary"][data-testid*="wb_add"] {
         z-index: 9998 !important; overflow-y: auto !important;
         transform: translateX(-110%) !important;
         transition: transform 0.26s cubic-bezier(.4,0,.2,1) !important;
+        padding-top: 56px !important;
     }
-    [data-testid="stSidebar"].ma-sb-open { transform: translateX(0) !important; box-shadow: 6px 0 32px rgba(0,0,0,0.2) !important; }
+    [data-testid="stSidebar"].ma-sb-open { transform: translateX(0) !important; box-shadow: 6px 0 32px rgba(0,0,0,0.25) !important; }
+
+    /* 侧边栏内部紧凑化 */
+    [data-testid="stSidebar"] .stButton button {
+        font-size: 0.82rem !important; padding: 6px 12px !important;
+        min-height: 34px !important; height: auto !important; border-radius: 8px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        margin-bottom: 6px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        font-size: 0.84rem !important; padding: 8px 12px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 6px !important; }
+    [data-testid="stSidebar"] p { font-size: 0.8rem !important; margin: 0 !important; }
+
     #ma-hamburger {
         display: flex !important; position: fixed !important;
         top: 10px !important; left: 10px !important; z-index: 9999 !important;
@@ -324,16 +345,17 @@ button[kind="secondary"][data-testid*="wb_add"] {
     }
     #ma-backdrop {
         display: none; position: fixed !important; inset: 0 !important;
-        background: rgba(0,0,0,0.35) !important; z-index: 9997 !important; -webkit-tap-highlight-color: transparent !important;
+        background: rgba(0,0,0,0.45) !important; z-index: 9997 !important; -webkit-tap-highlight-color: transparent !important;
     }
     #ma-backdrop.active { display: block !important; }
+
     [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 4px !important; }
     [data-testid="stColumn"] { min-width: 0 !important; flex-shrink: 1 !important; overflow: hidden !important; }
     .bubble-user { max-width: 80vw !important; font-size: 0.9rem !important; }
     .bubble-asst-wrap { font-size: 0.9rem !important; }
     .greeting-main { font-size: 1.4rem !important; }
-    .toolbar-model [data-testid="stSelectbox"] > div > div { font-size: 0.68rem !important; padding: 2px 6px !important; min-height: 32px !important; }
-    .toolbar-btn button { width: 36px !important; height: 36px !important; font-size: 1.1rem !important; }
+    .toolbar-model [data-testid="stSelectbox"] > div > div { font-size: 0.72rem !important; padding: 2px 8px !important; min-height: 32px !important; max-height: 32px !important; }
+    .toolbar-btn button { width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; font-size: 1rem !important; }
     .av { width: 28px !important; height: 28px !important; font-size: 0.9rem !important; }
     .app-header-title { font-size: 0.9rem !important; }
     [data-testid="stChatInputTextArea"] { font-size: 0.9rem !important; }
