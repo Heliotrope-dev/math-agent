@@ -575,7 +575,21 @@ try{{
     var doc  = window.parent.document;
     var SID  = '_dm_override_css';
     var el   = doc.getElementById(SID);
-    if (!dark) {{ if (el) el.remove(); return; }}
+    if (!dark) {{
+        if (el) el.remove();
+        if (doc._dmObs) {{ doc._dmObs.disconnect(); doc._dmObs = null; }}
+        var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
+        if (inp) {{
+            ['background','border','border-radius','box-shadow'].forEach(function(p){{ inp.style.removeProperty(p); }});
+            inp.querySelectorAll('div').forEach(function(d){{ d.style.removeProperty('background'); }});
+            inp.querySelectorAll('textarea,input').forEach(function(t){{
+                ['color','background','-webkit-text-fill-color','caret-color'].forEach(function(p){{ t.style.removeProperty(p); }});
+            }});
+        }}
+        var bot = doc.querySelector('[data-testid="stBottom"]');
+        if (bot) bot.style.removeProperty('background');
+        return;
+    }}
     var s = el || doc.createElement('style');
     if (!el) {{ s.id = SID; doc.head.appendChild(s); }}
     var CSS =
