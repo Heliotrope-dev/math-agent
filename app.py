@@ -585,11 +585,34 @@ try{{
         '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}' +
         '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){{background:#0D0D14!important}}' +
         '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
-        '[data-testid="stChatInput"]{{background:#0D0D14!important}}' +
+        '[data-testid="stChatInputContainer"]>div,[data-testid="stChatInputContainer"]>div>div{{background:#16162A!important}}' +
+        '[data-testid="stChatInput"]{{background:#16162A!important}}' +
         '[data-testid="stChatInputTextArea"]{{background:transparent!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important}}' +
         '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
         '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}';
-    function apply() {{ s.textContent = CSS; }}
+    function applyInline() {{
+        var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
+        if (inp) {{
+            inp.style.setProperty('background','#16162A','important');
+            inp.style.setProperty('border','1.5px solid #282845','important');
+            inp.style.setProperty('border-radius','24px','important');
+            inp.style.setProperty('box-shadow','none','important');
+            inp.querySelectorAll('*').forEach(function(el) {{
+                var tag = el.tagName.toLowerCase();
+                if (tag==='textarea'||tag==='input') {{
+                    el.style.setProperty('color','#DEE1F5','important');
+                    el.style.setProperty('background','transparent','important');
+                    el.style.setProperty('-webkit-text-fill-color','#DEE1F5','important');
+                    el.style.setProperty('caret-color','#DEE1F5','important');
+                }} else if (tag!=='button'&&tag!=='svg'&&tag!=='path') {{
+                    el.style.setProperty('background','#16162A','important');
+                }}
+            }});
+        }}
+        var bot = doc.querySelector('[data-testid="stBottom"]');
+        if (bot) bot.style.setProperty('background','#0D0D14','important');
+    }}
+    function apply() {{ s.textContent = CSS; applyInline(); }}
     apply();
     if (!doc._dmObs) {{
         doc._dmObs = new MutationObserver(function() {{
