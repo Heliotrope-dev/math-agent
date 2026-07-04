@@ -320,20 +320,18 @@ try {
             '[data-testid="stSidebar"] [data-testid="element-container"]{margin-bottom:0!important}' +
             /* divider 收紧但保留存在感 */
             '[data-testid="stSidebar"] hr{margin:6px 0!important;border-width:0.5px!important}' +
-            /* 邮件省略 */
-            '[data-testid="stSidebar"] p{' +
-                'font-size:0.78rem!important;overflow:hidden!important;' +
-                'text-overflow:ellipsis!important;white-space:nowrap!important;' +
-                'margin:0 0 4px!important}' +
-            /* 按钮紧凑 */
+            /* 侧栏文字自然换行，不截断 */
+            '[data-testid="stSidebar"] p{font-size:0.82rem!important;margin:0 0 6px!important}' +
+            /* 按钮：高度自适应，字号小一点防止课程名称溢出 */
             '[data-testid="stSidebar"] .stButton>button{' +
-                'min-height:34px!important;height:34px!important;' +
-                'font-size:0.82rem!important;padding:0 10px!important;' +
-                'border-radius:8px!important;margin:0!important}' +
+                'height:auto!important;min-height:36px!important;' +
+                'font-size:0.78rem!important;padding:6px 10px!important;' +
+                'border-radius:8px!important;margin:0!important;' +
+                'white-space:normal!important;line-height:1.3!important}' +
             /* expander header */
             '[data-testid="stSidebar"] details summary,' +
             '[data-testid="stSidebar"] [data-testid="stExpander"] summary{' +
-                'font-size:0.82rem!important;padding:6px 10px!important;min-height:34px!important}' +
+                'font-size:0.84rem!important;padding:8px 10px!important;min-height:36px!important}' +
             '[data-testid="stSidebar"] [data-testid="stExpander"]{margin:0 0 4px!important}' +
             /* 隐藏列块 +- 控制行：只要不是 [data-testid="column"] 的直接子 div 都隐藏 */
             '[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]>div:not([data-testid="stColumn"]){display:none!important}' +
@@ -608,7 +606,7 @@ try{{
         ':root{{--background-color:#0D0D14!important;--secondary-background-color:#16162A!important;--text-color:#DEE1F5!important}}' +
         'body,html,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"]{{background:#0D0D14!important}}' +
         '[data-testid="stSidebar"] *,[data-testid="stSidebar"] [data-testid="stSidebarCollapsedButton"] *{{color:#DEE1F5!important}}' +
-        '[data-testid="stSidebar"] .stButton button{{font-size:0.78rem!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}}' +
+        '[data-testid="stSidebar"] .stButton button{{font-size:0.78rem!important;white-space:normal!important;line-height:1.3!important}}' +
         '[data-testid="stSidebarCollapsedButton"] svg,[data-testid="stSidebarCollapsedButton"] path{{fill:#DEE1F5!important;color:#DEE1F5!important}}' +
         'button[data-testid="stSidebarCollapsedButton"]{{background:transparent!important}}' +
         '[data-testid="stSidebarCollapsedButton"]:hover{{background:rgba(255,255,255,0.1)!important}}' +
