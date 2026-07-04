@@ -312,17 +312,19 @@ try {
             /* 主内容顶部留白，防止汉堡按钮遮住内容 */
             '[data-testid="stAppViewContainer"],[data-testid="stMain"]{padding-top:56px!important}' +
             '.block-container{padding-top:8px!important}' +
-            /* 侧边栏顶部留给汉堡按钮，内边距紧凑 */
-            '[data-testid="stSidebar"]{padding-top:56px!important}' +
-            '[data-testid="stSidebar"]>div:first-child{padding:0 10px 12px!important}' +
+            /* 侧边栏：自身不加 padding，内层 div 顶部留出汉堡按钮空间 */
+            '[data-testid="stSidebar"]{padding-top:0!important}' +
+            '[data-testid="stSidebar"]>div:first-child{padding:52px 10px 12px!important}' +
             /* 侧边栏各区块间距压缩 */
-            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:4px!important}' +
+            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:2px!important}' +
             '[data-testid="stSidebar"] [data-testid="element-container"]{margin-bottom:0!important}' +
-            /* 邮件不截断 */
+            /* divider 最小化 */
+            '[data-testid="stSidebar"] hr{margin:4px 0!important;border-width:0.5px!important}' +
+            /* 邮件省略 */
             '[data-testid="stSidebar"] p{' +
                 'font-size:0.78rem!important;overflow:hidden!important;' +
                 'text-overflow:ellipsis!important;white-space:nowrap!important;' +
-                'margin:0 0 6px!important}' +
+                'margin:0 0 4px!important}' +
             /* 按钮紧凑 */
             '[data-testid="stSidebar"] .stButton>button{' +
                 'min-height:34px!important;height:34px!important;' +
@@ -332,9 +334,18 @@ try {
             '[data-testid="stSidebar"] details summary,' +
             '[data-testid="stSidebar"] [data-testid="stExpander"] summary{' +
                 'font-size:0.82rem!important;padding:6px 10px!important;min-height:34px!important}' +
-            '[data-testid="stSidebar"] [data-testid="stExpander"]{margin:0 0 4px!important}' +
-            /* 课程 pills 在侧边栏显示正常 */
-            '[data-testid="stSidebar"] [data-testid="stPills"] button{font-size:0.72rem!important;padding:2px 8px!important}' +
+            '[data-testid="stSidebar"] [data-testid="stExpander"]{margin:0 0 2px!important}' +
+            /* 隐藏列块的 +- 工具栏按钮 */
+            '[data-testid="stSidebar"] [data-testid="stElementToolbar"],' +
+            '[data-testid="stSidebar"] [data-testid="stToolbar"],' +
+            '[data-testid="stSidebar"] [class*="ToolbarActions"],' +
+            '[data-testid="stSidebar"] [data-testid="stHorizontalBlock"] button{display:none!important}' +
+            /* 课程 pills */
+            '[data-testid="stSidebar"] [data-testid="stPills"] button{display:inline-flex!important;font-size:0.72rem!important;padding:2px 8px!important}' +
+            /* 主页：换一批按钮不换行 */
+            '[data-testid="stMain"] .stButton>button{white-space:nowrap!important}' +
+            /* 主页：区块间距收紧 */
+            '[data-testid="stMain"] [data-testid="stVerticalBlock"]{gap:0.6rem!important}' +
         '}';
     doc.head.appendChild(s);
 } catch(e) {}
@@ -721,7 +732,7 @@ if not st.session_state.messages:
                 if st.button(ex, key=f"ex_{idx}", use_container_width=True):
                     st.session_state["_direct_input"] = ex
 
-        _, mid, _ = st.columns([2, 1, 2])
+        _, mid, _ = st.columns([3, 2, 3])
         with mid:
             if st.button("↻ 换一批", key="refresh_ex", use_container_width=True):
                 st.session_state.example_set = _get_examples()
