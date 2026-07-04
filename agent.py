@@ -114,26 +114,12 @@ CLOUD_PROVIDERS = {
 
 # ── 智能模型路由 ──────────────────────────────────────────────────────────────
 _DEFAULT_VISION_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
-_LIGHT_MODEL = "Qwen/Qwen3-VL-8B-Instruct"  # SiliconFlow 8B：闲聊类短消息用，快且便宜
-_CHITCHAT_MAX_LEN = 60
-# 含数字/运算符/数学关键词 → 视为数学问题，不降级到轻量模型
-_MATH_HINT_RE = re.compile(
-    r"[0-9=+*/^_∫∑√π\\$-]|求|解|证|算|极限|积分|导数|微分|方程|矩阵|行列式|概率|公式|化简|不等式|级数|向量"
-)
-
-
 def route_model(problem: str, image_bytes: Optional[bytes] = None,
                 default: str = "deepseek-chat") -> str:
-    """按输入复杂度路由模型：有图 → 视觉模型；短且无数学特征 → 轻量模型；其余用默认强模型。
-
-    轻量路由只在配置了 SILICONFLOW_API_KEY 时生效，避免路由到不可用的 provider。
-    """
+    """有图 → 视觉模型；纯文字 → deepseek-chat。"""
     has_sf = bool(os.environ.get("SILICONFLOW_API_KEY"))
     if image_bytes:
         return _DEFAULT_VISION_MODEL if has_sf else default
-    text = (problem or "").strip()
-    if has_sf and text and len(text) < _CHITCHAT_MAX_LEN and not _MATH_HINT_RE.search(text):
-        return _LIGHT_MODEL
     return default
 
 
