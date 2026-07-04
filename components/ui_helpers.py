@@ -150,13 +150,19 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !imp
     border-color: var(--accent) !important; color: var(--accent) !important;
 }
 
+.toolbar-btn { display: flex !important; align-items: center !important; justify-content: center !important; }
 .toolbar-btn button {
-    background: transparent !important; border: none !important;
-    font-size: 1.4rem !important; padding: 6px !important;
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+    font-size: 1.1rem !important; padding: 0 !important;
     border-radius: 50% !important; color: var(--text-muted) !important;
-    height: 44px !important; width: 44px !important;
+    height: 36px !important; width: 36px !important;
+    min-height: 36px !important; min-width: 36px !important;
+    max-height: 36px !important; max-width: 36px !important;
+    display: flex !important; align-items: center !important; justify-content: center !important;
+    box-shadow: none !important;
 }
-.toolbar-btn button:hover { background: var(--sidebar) !important; color: var(--text) !important; }
+.toolbar-btn button:hover { background: var(--sidebar) !important; border-color: var(--accent) !important; color: var(--accent) !important; }
 
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
@@ -194,9 +200,10 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !imp
 
 .toolbar-model [data-testid="stSelectbox"] > div > div {
     border: 1px solid var(--border) !important;
-    background: rgba(255,255,255,0.9) !important;
+    background: var(--surface) !important;
     font-size: 0.82rem !important; color: var(--text) !important;
-    padding: 4px 10px !important; min-height: 36px !important; border-radius: 20px !important;
+    padding: 2px 12px !important; min-height: 36px !important; max-height: 36px !important;
+    border-radius: 20px !important; box-shadow: none !important;
 }
 
 [data-testid="stPills"] { margin-top: 8px !important; }
@@ -410,9 +417,9 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }
 
 [data-testid="stHorizontalBlock"]:has(.toolbar-btn) { background: var(--dm-bg) !important; }
-.toolbar-model [data-testid="stSelectbox"] > div > div { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
-.toolbar-btn button { color: var(--dm-muted) !important; }
-.toolbar-btn button:hover { background: var(--dm-card) !important; color: var(--dm-text) !important; }
+.toolbar-model [data-testid="stSelectbox"] > div > div { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; min-height: 36px !important; max-height: 36px !important; }
+.toolbar-btn button { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-muted) !important; }
+.toolbar-btn button:hover { background: var(--dm-card2) !important; border-color: var(--dm-accent) !important; color: var(--dm-text) !important; }
 
 [data-testid="stFileUploaderDropzone"] button,
 [data-testid="stFileUploadDropzone"] button { background: var(--dm-surface) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }

@@ -524,55 +524,40 @@ if "dark_mode" not in st.session_state:
 if st.session_state.dark_mode:
     st.markdown(_DARK_CSS, unsafe_allow_html=True)
 
-    # 把暗色覆盖 CSS 注入到父页面 <head>，绕过 React 重渲染覆盖问题
-    _cv1.html("""<script>
-(function() {
-    try {
-        var doc = window.parent.document;
-        var existing = doc.getElementById('_dm_override_css');
-        var s = existing || doc.createElement('style');
-        if (!existing) { s.id = '_dm_override_css'; doc.head.appendChild(s); }
-        s.textContent = [
-                /* 覆盖 Streamlit 主题颜色变量 */
-                ':root{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important;--text-color:#dde0f5!important}',
-                /* 工具栏暗色背景 */
-                '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){background:#0f0f17!important;position:sticky!important;bottom:72px!important}',
-                /* 底栏 */
-                '[data-testid="stBottom"]{background:#0f0f17!important}',
-                '[data-testid="stBottomBlockContainer"]{background:#0f0f17!important}',
-                '[data-testid="stBottom"]>div{background:#0f0f17!important}',
-                '[data-testid="stBottom"]>div>div{background:#0f0f17!important}',
-                /* 输入框外框变深色 */
-                '[data-testid="stChatInputContainer"]{background:#18182a!important;border:1.5px solid #32325a!important;border-radius:24px!important;box-shadow:none!important}',
-                '[data-testid="stChatInput"]{background:#0f0f17!important}',
-                /* 所有白色背景通用兜底 */
-                '.stApp *{--background-color:#0f0f17!important;--secondary-background-color:#18182a!important}',
-                /* textarea 透明 */
-                '[data-testid="stChatInputTextArea"]{background:transparent!important;border:none!important;box-shadow:none!important;color:#dde0f5!important}',
-                /* placeholder */
-                '[data-testid="stChatInputTextArea"]::placeholder{color:#707090!important}',
-                /* 发送按钮 */
-                '[data-testid="stChatInputSubmitButton"] button{background:#2a6edd!important}',
-                /* KaTeX 暗色 */
-                '.katex,.katex *{color:#dde0f5!important;background:transparent!important}',
-                '.katex-display{background:transparent!important;color:#dde0f5!important}',
-                '.katex .frac-line{background:#dde0f5!important;border-color:#dde0f5!important}',
-                '.katex .fbox{border-color:#7a7ab8!important;background:transparent!important}',
-                '.katex svg path,.katex .svg-align path,.katex .delimsizing path,.katex .stretchy path{fill:#dde0f5!important;stroke:#dde0f5!important}',
-                /* MathJax 3 暗色 */
-                'mjx-container,mjx-container *{color:#dde0f5!important;background:transparent!important}',
-                'mjx-container svg,mjx-container svg *{fill:#dde0f5!important}',
-                'mjx-menclose{border-color:#7a7ab8!important}',
-                'mjx-mfrac>mjx-frac>mjx-line{border-color:#dde0f5!important}',
-                /* MathJax 2 兼容 */
-                '.MathJax_Display,.MathJax,.MJXc-display{background:transparent!important;color:#dde0f5!important}',
-                '.MathJax svg{fill:#dde0f5!important}',
-                /* Streamlit 数学容器 */
-                '.stMarkdownContainer .math,.stMarkdown .math{background:transparent!important}',
-                '[data-testid="stMarkdownContainer"]>div{background:transparent!important}',
-            ].join('');
-    } catch(e) {}
-})();
+# 始终注入：暗色时写入覆盖样式+MutationObserver，日间时清除
+_dm_js_flag = "true" if st.session_state.dark_mode else "false"
+_cv1.html(f"""<script>
+(function(){{
+try{{
+    var dark = {_dm_js_flag};
+    var doc  = window.parent.document;
+    var SID  = '_dm_override_css';
+    var el   = doc.getElementById(SID);
+    if (!dark) {{ if (el) el.remove(); return; }}
+    var s = el || doc.createElement('style');
+    if (!el) {{ s.id = SID; doc.head.appendChild(s); }}
+    var CSS =
+        ':root{{--background-color:#0D0D14!important;--secondary-background-color:#16162A!important;--text-color:#DEE1F5!important}}' +
+        'body,html,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"]{{background:#0D0D14!important}}' +
+        '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
+        '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}' +
+        '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){{background:#0D0D14!important}}' +
+        '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
+        '[data-testid="stChatInput"]{{background:#0D0D14!important}}' +
+        '[data-testid="stChatInputTextArea"]{{background:transparent!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important}}' +
+        '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
+        '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}';
+    function apply() {{ s.textContent = CSS; }}
+    apply();
+    if (!doc._dmObs) {{
+        doc._dmObs = new MutationObserver(function() {{
+            clearTimeout(doc._dmObs._t);
+            doc._dmObs._t = setTimeout(apply, 120);
+        }});
+        doc._dmObs.observe(doc.body, {{childList:true, subtree:true}});
+    }}
+}} catch(e) {{}}
+}})();
 </script>""", height=1)
 
 
@@ -1074,14 +1059,29 @@ if _patt:
             del st.session_state["pending_attachment"]
             st.rerun()
 
-# ── 底部工具栏（Claude 风格：🎙️ · 模型选择 · 引导 · ➕）────────────────────
+# ── 底部工具栏 ───────────────────────────────────────────────────────────────
 guide_mode = st.session_state.guide_mode
-_tb_mic, _tb_model, _tb_plus = st.columns([1, 8, 1], gap="small")
+
+_MODEL_LABELS = {
+    "deepseek-chat":                   "DeepSeek",
+    "Qwen/Qwen3-VL-30B-A3B-Instruct":  "Qwen3-VL 30B",
+    "Qwen/Qwen3-VL-32B-Instruct":      "Qwen3-VL 32B",
+    "Qwen/Qwen3-VL-32B-Thinking":      "Qwen3 思维链",
+    "Qwen/Qwen3-VL-8B-Instruct":       "Qwen3-VL 8B",
+}
+_copts     = list(CLOUD_PROVIDERS.keys())
+_clabels   = [_MODEL_LABELS.get(m, m) for m in _copts]
+_def_idx   = _copts.index("deepseek-chat")
+
+try:
+    _tb_mic, _tb_model, _tb_plus = st.columns([1, 6, 1], gap="small", vertical_alignment="center")
+except TypeError:
+    _tb_mic, _tb_model, _tb_plus = st.columns([1, 6, 1], gap="small")
 
 with _tb_mic:
     st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
     _mic_active = st.session_state.get("show_mic")
-    if st.button("✕" if _mic_active else "🎙️", key="tb_mic"):
+    if st.button("✕" if _mic_active else "🎙️", key="tb_mic", help="语音输入"):
         if _mic_active:
             st.session_state.show_mic = False
         else:
@@ -1094,23 +1094,22 @@ with _tb_mic:
 
 with _tb_model:
     st.markdown('<div class="toolbar-model">', unsafe_allow_html=True)
-    _copts = list(CLOUD_PROVIDERS.keys())
-    _def_idx = _copts.index("deepseek-chat")
-    selected_model = st.selectbox(
-        "模型", _copts, index=_def_idx,
+    _sel_label = st.selectbox(
+        "模型", _clabels, index=_def_idx,
         label_visibility="collapsed", key="tb_model_cloud",
     )
+    selected_model = _copts[_clabels.index(_sel_label)]
     st.session_state["_sel_model"] = selected_model
     st.markdown('</div>', unsafe_allow_html=True)
 
 with _tb_plus:
     st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
-    if st.button("✕" if st.session_state.get("show_plus") else "➕", key="tb_plus"):
+    if st.button("✕" if st.session_state.get("show_plus") else "➕", key="tb_plus", help="附件 / 拍题"):
         st.session_state.show_plus = not st.session_state.get("show_plus", False)
         st.session_state.show_mic = False
         st.session_state.show_photo = False
         st.session_state.show_file = False
-        st.session_state["_panel_just_toggled"] = True  # 防止误触发发送
+        st.session_state["_panel_just_toggled"] = True
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
