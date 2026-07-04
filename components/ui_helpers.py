@@ -237,6 +237,10 @@ hr { border-color: var(--border) !important; }
 .katex-display { margin: 0.8em 0 !important; overflow-x: auto !important; overflow-y: hidden !important; }
 .katex { font-size: 1.05em !important; }
 .katex-display > .katex { font-size: 1.1em !important; }
+.katex, .katex * { color: #1A1A2E !important; background: transparent !important; }
+.katex svg path, .katex .svg-align path, .katex .delimsizing path, .katex .stretchy path { fill: #1A1A2E !important; stroke: #1A1A2E !important; }
+mjx-container, mjx-container * { color: #1A1A2E !important; background: transparent !important; }
+mjx-container svg, mjx-container svg * { fill: #1A1A2E !important; }
 
 [data-testid="stAudioInput"],
 [data-testid="stAudioInput"] > div { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; }
