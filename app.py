@@ -463,8 +463,13 @@ def transcribe_audio(audio_file) -> tuple[str, str]:
     if len(raw) < 1000:
         return "", "录音太短，请说话后再松开（至少1秒）"
 
-    # 检测音频格式
-    if raw[:4] == b"RIFF":
+    # 优先用 UploadedFile 自带的 MIME type，避免 magic bytes 猜错
+    browser_mime = getattr(audio_file, "type", "") or ""
+    if browser_mime and "/" in browser_mime:
+        mime = browser_mime
+        raw_ext = browser_mime.split("/")[-1].split(";")[0]  # 去掉 codec 参数
+        ext = {"mpeg": "mp3", "ogg": "ogg", "mp4": "m4a", "x-m4a": "m4a"}.get(raw_ext, raw_ext)
+    elif raw[:4] == b"RIFF":
         mime, ext = "audio/wav", "wav"
     elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
         mime, ext = "audio/mpeg", "mp3"
@@ -472,16 +477,16 @@ def transcribe_audio(audio_file) -> tuple[str, str]:
         mime, ext = "audio/mp4", "m4a"
     elif raw[:4] == b"OggS":
         mime, ext = "audio/ogg", "ogg"
-    elif raw[:4] == b"\x1a\x45\xdf\xa3":  # EBML header = webm/matroska
+    elif raw[:4] == b"\x1a\x45\xdf\xa3":
         mime, ext = "audio/webm", "webm"
     else:
-        mime, ext = "audio/webm", "webm"  # 浏览器默认录音格式
+        mime, ext = "audio/webm", "webm"
 
     try:
         resp = requests.post(
             "https://api.siliconflow.cn/v1/audio/transcriptions",
             headers={"Authorization": f"Bearer {sf_key}"},
-            files={"file": (f"audio.{ext}", raw, mime)},
+            files={"file": (f"recording.{ext}", raw, mime)},
             data={"model": "FunAudioLLM/SenseVoiceSmall"},
             timeout=30,
         )
@@ -492,7 +497,7 @@ def transcribe_audio(audio_file) -> tuple[str, str]:
             return "", f"识别失败：{data['error']}"
         text = data.get("text", "").strip()
         if not text:
-            return "", "未识别到语音内容，请靠近麦克风重试"
+            return "", f"未识别到语音（格式:{ext}，大小:{len(raw)}B），请靠近麦克风或说长一点"
         return text, ""
     except requests.Timeout:
         return "", "识别超时（30s），请检查网络后重试"
