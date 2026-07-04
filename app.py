@@ -759,8 +759,6 @@ for i, msg in enumerate(st.session_state.messages):
         )
     else:
         _asst_turn += 1
-        st.markdown(f'<span class="turn-badge">第 {_asst_turn} 轮</span>',
-                    unsafe_allow_html=True)
         st.markdown(f'<div class="asst-bubble-marker" id="abm-{i}"></div>',
                     unsafe_allow_html=True)
         st.markdown(fix_latex(msg["content"]))
