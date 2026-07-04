@@ -588,36 +588,54 @@ try{{
         '[data-testid="stChatInputContainer"]>div,[data-testid="stChatInputContainer"]>div>div{{background:#16162A!important}}' +
         '[data-testid="stChatInput"]{{background:#16162A!important}}' +
         '[data-testid="stChatInputTextArea"]{{background:transparent!important;border:none!important;box-shadow:none!important;color:#1A1A2E!important}}' +
-        '[data-testid="stChatInputTextArea"]::placeholder{{color:#999!important}}' +
-        '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}';
+        '[data-testid="stChatInputTextArea"]::placeholder{{color:#888!important}}' +
+        '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}' +
+        /* 下拉框弹出层（Streamlit 渲染在 document 根部的 portal） */
+        '[data-baseweb="popover"],[data-baseweb="menu"],[data-baseweb="list"]{{background:#1E1E35!important;border:1px solid #2E2E50!important}}' +
+        '[data-baseweb="option"]{{background:#1E1E35!important;color:#DEE1F5!important}}' +
+        '[data-baseweb="option"]:hover,[data-baseweb="option"][aria-selected="true"]{{background:#2A2A4A!important}}' +
+        '[role="option"]{{background:#1E1E35!important;color:#DEE1F5!important}}' +
+        '[role="listbox"]{{background:#1E1E35!important}}' +
+        '[data-testid="stSelectboxVirtualDropdown"]{{background:#1E1E35!important}}';
     function applyInline() {{
+        /* 输入框容器 */
         var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
         if (inp) {{
             inp.style.setProperty('background','#16162A','important');
             inp.style.setProperty('border','1.5px solid #282845','important');
             inp.style.setProperty('border-radius','24px','important');
             inp.style.setProperty('box-shadow','none','important');
-            inp.querySelectorAll('*').forEach(function(el) {{
-                var tag = el.tagName.toLowerCase();
-                if (tag==='textarea'||tag==='input') {{
-                    el.style.setProperty('color','#1A1A2E','important');
-                    el.style.setProperty('background','transparent','important');
-                    el.style.setProperty('-webkit-text-fill-color','#1A1A2E','important');
-                    el.style.setProperty('caret-color','#1A1A2E','important');
-                }} else if (tag!=='button'&&tag!=='svg'&&tag!=='path') {{
-                    el.style.setProperty('background','#16162A','important');
-                }}
+            inp.querySelectorAll('div').forEach(function(d){{
+                d.style.setProperty('background','#16162A','important');
+            }});
+            inp.querySelectorAll('textarea,input').forEach(function(t){{
+                t.style.setProperty('color','#1A1A2E','important');
+                t.style.setProperty('background','transparent','important');
+                t.style.setProperty('-webkit-text-fill-color','#1A1A2E','important');
+                t.style.setProperty('caret-color','#1A1A2E','important');
             }});
         }}
+        /* 底部容器 */
         var bot = doc.querySelector('[data-testid="stBottom"]');
         if (bot) bot.style.setProperty('background','#0D0D14','important');
+        /* 下拉框弹出层 */
+        doc.querySelectorAll('[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"]').forEach(function(p){{
+            p.style.setProperty('background','#1E1E35','important');
+            p.style.setProperty('border','1px solid #2E2E50','important');
+            p.querySelectorAll('[data-baseweb="option"],[role="option"]').forEach(function(o){{
+                o.style.setProperty('background','#1E1E35','important');
+                o.style.setProperty('color','#DEE1F5','important');
+            }});
+        }});
     }}
     function apply() {{ s.textContent = CSS; applyInline(); }}
     apply();
     if (!doc._dmObs) {{
-        doc._dmObs = new MutationObserver(function() {{
+        doc._dmObs = new MutationObserver(function(muts) {{
+            var hasNew = muts.some(function(m){{return m.addedNodes.length>0;}});
+            if (!hasNew) return;
             clearTimeout(doc._dmObs._t);
-            doc._dmObs._t = setTimeout(apply, 120);
+            doc._dmObs._t = setTimeout(applyInline, 30);
         }});
         doc._dmObs.observe(doc.body, {{childList:true, subtree:true}});
     }}
