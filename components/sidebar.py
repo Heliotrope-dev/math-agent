@@ -22,7 +22,7 @@ def render_sidebar() -> None:
 
     # ── 用户信息 + 退出 ──────────────────────────────────────────────────────
     st.markdown(
-        f'<p style="font-size:0.75rem;color:#888;margin:0 0 4px">👤 {_uemail}</p>',
+        f'<p class="sb-email" style="font-size:0.75rem;color:#888;margin:0 0 4px">👤 {_uemail}</p>',
         unsafe_allow_html=True,
     )
     _sb_top_left, _sb_top_right = st.columns([3, 1])

@@ -315,11 +315,9 @@ try {
             /* 侧边栏：X 按钮绝对定位不占流，inner div 只留正常内边距 */
             '[data-testid="stSidebar"]{padding-top:0!important}' +
             '[data-testid="stSidebar"]>div:first-child{padding:6px 12px 12px!important}' +
-            /* 手机 email 压到 X 按钮下方 */
-            '[data-testid="stSidebar"] [data-testid="stMarkdown"]:first-of-type p{margin-top:48px!important}' +
-            /* expander 内容不裁剪，防止 caption 文字上缘被截断 */
-            '[data-testid="stSidebar"] details>div{overflow:visible!important;padding-top:4px!important}' +
-            /* 区块间距宽松一点 */
+            /* email 专属 class，压到 X 按钮下方（只在手机端生效） */
+            '[data-testid="stSidebar"] .sb-email{margin-top:52px!important}' +
+            /* 区块间距宽松 */
             '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:8px!important}' +
             /* divider */
             '[data-testid="stSidebar"] hr{margin:6px 0!important;border-width:0.5px!important}' +
@@ -348,6 +346,21 @@ try {
             '[data-testid="stMain"] [data-testid="stVerticalBlock"]{gap:0.6rem!important}' +
         '}';
     doc.head.appendChild(s);
+    /* 直接 DOM 删除侧边栏里的 +/− 工具栏按钮（toolbarMode=viewer 仍残留） */
+    function _hideSbPlus(){
+        try{
+            var sb=doc.querySelector('[data-testid="stSidebar"]');
+            if(!sb)return;
+            sb.querySelectorAll('button').forEach(function(b){
+                var t=b.textContent.trim();
+                if((t==='+' || t==='−' || t==='-') && b.offsetWidth<40)
+                    b.style.setProperty('display','none','important');
+            });
+        }catch(e){}
+    }
+    _hideSbPlus();
+    new MutationObserver(function(){_hideSbPlus();})
+        .observe(doc.body,{childList:true,subtree:true});
 } catch(e) {}
 })();
 </script>
