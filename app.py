@@ -733,7 +733,7 @@ if not st.session_state.messages:
         for _ti, _topic in enumerate(_topics):
             with _tcols[_ti % 2]:
                 if st.button(_topic, key=f"topic_{_ti}", use_container_width=True):
-                    _track_topic(_uemail, _cur_course, _topic)
+                    _track_topic(st.session_state.get("user_email", ""), _cur_course, _topic)
                     st.session_state.pop("user_profile", None)
                     st.session_state["_direct_input"] = (
                         f"【知识点讲解】{_cur_course} · {_topic}"
