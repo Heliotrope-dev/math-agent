@@ -309,9 +309,8 @@ try {
         '@media(max-width:768px){' +
             '[data-testid="stSidebarCollapseButton"]{display:none!important}' +
             '[data-testid="collapsedControl"]{display:none!important}' +
-            /* 主内容顶部留白，防止汉堡按钮遮住内容 */
-            '[data-testid="stAppViewContainer"],[data-testid="stMain"]{padding-top:56px!important}' +
-            '.block-container{padding-top:8px!important}' +
+            /* stHeader 是 fixed，stMain 已有 Streamlit 自身的 margin-top，不需要再加 */
+            '.block-container{padding-top:4px!important}' +
             /* 侧边栏：X 按钮绝对定位不占流，inner div 只留正常内边距 */
             '[data-testid="stSidebar"]{padding-top:0!important}' +
             '[data-testid="stSidebar"]>div:first-child{padding:6px 12px 12px!important}' +
@@ -346,20 +345,31 @@ try {
             '[data-testid="stMain"] [data-testid="stVerticalBlock"]{gap:0.6rem!important}' +
         '}';
     doc.head.appendChild(s);
-    /* 直接 DOM 删除侧边栏里的 +/− 工具栏按钮（toolbarMode=viewer 仍残留） */
+    /* 清除侧边栏工具栏残留：+/− 叶节点全部 display:none */
     function _hideSbPlus(){
         try{
             var sb=doc.querySelector('[data-testid="stSidebar"]');
             if(!sb)return;
-            sb.querySelectorAll('button').forEach(function(b){
-                var t=b.textContent.trim();
-                if((t==='+' || t==='−' || t==='-') && b.offsetWidth<40)
-                    b.style.setProperty('display','none','important');
+            sb.querySelectorAll('*').forEach(function(el){
+                if(el.childElementCount===0){
+                    var t=el.textContent.trim();
+                    if(t==='+' || t==='−' || t==='-')
+                        el.style.setProperty('display','none','important');
+                }
             });
         }catch(e){}
     }
-    _hideSbPlus();
-    new MutationObserver(function(){_hideSbPlus();})
+    /* email 找第一个 element-container，直接设 margin-top 清 X 按钮 */
+    function _fixSbEmail(){
+        try{
+            var sb=doc.querySelector('[data-testid="stSidebar"]');
+            if(!sb)return;
+            var ec=sb.querySelector('[data-testid="element-container"]');
+            if(ec && !ec._emailFixed){ec.style.setProperty('margin-top','52px','important');ec._emailFixed=true;}
+        }catch(e){}
+    }
+    _hideSbPlus(); _fixSbEmail();
+    new MutationObserver(function(){_hideSbPlus();_fixSbEmail();})
         .observe(doc.body,{childList:true,subtree:true});
 } catch(e) {}
 })();
