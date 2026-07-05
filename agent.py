@@ -154,7 +154,14 @@ class MathAgent:
             self.client = OpenAI(
                 api_key=os.environ.get(env_key, ""),
                 base_url=base_url,
+                http_client=httpx.Client(
+                    trust_env=False,
+                    verify=True,
+                    timeout=httpx.Timeout(60.0, connect=15.0),
+                    limits=httpx.Limits(max_keepalive_connections=3, max_connections=50),
+                ),
             )
+            self._own_client = True
 
     @property
     def supports_vision(self) -> bool:

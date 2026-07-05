@@ -1184,8 +1184,21 @@ if user_input:
                     err = None
                 except Exception as exc:
                     import traceback
-                    stream, err = None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
-                status.update(label="完成", state="complete", expanded=False)
+                    err_str = str(exc).lower()
+                    if "timeout" in err_str or "504" in err_str:
+                        friendly = "⏱️ 模型响应超时，请稍后重试或换一道题"
+                    elif "429" in err_str or "rate" in err_str:
+                        friendly = "⏳ 请求过于频繁，请等待几秒再试"
+                    elif "401" in err_str or "unauthorized" in err_str or "key" in err_str:
+                        friendly = "🔑 API Key 配置异常，请联系管理员"
+                    elif "502" in err_str or "503" in err_str:
+                        friendly = "🔧 模型服务暂时不可用，请稍后重试"
+                    else:
+                        friendly = f"💥 解题出错：{str(exc)[:80]}"
+                    stream, err = None, friendly
+                    status.update(label="❌ 出错了", state="error", expanded=True)
+                if not err:
+                    status.update(label="完成", state="complete", expanded=False)
 
             if stream is not None:
                 ph = st.empty()
