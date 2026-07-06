@@ -1,9 +1,9 @@
 """
-main.py — CLI 入口
+main.py — CLI entry point
 
-运行方式：
-  DeepSeek 模式：export DEEPSEEK_API_KEY="sk-..."  &&  python main.py
-  本地 Ollama：  python main.py --local             （无需 API Key）
+Usage:
+  DeepSeek mode: export DEEPSEEK_API_KEY="sk-..."  &&  python main.py
+  Local Ollama:  python main.py --local             (no API Key needed)
 """
 
 import sys

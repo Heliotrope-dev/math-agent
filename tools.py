@@ -8,9 +8,11 @@ Three tools:
 """
 
 import io
+import re as _re
 import base64
 import logging
 import sympy as sp
+from concurrent.futures import ProcessPoolExecutor, TimeoutError as _FutTimeout
 
 _log = logging.getLogger(__name__)
 
@@ -358,71 +360,98 @@ _STEP_TEMPLATES: dict[str, list[str]] = {
 # 3. 工具实现
 # ─────────────────────────────────────────
 
-def _run_calculator(expression: str, operation: str, variable: str = "x") -> str:
-    """SymPy 符号计算引擎。"""
-    # 预处理：将 ^ 替换为 **（用户常犯的写法）
+# ── SymPy 安全沙箱 ────────────────────────────────────────────────────────────
+# sympify() 内部走 eval；白名单过滤阻断注入路径
+_SAFE_EXPR = _re.compile(r"^[0-9a-zA-Z\+\-\*/\^().,:=\s'<>\[\]!*$]+$")
+_BANNED = ("__", "import", "lambda", "eval", "exec", "open", "os.", "sys.")
+
+def _check_expr_safe(expr: str) -> "str | None":
+    if len(expr) > 500:
+        return "表达式过长（>500字符），请拆分后重试"
+    low = expr.lower()
+    if not _SAFE_EXPR.match(expr) or any(b in low for b in _BANNED):
+        return "表达式包含不允许的字符或关键字，只支持纯数学表达式"
+    return None
+
+_CALC_POOL = ProcessPoolExecutor(max_workers=2)
+_CALC_TIMEOUT = 15  # 秒
+
+
+def _calc_impl(expression: str, operation: str, variable: str) -> str:
+    """在子进程中执行 SymPy 计算——只有进程能真正 kill 挂死的 SymPy。"""
     import re
+    import sympy as sp
     expr_str = re.sub(r'(?<=[\d)a-zA-Z])\^(?=[\d(\-a-zA-Z])', '**', expression)
+    var = sp.Symbol(variable)
 
-    try:
-        var = sp.Symbol(variable)
+    if operation == "evaluate":
+        expr = sp.sympify(expr_str)
+        simplified = sp.simplify(expr)
+        numeric = sp.N(simplified)
+        return f"表达式：{expression}\n化简：{simplified}\n数值结果：{numeric}"
 
-        if operation == "evaluate":
-            expr = sp.sympify(expr_str)
-            simplified = sp.simplify(expr)
-            numeric = sp.N(simplified)
-            return f"表达式：{expression}\n化简：{simplified}\n数值结果：{numeric}"
-
-        elif operation == "solve":
-            if "=" in expr_str:
-                lhs, rhs = expr_str.split("=", 1)
-                equation = sp.Eq(sp.sympify(lhs.strip()), sp.sympify(rhs.strip()))
-            else:
-                equation = sp.sympify(expr_str)
-            solutions = sp.solve(equation, var)
-            return f"方程：{expression}\n解：{solutions}"
-
-        elif operation == "differentiate":
-            expr = sp.sympify(expr_str)
-            deriv = sp.simplify(sp.diff(expr, var))
-            return f"f({variable}) = {expression}\nf'({variable}) = {deriv}"
-
-        elif operation == "integrate":
-            expr = sp.sympify(expr_str)
-            result = sp.integrate(expr, var)
-            return f"∫ ({expression}) d{variable} = {result} + C"
-
-        elif operation == "simplify":
-            expr = sp.sympify(expr_str)
-            simplified = sp.simplify(expr)
-            return f"原式：{expression}\n化简结果：{simplified}"
-
-        elif operation == "limit":
-            if "->" in variable:
-                var_name, point_str = variable.split("->", 1)
-                var_sym = sp.Symbol(var_name.strip())
-                point = sp.sympify(point_str.strip())
-            else:
-                var_sym = sp.Symbol(variable)
-                point = sp.sympify("0")
-            expr = sp.sympify(expr_str)
-            result = sp.limit(expr, var_sym, point)
-            return f"lim({variable}) ({expression}) = {result}"
-
-        elif operation == "definite_integral":
-            parts = [p.strip() for p in expr_str.split(",")]
-            if len(parts) == 3:
-                expr = sp.sympify(parts[0])
-                a, b = sp.sympify(parts[1]), sp.sympify(parts[2])
-                result = sp.integrate(expr, (var, a, b))
-                numeric = sp.N(result)
-                return f"∫[{parts[1]},{parts[2]}] ({parts[0]}) d{variable} = {result} ≈ {numeric}"
-            else:
-                return "definite_integral 格式：'expression, lower, upper'，例如 'x**2, 0, 1'"
-
+    elif operation == "solve":
+        if "=" in expr_str:
+            lhs, rhs = expr_str.split("=", 1)
+            equation = sp.Eq(sp.sympify(lhs.strip()), sp.sympify(rhs.strip()))
         else:
-            return f"未知操作：{operation}"
+            equation = sp.sympify(expr_str)
+        solutions = sp.solve(equation, var)
+        return f"方程：{expression}\n解：{solutions}"
 
+    elif operation == "differentiate":
+        expr = sp.sympify(expr_str)
+        deriv = sp.simplify(sp.diff(expr, var))
+        return f"f({variable}) = {expression}\nf'({variable}) = {deriv}"
+
+    elif operation == "integrate":
+        expr = sp.sympify(expr_str)
+        result = sp.integrate(expr, var)
+        return f"∫ ({expression}) d{variable} = {result} + C"
+
+    elif operation == "simplify":
+        expr = sp.sympify(expr_str)
+        simplified = sp.simplify(expr)
+        return f"原式：{expression}\n化简结果：{simplified}"
+
+    elif operation == "limit":
+        if "->" in variable:
+            var_name, point_str = variable.split("->", 1)
+            var_sym = sp.Symbol(var_name.strip())
+            point = sp.sympify(point_str.strip())
+        else:
+            var_sym = sp.Symbol(variable)
+            point = sp.sympify("0")
+        expr = sp.sympify(expr_str)
+        result = sp.limit(expr, var_sym, point)
+        return f"lim({variable}) ({expression}) = {result}"
+
+    elif operation == "definite_integral":
+        parts = [p.strip() for p in expr_str.split(",")]
+        if len(parts) == 3:
+            expr = sp.sympify(parts[0])
+            a, b = sp.sympify(parts[1]), sp.sympify(parts[2])
+            result = sp.integrate(expr, (var, a, b))
+            numeric = sp.N(result)
+            return f"∫[{parts[1]},{parts[2]}] ({parts[0]}) d{variable} = {result} ≈ {numeric}"
+        else:
+            return "definite_integral 格式：'expression, lower, upper'，例如 'x**2, 0, 1'"
+
+    else:
+        return f"未知操作：{operation}"
+
+
+def _run_calculator(expression: str, operation: str, variable: str = "x") -> str:
+    """SymPy 符号计算引擎（带安全检查 + 进程超时）。"""
+    err = _check_expr_safe(expression)
+    if err:
+        return f"计算被拒绝：{err}"
+    try:
+        fut = _CALC_POOL.submit(_calc_impl, expression, operation, variable)
+        return fut.result(timeout=_CALC_TIMEOUT)
+    except _FutTimeout:
+        return (f"计算超时（>{_CALC_TIMEOUT}s），表达式可能过于复杂，"
+                "请简化后重试，或改用数值方法")
     except Exception as exc:
         return (
             f"计算出错：{exc}\n"
@@ -761,7 +790,11 @@ def _run_draw_mindmap(title: str, branches: list) -> str:
 
 def execute_tool(tool_name: str, tool_input: dict) -> str:
     """将工具调用请求分发到对应实现。"""
+    if not isinstance(tool_input, dict):
+        return f"[参数格式错误：期望 JSON 对象，收到 {type(tool_input).__name__}]"
     if tool_name == "calculator":
+        if "expression" not in tool_input or "operation" not in tool_input:
+            return "[calculator 缺少必填参数 expression/operation，请重新调用并提供完整参数]"
         return _run_calculator(
             expression=tool_input["expression"],
             operation=tool_input["operation"],

@@ -9,21 +9,28 @@ Two modes:
 import os
 import re
 import json
+import time
 import base64
 import logging
 from typing import Callable, Iterator, Optional, Union
 import httpx
 
 _log = logging.getLogger(__name__)
-from openai import OpenAI
+from openai import (
+    OpenAI,
+    BadRequestError, RateLimitError, APITimeoutError,
+    APIConnectionError, InternalServerError,
+)
 from tools import TOOL_DEFINITIONS, execute_tool, compress_image
 
 # macOS system proxy is auto-detected by httpx and blocks localhost; disable explicitly
-# NOTE: Do not share httpx.Client at module level; create per-instance to avoid pool conflicts
 
 _USE_LOCAL = os.environ.get("USE_LOCAL", "0") == "1"
 _DEFAULT_MAX_ITERATIONS = 20
-_MAX_HISTORY_TURNS = 10  # keep last N turns (user+assistant = 1 turn)
+_MAX_HISTORY_TURNS = 10       # keep last N turns (user+assistant = 1 turn)
+_CTX_BUDGET_CHARS = 100_000   # ~50K tokens, leaves headroom under 64K context limit
+_MAX_MSG_CHARS = 16_000        # single message hard cap before API call
+_MAX_TOOL_RESULT_CHARS = 4_000 # tool result truncation to avoid context bloat
 
 _SYSTEM = """你是一位大学数学课本风格的助教，行文严谨清晰。
 
@@ -134,25 +141,28 @@ class MathAgent:
         self.use_local = use_local
         self.guide_mode = guide_mode
         self.max_iterations = max_iterations
-        self._own_client = False
         if use_local:
             _ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/") + "/v1"
+            # only disable TLS verification for localhost; remote Ollama should use TLS
+            _is_local_url = "127.0.0.1" in _ollama_url or "localhost" in _ollama_url
             self.client = OpenAI(
                 api_key="ollama",
                 base_url=_ollama_url,
                 http_client=httpx.Client(
                     trust_env=False,
-                    verify=False,
+                    verify=not _is_local_url,
                     limits=httpx.Limits(max_keepalive_connections=5, max_connections=100),
                 ),
             )
-            self._own_client = True
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
             self.model = model or "deepseek-chat"
             _, base_url, env_key = CLOUD_PROVIDERS.get(self.model, ("", "https://api.deepseek.com", "DEEPSEEK_API_KEY"))
+            api_key = os.environ.get(env_key, "")
+            if not api_key:
+                raise RuntimeError(f"环境变量 {env_key} 未设置，无法初始化模型 {self.model}")
             self.client = OpenAI(
-                api_key=os.environ.get(env_key, ""),
+                api_key=api_key,
                 base_url=base_url,
                 http_client=httpx.Client(
                     trust_env=False,
@@ -161,7 +171,6 @@ class MathAgent:
                     limits=httpx.Limits(max_keepalive_connections=3, max_connections=50),
                 ),
             )
-            self._own_client = True
 
     @property
     def supports_vision(self) -> bool:
@@ -172,16 +181,39 @@ class MathAgent:
             self.client.close()
         except Exception:
             pass
-        self._own_client = False
+
+    def __enter__(self) -> "MathAgent":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    @staticmethod
+    def _msg_len(m) -> int:
+        c = m.get("content") if isinstance(m, dict) else getattr(m, "content", "")
+        return len(c) if isinstance(c, str) else 4000  # multimodal messages estimated at 4000
+
+    @staticmethod
+    def _truncate_msg(m: dict) -> dict:
+        c = m.get("content")
+        if isinstance(c, str) and len(c) > _MAX_MSG_CHARS:
+            m = {**m, "content": c[:_MAX_MSG_CHARS] + "\n… (内容过长已截断) "}
+        return m
 
     @staticmethod
     def _trim_history(history: list) -> list:
-        """Keep last _MAX_HISTORY_TURNS turns (each = user + assistant) to avoid context overflow."""
+        """Keep last _MAX_HISTORY_TURNS turns (each = user+assistant) to avoid context overflow."""
         turns = []
         buf = []
         for msg in reversed(history):
             buf.insert(0, msg)
-            if msg["role"] == "user":
+            if msg.get("role") == "user":
                 turns.insert(0, buf)
                 buf = []
                 if len(turns) >= _MAX_HISTORY_TURNS:
@@ -190,12 +222,13 @@ class MathAgent:
 
     @staticmethod
     def _compress_history(history: list) -> list:
-        """长对话压缩：保留最近轮次原文，更早的轮次摘要成一条 system 消息。
-
-        直接丢弃早期轮次会让模型忘记前文；全部保留则最终撑爆 context window。
-        摘要方案在两者之间取平衡，且不需要额外一次 LLM 调用。
-        """
+        """长对话压缩：保留最近轮次原文，更早的轮次摘要成一条 system 消息。"""
         recent = MathAgent._trim_history(history)
+        # Apply per-message truncation first
+        recent = [MathAgent._truncate_msg(m) for m in recent]
+        # Then enforce total token budget by dropping oldest turns
+        while len(recent) > 2 and sum(map(MathAgent._msg_len, recent)) > _CTX_BUDGET_CHARS:
+            recent.pop(0)
         dropped = history[: len(history) - len(recent)]
         if not dropped:
             return recent
@@ -205,12 +238,36 @@ class MathAgent:
             if not isinstance(content, str) or not content.strip():
                 continue
             prefix = "用户" if m.get("role") == "user" else "助教"
-            snippet = content.strip().replace("\n", " ")[:60]
+            snippet = content.strip().replace("\n", " ")[:120]
             lines.append(f"{prefix}：{snippet}")
         if not lines:
             return recent
         summary = "（以下是早前对话的摘要，供参考，不必逐条回应）\n" + "\n".join(lines[-40:])
         return [{"role": "system", "content": summary[:2000]}] + recent
+
+    def _create_with_retry(self, *, tools, messages, max_tokens, extra, max_retries: int = 3):
+        """带指数退避的 API 调用封装。返回 (response, tools_ok)。"""
+        tools_ok = tools is not None
+        for attempt in range(max_retries + 1):
+            try:
+                kwargs = dict(model=self.model, messages=messages,
+                              max_tokens=max_tokens, extra_body=extra)
+                if tools_ok:
+                    kwargs["tools"] = tools
+                return self.client.chat.completions.create(**kwargs), tools_ok
+            except BadRequestError as e:
+                msg = str(e).lower()
+                # Only downgrade on tool-related 400; context-limit 400 should propagate
+                if tools_ok and ("tool" in msg or "function" in msg):
+                    tools_ok = False
+                    continue
+                raise
+            except (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError) as e:
+                if attempt >= max_retries:
+                    raise
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                _log.warning("API %s, %ds 后重试 (%d/%d)", type(e).__name__, wait, attempt + 1, max_retries)
+                time.sleep(wait)
 
     def solve(
         self,
@@ -230,7 +287,9 @@ class MathAgent:
             messages.extend(self._compress_history(history))
 
         # vision mode: compress image (reduce tokens) + single direct call
-        if image_bytes and self.supports_vision:
+        if image_bytes:
+            if not self.supports_vision:
+                return "⚠️ 当前模型不支持图片识别，请使用拍题功能或切换到视觉模型。"
             image_bytes = compress_image(image_bytes, max_size=768, quality=80)
             b64 = base64.b64encode(image_bytes).decode()
             _default_prompt = "请解答图片中的数学题"
@@ -266,10 +325,9 @@ class MathAgent:
         # plain "讲解一下"/"介绍一下" is solving context, follows normal flow
         is_explain = problem.lstrip().startswith("【知识点讲解】")
         messages.append({"role": "user", "content": problem if is_explain else f"请解题：{problem}"})
-        extra = {}  # think:False 会导致 Ollama 挂起，去掉
+        extra = {}
 
         # explain mode: only calculator tool, no draw_mindmap/plot_function
-        # prevent AI from calling viz tools early and breaking the 5-section structure
         _EXPLAIN_TOOLS = [t for t in TOOL_DEFINITIONS if t["function"]["name"] == "calculator"]
         _tools_supported = True
 
@@ -277,35 +335,28 @@ class MathAgent:
         _accumulated: list[str] = []
 
         for iteration in range(self.max_iterations):
+            # Guard against context bloat accumulated during the loop
+            if sum(map(self._msg_len, messages)) > _CTX_BUDGET_CHARS:
+                for m in messages:
+                    if isinstance(m, dict) and m.get("role") == "tool" and len(m.get("content", "")) > 500:
+                        m["content"] = m["content"][:500] + "… (已截断) "
+
             _active_tools = (_EXPLAIN_TOOLS if is_explain else TOOL_DEFINITIONS) if _tools_supported else None
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    tools=_active_tools,
-                    messages=messages,
-                    max_tokens=8192,
-                    extra_body=extra,
-                )
-            except Exception as e:
-                err = str(e).lower()
-                if _tools_supported and ("tool" in err or "function" in err
-                                         or "400" in err or "bad request" in err
-                                         or "502" in err):
-                    _tools_supported = False
-                    response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        max_tokens=8192,
-                        extra_body=extra,
-                    )
-                else:
-                    raise
+            response, _tools_supported = self._create_with_retry(
+                tools=_active_tools,
+                messages=messages,
+                max_tokens=8192,
+                extra=extra,
+            )
 
             msg = response.choices[0].message
             finish_reason = response.choices[0].finish_reason
 
-            if finish_reason != "tool_calls" or not msg.tool_calls:
-                # final reply: prepend accumulated text from earlier rounds
+            if finish_reason == "length":
+                _log.warning("response truncated at max_tokens (iteration %d)", iteration)
+
+            # Use msg.tool_calls as the authoritative signal; finish_reason is unreliable on Ollama
+            if not msg.tool_calls:
                 final = msg.content or "（无输出）"
                 if _accumulated:
                     final = "\n\n".join(_accumulated) + "\n\n" + final
@@ -322,7 +373,6 @@ class MathAgent:
                 try:
                     args = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
-                    # model sometimes appends junk after JSON; raw_decode for first valid object
                     try:
                         args, _ = json.JSONDecoder().raw_decode(tc.function.arguments.strip())
                     except Exception:
@@ -330,14 +380,31 @@ class MathAgent:
 
                 _log.debug("tool call: %s args=%s", name, args)
 
-                if on_tool_call:
-                    on_tool_call(name, args, None)
+                try:
+                    if on_tool_call:
+                        on_tool_call(name, args, None)
+                except Exception:
+                    pass
 
-                result = execute_tool(name, args)
-                _log.debug("tool result: %s", result[:120])
+                try:
+                    result = execute_tool(name, args)
+                except Exception as exc:
+                    _log.warning("tool %s failed: %s (args=%s)", name, exc, args)
+                    result = f"[工具执行出错: {type(exc).__name__}: {exc}。请检查参数格式后重试，或改用其他方法]"
 
-                if on_tool_call:
-                    on_tool_call(name, args, result)
+                _log.debug("tool result: %s", str(result)[:120])
+
+                try:
+                    if on_tool_call:
+                        on_tool_call(name, args, result)
+                except Exception:
+                    pass
+
+                # Truncate oversized tool results to prevent context explosion
+                if len(result) > _MAX_TOOL_RESULT_CHARS:
+                    result = (result[:_MAX_TOOL_RESULT_CHARS]
+                              + f"\n… (结果过长，已截断，原始长度 {len(result)} 字符。"
+                              "如需完整结果请缩小计算范围) ")
 
                 messages.append({
                     "role":         "tool",
@@ -345,7 +412,7 @@ class MathAgent:
                     "content":      result,
                 })
 
-        # iteration limit: ask model to give final answer based on accumulated results
+        # iteration limit: ask model to summarize based on accumulated results
         messages.append({"role": "user", "content": "请根据上面的计算结果，直接给出最终答案，不要再调用工具。"})
         try:
             resp = self.client.chat.completions.create(
@@ -353,6 +420,7 @@ class MathAgent:
             )
             return resp.choices[0].message.content or "（无输出）"
         except Exception:
+            _log.exception("iteration limit fallback failed")
             return "⚠️ 解题超时，请尝试把题目拆分成更小的步骤发送。"
 
     def solve_stream(
@@ -362,17 +430,19 @@ class MathAgent:
         on_tool_call: Optional[Callable] = None,
         image_bytes: Optional[bytes] = None,
     ) -> Iterator:
-        """Run the full agentic loop, returning an iterable stream object (real streaming for vision/guide)."""
-        result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
+        """Run the full agentic loop, returning an iterable stream object."""
+        try:
+            result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
+        except Exception as exc:
+            _log.exception("solve failed")
+            return _fake_stream(f"⚠️ 解题出错：{exc}")
         if isinstance(result, str):
             return _fake_stream(result)
         return result
 
 
-def _fake_stream(text: str, chunk_size: int = 2) -> Iterator:
+def _fake_stream(text: str, chunk_size: int = 2, max_total_delay: float = 30.0) -> Iterator:
     """Yield text in fixed-size chunks with delay to produce visible streaming effect."""
-    import time
-
     class _Delta:
         def __init__(self, c): self.content = c
     class _Choice:
@@ -380,6 +450,9 @@ def _fake_stream(text: str, chunk_size: int = 2) -> Iterator:
     class _Chunk:
         def __init__(self, c): self.choices = [_Choice(c)]
 
+    total_chunks = max(1, len(text) // chunk_size)
+    delay = min(0.025, max_total_delay / total_chunks)
+
     for i in range(0, len(text), chunk_size):
         yield _Chunk(text[i:i + chunk_size])
-        time.sleep(0.025)
+        time.sleep(delay)

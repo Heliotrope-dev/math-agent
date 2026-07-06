@@ -516,14 +516,14 @@ def ocr_math_image(image_bytes):
         return "（未配置 SILICONFLOW_API_KEY，无法识别图片）"
     try:
         from agent import MathAgent
-        agent = MathAgent(use_local=False, model=OCR_MODEL)
-        result = agent.solve(
-            "请识别图片中的数学题，只输出题目原文，不要解答",
-            image_bytes=image_bytes,
-        )
-        if hasattr(result, '__iter__') and not isinstance(result, str):
-            return "".join(c.choices[0].delta.content or "" for c in result)
-        return result
+        with MathAgent(use_local=False, model=OCR_MODEL) as agent:
+            result = agent.solve(
+                "请识别图片中的数学题，只输出题目原文，不要解答",
+                image_bytes=image_bytes,
+            )
+            if hasattr(result, '__iter__') and not isinstance(result, str):
+                return "".join(c.choices[0].delta.content or "" for c in result)
+            return result
     except Exception as e:
         return f"识别失败：{e}"
 
