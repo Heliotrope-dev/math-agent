@@ -106,22 +106,28 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !imp
 }
 .refresh-btn button:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
 
-/* page_link 外框样式，与 expander 保持一致 */
+/* page_link 外框样式，与 expander 完全一致 */
 a[data-testid="stPageLink-NavLink"] {
     border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
-    padding: 8px 14px !important;
-    font-size: 0.95rem !important;
+    border-radius: 10px !important;
+    background: var(--surface) !important;
+    padding: 10px 14px !important;
+    font-size: 0.84rem !important;
     color: var(--text) !important;
     text-decoration: none !important;
     display: flex !important;
     align-items: center !important;
     gap: 6px !important;
-    transition: border-color 0.15s;
+    outline: none !important;
+    box-shadow: none !important;
+    transition: border-color 0.15s, background 0.15s;
 }
-a[data-testid="stPageLink-NavLink"]:hover {
+a[data-testid="stPageLink-NavLink"]:hover,
+a[data-testid="stPageLink-NavLink"]:focus {
     border-color: var(--accent) !important;
     color: var(--accent) !important;
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 .msg-row-user { display: flex; justify-content: flex-end; margin: 6px 0; }
@@ -498,6 +504,22 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stExpander"] { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
 [data-testid="stExpander"] summary { color: var(--dm-text) !important; }
 details, details summary { background: var(--dm-surface) !important; color: var(--dm-text) !important; }
+
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+    background: var(--dm-surface) !important;
+    border-color: var(--dm-border) !important;
+    color: var(--dm-text) !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover,
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:focus {
+    background: var(--dm-card2) !important;
+    border-color: var(--dm-accent) !important;
+    color: var(--dm-accent) !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
 
 hr { border-color: var(--dm-border) !important; }
 small, .caption { color: var(--dm-muted) !important; }

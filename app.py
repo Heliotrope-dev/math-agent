@@ -121,6 +121,30 @@ _cv1.html("""
 <script>
 (function() {
 try {
+    // ── 0. 加载中遮罩 ─────────────────────────────────────────────
+    var doc = window.parent.document;
+    if (!doc.getElementById('_ma_loader')) {
+        var ov = doc.createElement('div');
+        ov.id = '_ma_loader';
+        var isDark = window.parent.matchMedia('(prefers-color-scheme: dark)').matches;
+        ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.35s;background:' + (isDark ? '#0D0D14' : '#F8F8FA');
+        ov.innerHTML = '<div style="font-size:2.4rem">🧮</div><div style="font-size:0.95rem;color:#888;font-family:Inter,sans-serif;letter-spacing:.02em">加载中…</div>';
+        doc.body.appendChild(ov);
+        var tries = 0;
+        var iv = setInterval(function() {
+            tries++;
+            if (tries > 40) { clearInterval(iv); ov.style.opacity='0'; setTimeout(function(){ov.remove();},350); return; }
+            var status = doc.querySelector('[data-testid="stStatusWidget"]');
+            var running = status && (status.textContent || '').indexOf('Running') !== -1;
+            var app = doc.querySelector('[data-testid="stAppViewContainer"]');
+            if (app && !running) {
+                clearInterval(iv);
+                setTimeout(function(){ ov.style.opacity='0'; setTimeout(function(){ov.remove();},350); }, 250);
+            }
+        }, 150);
+    }
+} catch(e2) {}
+
     // ── 1. localStorage 自动登录 ──────────────────────────────────
     var url = new URL(window.parent.location.href);
     if (!url.searchParams.get('_auth')) {
