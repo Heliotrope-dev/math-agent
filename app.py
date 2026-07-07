@@ -103,6 +103,7 @@ def _show_login_page():
                         st.error(f"注册失败：{_e}")
 
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="wide", initial_sidebar_state="expanded")
+st.markdown(_BASE_CSS, unsafe_allow_html=True)  # 尽早注入，防止导航栏闪烁
 
 # ── 启动环境校验：至少配置一个云端 API Key，否则友好提示而非运行时崩溃 ────────
 if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("SILICONFLOW_API_KEY")):
@@ -399,6 +400,10 @@ st.markdown(_BASE_CSS, unsafe_allow_html=True)
 
 # ── 登录检查（未登录则显示登录页并阻止后续渲染）─────────────────────────────
 if not st.session_state.get("logged_in"):
+    st.markdown(
+        "<style>[data-testid='stSidebar']{display:none!important}</style>",
+        unsafe_allow_html=True,
+    )
     _show_login_page()
     st.stop()
 
