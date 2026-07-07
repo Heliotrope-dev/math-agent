@@ -7,59 +7,62 @@ from datetime import datetime, timedelta
 
 import requests
 
-_SB_URL = (
-    os.environ.get("SUPABASE_URL", "").rstrip("/") + "/rest/v1"
-    if os.environ.get("SUPABASE_URL")
-    else ""
-)
-_SB_KEY = os.environ.get("SUPABASE_KEY", "")
-_SB_HDR = {
-    "apikey": _SB_KEY,
-    "Authorization": f"Bearer {_SB_KEY}",
-    "Content-Type": "application/json",
-}
-
 _TOKEN_DAYS = 7
 
 
 # ── Supabase REST（直接用 requests，无需 supabase 包）────────────────────────
 
+def _sb_url() -> str:
+    url = os.environ.get("SUPABASE_URL", "")
+    return url.rstrip("/") + "/rest/v1" if url else ""
+
+def _sb_headers() -> dict:
+    key = os.environ.get("SUPABASE_KEY", "")
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+
+def _sb_ready() -> bool:
+    return bool(_sb_url() and os.environ.get("SUPABASE_KEY"))
+
+
 def _sb_get(table: str, params: dict) -> list:
-    if not _SB_URL or not _SB_KEY:
+    if not _sb_ready():
         return []
     try:
-        r = requests.get(f"{_SB_URL}/{table}", headers=_SB_HDR, params=params, timeout=8)
+        r = requests.get(f"{_sb_url()}/{table}", headers=_sb_headers(), params=params, timeout=8)
         return r.json() if r.ok else []
     except Exception:
         return []
 
 
 def _sb_post(table: str, data) -> bool:
-    """写入成功返回 True；网络异常/配置缺失/HTTP 错误都返回 False，调用方可据此回滚。"""
-    if not _SB_URL or not _SB_KEY:
+    if not _sb_ready():
         return False
     try:
-        r = requests.post(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, timeout=8)
+        r = requests.post(f"{_sb_url()}/{table}", headers=_sb_headers(), json=data, timeout=8)
         return r.ok
     except Exception:
         return False
 
 
 def _sb_delete(table: str, params: dict) -> bool:
-    if not _SB_URL or not _SB_KEY:
+    if not _sb_ready():
         return False
     try:
-        r = requests.delete(f"{_SB_URL}/{table}", headers=_SB_HDR, params=params, timeout=8)
+        r = requests.delete(f"{_sb_url()}/{table}", headers=_sb_headers(), params=params, timeout=8)
         return r.ok
     except Exception:
         return False
 
 
 def _sb_patch(table: str, data: dict, params: dict) -> bool:
-    if not _SB_URL or not _SB_KEY:
+    if not _sb_ready():
         return False
     try:
-        r = requests.patch(f"{_SB_URL}/{table}", headers=_SB_HDR, json=data, params=params, timeout=8)
+        r = requests.patch(f"{_sb_url()}/{table}", headers=_sb_headers(), json=data, params=params, timeout=8)
         return r.ok
     except Exception:
         return False
@@ -178,30 +181,24 @@ def _load_wrong_book(email: str) -> list:
 
 
 def _save_wrong_book(email: str, wb: list) -> bool:
-    """全量覆盖式保存；delete 成功但 insert 失败时用备份回滚，避免数据丢失。"""
+    """差量更新：只增删变化的条目，消除全量覆盖的数据丢失窗口。"""
     if not email:
         return False
-    rows = [
-        {
-            "email": email,
-            "question": item["question"],
-            "saved_at": item.get("saved_at", ""),
-            "image_b64": item.get("image_b64", ""),
-        }
-        for item in wb
-    ] if wb else []
-    backup = _load_wrong_book(email)
-    if not _sb_delete("wrong_book", {"email": f"eq.{email}"}):
-        return False  # 删除失败，远端数据未动，无需回滚
-    if not rows:
-        return True
-    if _sb_post("wrong_book", rows):
-        return True
-    # delete 成功但 insert 失败 → 尝试恢复备份
-    if backup:
-        _sb_post("wrong_book", [
-            {"email": email, "question": x["question"],
-             "saved_at": x.get("saved_at", ""), "image_b64": x.get("image_b64", "")}
-            for x in backup
-        ])
-    return False
+    existing = _load_wrong_book(email)
+    existing_qs = {r["question"] for r in existing}
+    new_qs = {item["question"] for item in wb} if wb else set()
+
+    # 精确删除已移除的条目（按 question 精确匹配，不影响其他条目）
+    for q in existing_qs - new_qs:
+        _sb_delete("wrong_book", {"email": f"eq.{email}", "question": f"eq.{q}"})
+
+    # 插入新增的条目
+    to_add = [item for item in (wb or []) if item["question"] not in existing_qs]
+    if to_add:
+        rows = [
+            {"email": email, "question": item["question"],
+             "saved_at": item.get("saved_at", ""), "image_b64": item.get("image_b64", "")}
+            for item in to_add
+        ]
+        return _sb_post("wrong_book", rows)
+    return True
