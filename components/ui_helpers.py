@@ -106,6 +106,24 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !imp
 }
 .refresh-btn button:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
 
+/* page_link 外框样式，与 expander 保持一致 */
+a[data-testid="stPageLink-NavLink"] {
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    padding: 8px 14px !important;
+    font-size: 0.95rem !important;
+    color: var(--text) !important;
+    text-decoration: none !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    transition: border-color 0.15s;
+}
+a[data-testid="stPageLink-NavLink"]:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+
 .msg-row-user { display: flex; justify-content: flex-end; margin: 6px 0; }
 .bubble-user {
     background: var(--user-bg) !important;
