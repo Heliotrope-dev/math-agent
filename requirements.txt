@@ -6,3 +6,5 @@ httpx
 Pillow
 matplotlib
 numpy
+chromadb>=0.5.0
+pymupdf
