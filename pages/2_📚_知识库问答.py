@@ -100,7 +100,7 @@ def render_sidebar(engine: RAGEngine) -> None:
     with st.sidebar:
         st.page_link("_math_page.py", label="← 数学解题", use_container_width=True)
         st.divider()
-        st.subheader("📚 知识库管理")
+        st.subheader("知识库管理")
 
         missing = [k for k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY") if not get_secret(k)]
         if missing:
@@ -142,9 +142,9 @@ def render_sidebar(engine: RAGEngine) -> None:
 
 def render_chat(engine: RAGEngine) -> None:
     st.markdown("""
-    <div style="padding: 12px 0 4px">
-        <span style="font-size:2rem;font-weight:700;">📚 知识库问答</span><br>
-        <span style="font-size:0.85rem;color:#888;">上传文档后提问 · 语义检索 + DeepSeek 生成 · 答案附引用来源</span>
+    <div style="padding:16px 0 8px">
+        <div style="font-size:1.6rem;font-weight:600;letter-spacing:-0.01em;margin-bottom:4px">知识库问答</div>
+        <div style="font-size:0.83rem;color:var(--text-muted)">上传文档后提问 · 语义检索 + DeepSeek 生成 · 附引用来源</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -169,7 +169,7 @@ def render_chat(engine: RAGEngine) -> None:
                 with st.expander(f"📎 参考来源（{len(msg['chunks'])} 条）"):
                     for i, c in enumerate(msg["chunks"], 1):
                         st.markdown(f"**{i}. {c['source']} · 第{c['page']}页** （相关度 {1 - c['distance']:.0%}）")
-                        st.text(c["text"][:400] + ("…" if len(c["text"]) > 400 else ""))
+                        st.markdown(f'<p style="font-size:0.8rem;color:var(--text-muted);line-height:1.6;margin:4px 0 0">{c["text"][:400]}{"…" if len(c["text"]) > 400 else ""}</p>', unsafe_allow_html=True)
 
     # ── 输入框 ─────────────────────────────────────────────────────────────────
     question = st.chat_input("输入你的问题…")

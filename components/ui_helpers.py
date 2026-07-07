@@ -147,8 +147,8 @@ a[data-testid="stPageLink-NavLink"]:focus {
 }
 .bubble-asst-wrap p, .bubble-asst-wrap li { color: var(--text) !important; }
 .stMarkdown:has(.asst-bubble-marker) + .stMarkdown > div {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 4px 18px 18px 18px; padding: 10px 14px;
+    background: var(--surface) !important; border: 1px solid var(--border) !important;
+    border-radius: 4px 18px 18px 18px !important; padding: 10px 14px !important;
     font-family: 'LXGW WenKai', 'KaiTi', 'STKaiti', serif;
     font-size: 1rem; line-height: 1.8; word-break: break-word;
 }
@@ -266,7 +266,7 @@ div[data-testid="stPills"] span { color: inherit !important; background: transpa
 
 pre, code { background: #F0F1F3 !important; border: 1px solid var(--border) !important; border-radius: 8px !important; font-size: 0.82rem !important; color: #333 !important; }
 hr { border-color: var(--border) !important; }
-[data-testid="stSidebar"] hr { margin: 4px 0 !important; }
+[data-testid="stSidebar"] hr { margin: 8px 0 !important; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 6px !important; }
 
 .katex-display { margin: 0.8em 0 !important; overflow-x: auto !important; overflow-y: hidden !important; }
@@ -314,11 +314,10 @@ mjx-container svg, mjx-container svg * { fill: #1A1A2E !important; }
 [data-testid="stCheckbox"] span, [data-testid="stCheckbox"] p { color: var(--text) !important; }
 
 .feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0 12px; }
-.feature-card { background: var(--surface); border-radius: var(--radius); padding: 14px 12px; text-align: center; border: 1px solid var(--border); }
+.feature-card { background: var(--surface); border-radius: var(--radius); padding: 18px 16px; text-align: left; border: 1px solid var(--border); }
 .feature-card:hover { border-color: var(--accent); }
-.feature-icon { font-size: 1.5rem; margin-bottom: 6px; }
-.feature-title { font-size: 0.88rem; font-weight: 600; color: var(--text) !important; margin-bottom: 4px; }
-.feature-desc { font-size: 0.75rem; color: var(--text-muted) !important; line-height: 1.4; }
+.feature-title { font-size: 0.92rem; font-weight: 600; color: var(--text) !important; margin-bottom: 5px; }
+.feature-desc { font-size: 0.78rem; color: var(--text-muted) !important; line-height: 1.5; }
 
 button[kind="secondary"][data-testid*="wb_add"] {
     font-size: 0.75rem !important; color: var(--text-muted) !important;
@@ -387,9 +386,9 @@ button[kind="secondary"][data-testid*="wb_add"] {
     .av { width: 28px !important; height: 28px !important; font-size: 0.9rem !important; }
     .app-header-title { font-size: 0.9rem !important; }
     [data-testid="stChatInputTextArea"] { font-size: 0.9rem !important; }
-    .feature-card { padding: 10px 8px; }
-    .feature-title { font-size: 0.82rem !important; }
-    .feature-desc { font-size: 0.7rem !important; }
+    .feature-card { padding: 14px 12px; }
+    .feature-title { font-size: 0.85rem !important; }
+    .feature-desc { font-size: 0.72rem !important; }
 }
 </style>
 """

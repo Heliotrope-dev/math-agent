@@ -825,22 +825,18 @@ if not st.session_state.messages:
         st.markdown("""
         <div class="feature-grid">
             <div class="feature-card">
-                <div class="feature-icon">📐</div>
                 <div class="feature-title">精准解题</div>
                 <div class="feature-desc">多工具协作，完整推导过程与答案</div>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">📷</div>
                 <div class="feature-title">拍题识别</div>
                 <div class="feature-desc">拍照或上传图片，AI 识别并解答</div>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">🎙️</div>
                 <div class="feature-title">语音提问</div>
                 <div class="feature-desc">支持中英文语音识别，说题即解</div>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">🧭</div>
                 <div class="feature-title">引导学习</div>
                 <div class="feature-desc">苏格拉底式教学，引导自主思考</div>
             </div>
