@@ -7,6 +7,8 @@ import streamlit as st
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
+st.set_page_config(page_title="知识库问答", page_icon="📚", layout="wide")
+
 for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
     if _k not in os.environ:
         try:
@@ -15,10 +17,19 @@ for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
             pass
 
 from components.config import get_secret
+from components.ui_helpers import _BASE_CSS, _DARK_CSS
 from components.rag_engine import RAGEngine
 from components.rag_ingest import chunk_documents, parse_pdf, parse_txt
 
-st.set_page_config(page_title="知识库问答", page_icon="📚", layout="wide")
+# 复用 math-agent 的主题 CSS，隐藏原生导航
+_dm = st.session_state.get("dark_mode", False)
+st.markdown(_BASE_CSS + (_DARK_CSS if _dm else ""), unsafe_allow_html=True)
+
+# 权限检查
+if not st.session_state.get("logged_in", False):
+    st.warning("请先登录后使用")
+    st.page_link("app.py", label="← 返回登录", use_container_width=False)
+    st.stop()
 
 
 @st.cache_resource
@@ -39,6 +50,8 @@ def _ingest_file(engine: RAGEngine, uploaded) -> int:
 
 def render_sidebar(engine: RAGEngine) -> None:
     with st.sidebar:
+        st.page_link("app.py", label="← 数学解题", use_container_width=True)
+        st.divider()
         st.title("📚 知识库")
 
         missing = [k for k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY") if not get_secret(k)]

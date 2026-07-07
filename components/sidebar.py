@@ -47,6 +47,8 @@ def render_sidebar() -> None:
         if st.button(_dm_icon, key="dark_mode_btn", use_container_width=True, help="切换深色/浅色模式"):
             st.session_state.dark_mode = not st.session_state.dark_mode
             st.rerun()
+
+    st.page_link("pages/2_📚_知识库问答.py", label="📚 知识库问答", use_container_width=True)
     st.divider()
 
     # ── 最近问题（最多显示20条）─────────────────────────────────────────────

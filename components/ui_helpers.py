@@ -5,6 +5,8 @@ _BASE_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 @import url('https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css');
 
+[data-testid="stSidebarNav"] { display: none !important; }
+
 :root {
     --bg:        #F8F8FA;
     --surface:   #FFFFFF;
