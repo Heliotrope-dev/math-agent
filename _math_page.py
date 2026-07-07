@@ -798,6 +798,7 @@ if not st.session_state.messages:
                     st.session_state["_direct_input"] = (
                         f"【知识点讲解】{_cur_course} · {_topic}"
                     )
+                    st.rerun()
 
     else:
         # ── 默认模式：示例题 ──
@@ -815,6 +816,7 @@ if not st.session_state.messages:
             with cols[idx % 2]:
                 if st.button(ex, key=f"ex_{idx}", use_container_width=True):
                     st.session_state["_direct_input"] = ex
+                    st.rerun()
 
         _, mid, _ = st.columns([3, 2, 3])
         with mid:
@@ -868,11 +870,16 @@ for i, msg in enumerate(st.session_state.messages):
                     unsafe_allow_html=True)
         st.markdown(fix_latex(msg["content"]))
         if msg.get("tags"):
-            _tcols = st.columns(len(msg["tags"]))
-            for _ti, _tag in enumerate(msg["tags"]):
-                with _tcols[_ti]:
-                    if st.button(_tag, key=f"tag_{i}_{_ti}", use_container_width=True):
-                        st.session_state["_direct_input"] = f"请详细讲解「{_tag}」：定义、推导过程和典型例题"
+            _sel_tag = st.pills(
+                label="",
+                options=msg["tags"],
+                key=f"tags_{i}",
+                label_visibility="collapsed",
+            )
+            if _sel_tag and st.session_state.get(f"_tag_done_{i}") != _sel_tag:
+                st.session_state[f"_tag_done_{i}"] = _sel_tag
+                st.session_state["_direct_input"] = f"请详细讲解「{_sel_tag}」：定义、推导过程和典型例题"
+                st.rerun()
         if msg.get("practice"):
             st.markdown(
                 '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
