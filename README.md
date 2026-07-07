@@ -1,6 +1,6 @@
 # Math Agent
 
-面向大学数学的 AI 解题助手，支持文字、拍题、语音三种提问方式，自带学习记录和错题本。
+面向大学数学的 AI 学习平台，包含 AI 解题助手和 RAG 知识库问答两大功能模块。
 
 线上地址：**[math.heliotrope.online](https://math.heliotrope.online)**
 
@@ -8,6 +8,7 @@
 
 ## 功能
 
+### 数学解题
 - **拍题识别**：拍照或上传图片，Qwen3-VL 识别题目并逐步解答
 - **语音提问**：说出题目，SenseVoice 转文字后直接求解
 - **符号计算**：SymPy 精确求解微积分、线性代数、方程，无浮点误差
@@ -16,19 +17,31 @@
 - **错题本**：解题后一键收藏，支持随机复习
 - **学习档案**：记录访问过的知识点，标记薄弱环节（访问 ≥2 次）
 
+### 知识库问答（RAG）
+- **文档上传**：支持 PDF / TXT / Markdown，同名文件自动去重
+- **语义检索**：BAAI/bge-m3 向量化，ChromaDB 余弦相似度检索
+- **带引用回答**：DeepSeek 基于检索结果生成答案，附文件名 + 页码来源
+- **多轮对话**：保留最近 5 轮历史，上下文连贯
+
 ---
 
 ## 项目结构
 
 ```
-app.py                  # 入口：路由、会话管理、主布局
-agent.py                # ReAct 循环 + 多模型路由
-tools.py                # 三个工具：计算器 / 公式检索 / 步骤分解
+app.py                      # 入口：路由、会话管理、主布局
+agent.py                    # ReAct 循环 + 多模型路由
+tools.py                    # 三个工具：计算器 / 公式检索 / 步骤分解
+pages/
+  2_📚_知识库问答.py          # RAG 问答页（Streamlit 多页面）
 components/
-  auth.py               # 认证：注册 / 登录 / token 校验 / 错题本持久化
-  sidebar.py            # 侧边栏全部 UI
-  config.py             # 常量 + 密钥读取
-  ui_helpers.py         # 全局 CSS（日间 / 暗色两套）
+  auth.py                   # 认证：注册 / 登录 / token 校验 / 错题本持久化
+  sidebar.py                # 侧边栏全部 UI
+  config.py                 # 常量 + 密钥读取
+  ui_helpers.py             # 全局 CSS（日间 / 暗色两套）
+  rag_engine.py             # RAGEngine：向量化 / ChromaDB / DeepSeek 生成
+  rag_ingest.py             # 文档解析与句子边界切分
+data/
+  chroma_db/                # ChromaDB 本地持久化向量库
 ```
 
 ---
@@ -149,7 +162,23 @@ new MutationObserver(function(muts) {
 
 ---
 
-### 6. KaTeX 替代内置 MathJax
+### 6. RAG 知识库：不依赖框架，每步显式实现
+
+知识库问答没有使用 LangChain / LlamaIndex，检索和生成的每一步都是显式代码，方便调试和定制。
+
+**切分策略**：按句子边界（`。！？!?\n`）优先断句，单句超长时再按窗口硬切，默认 500 字 / 50 字重叠。相比按字符数盲切，保留了更完整的语义单元。
+
+**编码兼容**：TXT/Markdown 文件依次尝试 utf-8 → gb18030 → latin-1，兼容中文文档常见的 GBK 编码问题。
+
+**向量化**：BAAI/bge-m3（SiliconFlow），按批次（16 条）请求，对接口返回乱序的情况按 `index` 字段排序后再拼接。
+
+**向量库**：ChromaDB 本地持久化，余弦相似度，同名文档先删后写实现去重覆盖，不会出现重复 chunk 干扰检索。
+
+**惰性客户端**：`RAGEngine` 被 `@st.cache_resource` 长期缓存，DeepSeek client 在 `__init__` 里不创建，改为每次使用时对比当前 key 是否变化，变了则重建，保证 key 配置后即生效。
+
+---
+
+### 7. KaTeX 替代内置 MathJax
 
 Streamlit 内置 MathJax 在流式输出时会和 markdown 解析冲突，导致公式闪烁或渲染失败。改成手动加载 KaTeX：动态插入 `<script>` 标签，加载完成后挂 `MutationObserver`，每次 DOM 变化后 debounce 250ms 重新 render。同样通过 `window.parent.document` 注入到父页面，公式渲染在整个应用范围内生效。
 
@@ -188,11 +217,12 @@ OpenClaw 的 Fable 5 子 Agent 会直接 SSH 到 VPS 修改文件但不提交，
 ## 技术栈
 
 - **语言**：Python 3.11
-- **框架**：Streamlit
+- **框架**：Streamlit（多页面）
 - **LLM**：DeepSeek API（文字）/ SiliconFlow Qwen3-VL（视觉）/ SenseVoice（语音）
-- **符号计算**：SymPy
+- **符号计算**：SymPy（ProcessPoolExecutor 隔离，15s 超时防挂死）
+- **向量检索**：ChromaDB + BAAI/bge-m3（SiliconFlow Embeddings）
 - **数据库**：Supabase（PostgreSQL，直接 REST）
-- **部署**：VPS + Nginx 反向代理 + systemd + GitHub Actions 自动部署
+- **部署**：VPS + Nginx 反向代理 + Cloudflare CDN + systemd
 
 ---
 
