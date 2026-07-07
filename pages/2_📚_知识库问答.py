@@ -4,6 +4,7 @@ import logging
 import os
 
 import streamlit as st
+import streamlit.components.v1 as _cv1
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
@@ -23,6 +24,57 @@ from components.rag_ingest import chunk_documents, parse_pdf, parse_txt
 
 _dm = st.session_state.get("dark_mode", False)
 st.markdown(_BASE_CSS + (_DARK_CSS if _dm else ""), unsafe_allow_html=True)
+
+_dm_flag = "true" if _dm else "false"
+_cv1.html(f"""<script>
+(function(){{
+try{{
+    var dark = {_dm_flag};
+    var doc = window.parent.document;
+    var SID = '_dm_rag_css';
+    var el = doc.getElementById(SID);
+    if (!dark) {{ if (el) el.remove(); return; }}
+    var s = el || doc.createElement('style');
+    if (!el) {{ s.id = SID; doc.head.appendChild(s); }}
+    s.textContent =
+        '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
+        '[data-testid="stChatInputContainer"]>div,[data-testid="stChatInputContainer"]>div>div{{background:#16162A!important}}' +
+        '[data-testid="stChatInputTextArea"]{{background:#16162A!important;color:#DEE1F5!important;-webkit-text-fill-color:#DEE1F5!important;caret-color:#DEE1F5!important;border:none!important}}' +
+        '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
+        '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}' +
+        '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
+        '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}';
+    function applyInline() {{
+        var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
+        if (inp) {{
+            inp.style.setProperty('background','#16162A','important');
+            inp.style.setProperty('border','1.5px solid #282845','important');
+            inp.style.setProperty('border-radius','24px','important');
+            inp.querySelectorAll('*').forEach(function(d){{ d.style.setProperty('background','#16162A','important'); }});
+            inp.querySelectorAll('textarea,input').forEach(function(t){{
+                t.style.setProperty('color','#DEE1F5','important');
+                t.style.setProperty('background','#16162A','important');
+                t.style.setProperty('-webkit-text-fill-color','#DEE1F5','important');
+                t.style.setProperty('caret-color','#DEE1F5','important');
+            }});
+        }}
+        doc.querySelectorAll('[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]').forEach(function(bt){{
+            bt.style.setProperty('background','#0D0D14','important');
+            bt.querySelectorAll('*').forEach(function(e2){{ e2.style.setProperty('background','#0D0D14','important'); }});
+        }});
+    }}
+    applyInline();
+    if (!doc._dmRagObs) {{
+        doc._dmRagObs = new MutationObserver(function(muts){{
+            if (!muts.some(function(m){{ return m.addedNodes.length>0; }})) return;
+            clearTimeout(doc._dmRagObs._t);
+            doc._dmRagObs._t = setTimeout(applyInline, 30);
+        }});
+        doc._dmRagObs.observe(doc.body, {{childList:true,subtree:true}});
+    }}
+}} catch(e) {{}}
+}})();
+</script>""", height=1)
 
 if not st.session_state.get("logged_in", False):
     st.warning("请先登录后使用")

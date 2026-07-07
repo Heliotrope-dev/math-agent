@@ -128,7 +128,7 @@ try {
         ov.id = '_ma_loader';
         var isDark = window.parent.matchMedia('(prefers-color-scheme: dark)').matches;
         ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.35s;background:' + (isDark ? '#0D0D14' : '#F8F8FA');
-        ov.innerHTML = '<div style="font-size:2.4rem">🧮</div><div style="font-size:0.95rem;color:#888;font-family:Inter,sans-serif;letter-spacing:.02em">加载中…</div>';
+        ov.innerHTML = '<div style="width:36px;height:36px;border:3px solid #e0e0e8;border-top-color:#5B8CFF;border-radius:50%;animation:_ma_spin 0.8s linear infinite"></div><div style="font-size:0.9rem;color:#aaa;font-family:Inter,sans-serif;letter-spacing:.03em;margin-top:4px">加载中…</div><style>@keyframes _ma_spin{to{transform:rotate(360deg)}}</style>';
         doc.body.appendChild(ov);
         var tries = 0;
         var iv = setInterval(function() {
