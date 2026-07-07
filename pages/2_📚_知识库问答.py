@@ -21,11 +21,9 @@ from components.ui_helpers import _BASE_CSS, _DARK_CSS
 from components.rag_engine import RAGEngine
 from components.rag_ingest import chunk_documents, parse_pdf, parse_txt
 
-# 复用 math-agent 的主题 CSS，隐藏原生导航
 _dm = st.session_state.get("dark_mode", False)
 st.markdown(_BASE_CSS + (_DARK_CSS if _dm else ""), unsafe_allow_html=True)
 
-# 权限检查
 if not st.session_state.get("logged_in", False):
     st.warning("请先登录后使用")
     st.page_link("app.py", label="← 返回登录", use_container_width=False)
@@ -52,7 +50,7 @@ def render_sidebar(engine: RAGEngine) -> None:
     with st.sidebar:
         st.page_link("app.py", label="← 数学解题", use_container_width=True)
         st.divider()
-        st.title("📚 知识库")
+        st.subheader("📚 知识库管理")
 
         missing = [k for k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY") if not get_secret(k)]
         if missing:
@@ -80,21 +78,25 @@ def render_sidebar(engine: RAGEngine) -> None:
                 st.error(err)
 
         st.divider()
-        st.subheader("已上传文档")
+        st.caption("已上传文档")
         doc_counts = engine.list_documents()
         if not doc_counts:
             st.caption("（暂无文档）")
         for source, count in sorted(doc_counts.items()):
             col_name, col_del = st.columns([4, 1])
-            col_name.markdown(f"**{source}**\n\n{count} 个段落")
+            col_name.markdown(f"**{source}**  \n{count} 段落")
             if col_del.button("🗑", key=f"del::{source}", help=f"删除 {source}"):
                 engine.delete_document(source)
                 st.rerun()
 
 
 def render_chat(engine: RAGEngine) -> None:
-    st.title("📚 知识库问答")
-    st.caption("上传文档后提问 · 语义检索 + DeepSeek 生成 · 答案附引用来源")
+    st.markdown("""
+    <div style="padding: 12px 0 4px">
+        <span style="font-size:2rem;font-weight:700;">📚 知识库问答</span><br>
+        <span style="font-size:0.85rem;color:#888;">上传文档后提问 · 语义检索 + DeepSeek 生成 · 答案附引用来源</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     if engine.collection.count() == 0:
         st.info("👆 请先在左侧上传文档")
@@ -102,42 +104,55 @@ def render_chat(engine: RAGEngine) -> None:
     if "rag_messages" not in st.session_state:
         st.session_state.rag_messages = []
 
+    # ── 历史消息（与 math-agent 同款气泡样式）──────────────────────────────────
     for msg in st.session_state.rag_messages:
-        with st.chat_message(msg["role"]):
+        if msg["role"] == "user":
+            _safe = msg["content"].replace("<", "&lt;").replace(">", "&gt;")
+            st.markdown(
+                f'<div class="msg-row-user"><div class="bubble-user">{_safe}</div></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown('<div class="asst-bubble-marker"></div>', unsafe_allow_html=True)
             st.markdown(msg["content"])
             if msg.get("chunks"):
                 with st.expander(f"📎 参考来源（{len(msg['chunks'])} 条）"):
                     for i, c in enumerate(msg["chunks"], 1):
-                        st.markdown(f"**{i}. {c['source']} · 第{c['page']}页** （距离 {c['distance']}）")
-                        st.text(c["text"][:500] + ("…" if len(c["text"]) > 500 else ""))
+                        st.markdown(f"**{i}. {c['source']} · 第{c['page']}页** （相关度 {1 - c['distance']:.0%}）")
+                        st.text(c["text"][:400] + ("…" if len(c["text"]) > 400 else ""))
 
+    # ── 输入框 ─────────────────────────────────────────────────────────────────
     question = st.chat_input("输入你的问题…")
     if not question:
         return
 
+    _safe_q = question.replace("<", "&lt;").replace(">", "&gt;")
+    st.markdown(
+        f'<div class="msg-row-user"><div class="bubble-user">{_safe_q}</div></div>',
+        unsafe_allow_html=True,
+    )
     st.session_state.rag_messages.append({"role": "user", "content": question})
-    with st.chat_message("user"):
-        st.markdown(question)
 
-    with st.chat_message("assistant"):
+    st.markdown('<div class="asst-bubble-marker"></div>', unsafe_allow_html=True)
+    with st.spinner("检索知识库并生成回答…"):
         try:
-            with st.spinner("检索知识库…"):
-                chunks = engine.query(question)
-            with st.spinner("生成回答…"):
-                answer = engine.generate_answer(question, chunks, st.session_state.rag_messages[:-1])
+            chunks = engine.query(question)
+            answer = engine.generate_answer(question, chunks, st.session_state.rag_messages[:-1])
         except Exception as e:
             answer = f"⚠️ {e}"
             chunks = []
-        st.markdown(answer)
-        if chunks:
-            with st.expander(f"📎 参考来源（{len(chunks)} 条）"):
-                for i, c in enumerate(chunks, 1):
-                    st.markdown(f"**{i}. {c['source']} · 第{c['page']}页** （距离 {c['distance']}）")
-                    st.text(c["text"][:500] + ("…" if len(c["text"]) > 500 else ""))
+
+    st.markdown(answer)
+    if chunks:
+        with st.expander(f"📎 参考来源（{len(chunks)} 条）"):
+            for i, c in enumerate(chunks, 1):
+                st.markdown(f"**{i}. {c['source']} · 第{c['page']}页** （相关度 {1 - c['distance']:.0%}）")
+                st.text(c["text"][:400] + ("…" if len(c["text"]) > 400 else ""))
 
     st.session_state.rag_messages.append(
         {"role": "assistant", "content": answer, "chunks": chunks}
     )
+    st.rerun()
 
 
 engine = get_engine()
