@@ -21,7 +21,7 @@ from openai import (
     BadRequestError, RateLimitError, APITimeoutError,
     APIConnectionError, InternalServerError,
 )
-from tools import TOOL_DEFINITIONS, execute_tool, compress_image, answers_equivalent
+from tools import TOOL_DEFINITIONS, execute_tool, compress_image, answer_supported_by_calcs
 
 _FINAL_ANSWER_RE = re.compile(r'\$\$(.+?)\$\$', re.DOTALL)
 
@@ -355,8 +355,8 @@ class MathAgent:
 
         # accumulate text from tool-calling rounds to avoid loss
         _accumulated: list[str] = []
-        # 答案自纠错：记下最后一次 calculator 的结果，跟模型最终写的答案核对
-        _last_calc_result: Optional[str] = None
+        # 答案自纠错：记下这一轮所有 calculator 的结果，跟模型最终写的答案核对
+        _calc_results: list[str] = []
         _verify_attempted = False
 
         for iteration in range(self.max_iterations):
@@ -386,20 +386,19 @@ class MathAgent:
                 if _accumulated:
                     final = "\n\n".join(_accumulated) + "\n\n" + final
 
-                if _last_calc_result and not _verify_attempted:
+                if _calc_results and not _verify_attempted:
                     parsed = _extract_final_answer(final)
-                    if parsed and not answers_equivalent(parsed, _last_calc_result):
+                    if parsed and not answer_supported_by_calcs(parsed, _calc_results):
                         _verify_attempted = True
-                        _log.info("答案自纠错触发：最终答案 %r 与 calculator 结果 %r 不一致", parsed, _last_calc_result)
+                        _log.info("答案自纠错触发：最终答案 %r 在 calculator 结果 %r 里找不到依据", parsed, _calc_results)
                         messages.append(msg)
                         messages.append({
                             "role": "user",
                             "content": (
-                                f"检查一下：你用 calculator 算出的结果是「{_last_calc_result}」，"
-                                f"但最终答案写的是「{parsed}」，两者对不上。请重新核对计算过程，"
-                                "如果确认之前的最终答案有误，给出修正后的完整解答；"
-                                "如果确认最终答案是对的（比如经过了合理的化简/取舍），"
-                                "说明理由后维持原答案。"
+                                f"检查一下：你最终写的答案是「{parsed}」，但这跟你用 calculator "
+                                "算出的结果对不上。请重新核对计算过程，如果确认之前的最终答案有误，"
+                                "给出修正后的完整解答；如果确认最终答案是对的（比如经过了合理的"
+                                "化简/取舍），说明理由后维持原答案。"
                             ),
                         })
                         continue
@@ -433,7 +432,7 @@ class MathAgent:
                 try:
                     result = execute_tool(name, args)
                     if name == "calculator":
-                        _last_calc_result = result
+                        _calc_results.append(result)
                 except Exception as exc:
                     _log.warning("tool %s failed: %s (args=%s)", name, exc, args)
                     result = f"[工具执行出错: {type(exc).__name__}: {exc}。请检查参数格式后重试，或改用其他方法]"

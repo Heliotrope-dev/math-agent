@@ -472,13 +472,31 @@ from sympy.parsing.sympy_parser import (
 )
 _LOOSE_TRANSFORMS = _std_transforms + (_implicit_mul,)
 
-_LATEX_STRIP = _re.compile(r'\$+|\\\(|\\\)|\\\[|\\\]|\\left|\\right|\\,|\\;')
+_LATEX_STRIP = _re.compile(r'\$+|\\\(|\\\)|\\\[|\\\]|\\left|\\right|\\,|\\;|\\quad|\\qquad|\\!')
 _ANSWER_PREFIX = _re.compile(r'^(答案|结果|即|解得?)\s*[:：]?\s*')
 _VAR_EQ_PREFIX = _re.compile(r'^[a-zA-Z]\w*\s*=\s*(.+)$')
+_BOXED_RE = _re.compile(r'\\boxed\s*\{(.*)\}\s*$', _re.DOTALL)
+_FRAC_RE = _re.compile(r'\\[cd]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}')
+_FRAC_SHORT_RE = _re.compile(r'\\[cd]?frac\s*(\w)\s*(\w)')  # \frac12 简写（无花括号，各一个字符）
+
+
+def _normalize_latex(s: str) -> str:
+    """把常见的 LaTeX 数学宏转成 sympy 能读的形式：\\boxed{} 拆包，\\frac{a}{b} / \\frac12 → (a)/(b)。"""
+    s = s.strip()
+    m = _BOXED_RE.match(s)
+    if m:
+        s = m.group(1).strip()
+    prev = None
+    while prev != s:  # \frac 可能嵌套（如分数里还有分数），反复替换到不再变化
+        prev = s
+        s = _FRAC_RE.sub(r'(\1)/(\2)', s)
+        s = _FRAC_SHORT_RE.sub(r'(\1)/(\2)', s)
+    return s
 
 
 def _clean_answer_text(s: str) -> str:
-    """去除 LaTeX 包裹符号、"答案："前缀，剩下待拆分/sympify 的核心内容。"""
+    """去除 LaTeX 宏/包裹符号、"答案："前缀，剩下待拆分/sympify 的核心内容。"""
+    s = _normalize_latex(s)
     s = _LATEX_STRIP.sub('', s).strip()
     s = _ANSWER_PREFIX.sub('', s).strip()
     return s.strip()
@@ -524,37 +542,46 @@ def _to_value_set(s: str) -> "list | None":
     return values
 
 
-def answers_equivalent(parsed_answer: str, tool_result: str, tol: float = 1e-6) -> bool:
-    """判断模型最终答案（parsed_answer）与 calculator 的计算结果（tool_result）在数学上是否等价。
+def _value_in_pool(v, pool: list, tol: float = 1e-6) -> bool:
+    """v 是否在 pool 里有等价的值（先试符号相等，再退化到数值容差）。"""
+    for p in pool:
+        try:
+            if sp.simplify(v - p) == 0:
+                return True
+        except Exception:
+            pass
+        try:
+            if abs(complex(sp.N(v)) - complex(sp.N(p))) < tol:
+                return True
+        except Exception:
+            pass
+    return False
 
-    用 SymPy 判断"是否相等"，而不是字符串比较——'x=2'、'2'、'2.0' 应视为等价。
-    多解按集合匹配（不关心顺序），数量不一致视为不等价（保守策略：宁可多重试一次，
-    不漏掉模型漏抄了某个解的情况）。
+
+def answer_supported_by_calcs(parsed_answer: str, calc_results: list, tol: float = 1e-6) -> bool:
+    """判断最终答案里的每一个值，是否都能在这一轮所有 calculator 调用结果里找到依据。
+
+    不是只对比"最后一次调用"——模型经常分几次单独算（比如二次方程两个根分两次
+    evaluate），只看最后一次会把正确答案误判成不一致。这里把这一轮所有 calculator
+    结果汇总成一个"值池"，最终答案里的每个值只要能在池子里找到匹配就算通过。
+    找不到 calculator 记录、或最终答案解析失败，一律判为"无法验证"（不通过）。
     """
-    a = _to_value_set(parsed_answer)
-    b = _to_value_set(_extract_calc_value(tool_result))
-    if a is None or b is None or len(a) != len(b):
+    answer_vals = _to_value_set(parsed_answer)
+    if not answer_vals:
         return False
-    remaining = list(b)
-    for va in a:
-        match_idx = None
-        for i, vb in enumerate(remaining):
-            try:
-                if sp.simplify(va - vb) == 0:
-                    match_idx = i
-                    break
-            except Exception:
-                pass
-            try:
-                if abs(complex(sp.N(va)) - complex(sp.N(vb))) < tol:
-                    match_idx = i
-                    break
-            except Exception:
-                pass
-        if match_idx is None:
-            return False
-        remaining.pop(match_idx)
-    return True
+    pool = []
+    for r in calc_results:
+        vals = _to_value_set(_extract_calc_value(r))
+        if vals:
+            pool.extend(vals)
+    if not pool:
+        return False
+    return all(_value_in_pool(v, pool, tol) for v in answer_vals)
+
+
+def answers_equivalent(parsed_answer: str, tool_result: str, tol: float = 1e-6) -> bool:
+    """判断模型最终答案与单次 calculator 结果是否数学等价（answer_supported_by_calcs 的单值版本）。"""
+    return answer_supported_by_calcs(parsed_answer, [tool_result], tol)
 
 
 # RAG 懒加载索引（首次调用时构建，需要 Ollama 在线；失败后 5 分钟重试）
