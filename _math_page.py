@@ -1209,7 +1209,10 @@ if user_input:
     if _img_bytes and "_img_b64_bubble" in locals():
         _msg_record["image_b64"] = _img_b64_bubble
     st.session_state.messages.append(_msg_record)
-    _save_message(st.session_state.get("user_email", ""), "user", user_input)
+    _save_message(
+        st.session_state.get("user_email", ""), "user", user_input,
+        image_b64=_msg_record.get("image_b64", ""),
+    )
 
     with _new_turn:
         # 用户气泡
@@ -1247,6 +1250,8 @@ if user_input:
                     f"上一题：{_sim_data['question']}\n\n"
                     f"上一题的解答（题目内容包含在其中）：{_sim_data['answer']}\n\n"
                     "请出一道相似但不同的练习题，标注题型和难度，只出题不解答。"
+                    "所有数学公式、表达式必须用 LaTeX 并加 $ 包裹（行内 $...$，"
+                    "独立公式 $$...$$），不要用代码块或反引号包裹数学内容。"
                 )
                 solve_history = []
             else:

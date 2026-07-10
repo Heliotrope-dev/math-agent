@@ -173,20 +173,24 @@ def _invalidate_token(token: str):
 
 
 # ── 对话历史持久化（Supabase REST）───────────────────────────────────────────
-# 只存 role/content 文字内容，不存图片（base64图片会让表迅速膨胀，而且
-# image_b64 只是给气泡显示用的，不影响后续对话的文字上下文）。
+# image_b64 存的是已经压缩过的缩略图（compress_image 处理过，单张几十到
+# 一百多KB），个人使用量级不会让表明显膨胀，用户明确要求上传的图片以后
+# 还能点开看，所以存。
 
-def _save_message(email: str, role: str, content: str) -> bool:
+def _save_message(email: str, role: str, content: str, image_b64: str = "") -> bool:
     if not email or not content:
         return False
-    return _sb_post("chat_messages", {"email": email, "role": role, "content": content})
+    payload = {"email": email, "role": role, "content": content}
+    if image_b64:
+        payload["image_b64"] = image_b64
+    return _sb_post("chat_messages", payload)
 
 
 def _load_recent_messages(email: str, limit: int = 20) -> list:
     if not email:
         return []
     rows = _sb_get("chat_messages", {
-        "email": f"eq.{email}", "select": "role,content",
+        "email": f"eq.{email}", "select": "role,content,image_b64",
         "order": "created_at.desc", "limit": str(limit),
     })
     return list(reversed(rows))
