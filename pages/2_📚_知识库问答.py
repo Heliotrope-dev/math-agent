@@ -76,7 +76,7 @@ try{{
 
 if not st.session_state.get("logged_in", False):
     st.warning("请先登录后使用")
-    st.page_link("_math_page.py", label="← 返回登录", use_container_width=False)
+    st.page_link("app.py", label="← 返回登录", use_container_width=False)
     st.stop()
 
 
@@ -98,7 +98,7 @@ def _ingest_file(engine: RAGEngine, uploaded) -> int:
 
 def render_sidebar(engine: RAGEngine) -> None:
     with st.sidebar:
-        st.page_link("_math_page.py", label="← 数学解题", use_container_width=True)
+        st.page_link("app.py", label="← 数学解题", use_container_width=True)
         st.divider()
         st.subheader("知识库管理")
 
