@@ -162,31 +162,6 @@ a[data-testid="stPageLink-NavLink"]:focus {
 }
 .guide-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* 加号面板：弹窗式，居中浮层 + 半透明遮罩，不再把下面内容往上顶。
-   用 st.container(key="plus_modal_box") 包裹内容——Streamlit 会把 key 转成
-   真实的 CSS class（st-key-<key>），内容是真的嵌套在这个容器里，不是靠手写
-   <div> 标签硬凑（那种写法在浏览器里不会真正嵌套，坑详见 commit 记录）。 */
-.plus-modal-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.35);
-    z-index: 299; backdrop-filter: blur(2px);
-}
-.st-key-plus_modal_box {
-    position: fixed !important; left: 50% !important; bottom: 150px !important;
-    transform: translateX(-50%) !important; width: min(420px, 90vw) !important;
-    z-index: 300 !important; box-shadow: 0 12px 40px rgba(0,0,0,0.25) !important;
-    background: var(--surface) !important; border: 1px solid var(--border) !important;
-    border-radius: 16px !important; padding: 16px 12px !important;
-}
-.st-key-plus_modal_box .stButton button {
-    background: var(--surface) !important; border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important; padding: 14px 6px !important;
-    height: 76px !important; font-size: 0.82rem !important; color: var(--text-muted) !important;
-    box-shadow: none !important;
-}
-.st-key-plus_modal_box .stButton button:hover {
-    border-color: var(--accent) !important; color: var(--accent) !important;
-}
-
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div { background: var(--bg) !important; }
@@ -209,6 +184,10 @@ a[data-testid="stPageLink-NavLink"]:focus {
 }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; outline: none !important; }
 [data-testid="stChatInputSubmitButton"] button { background: var(--accent) !important; border-radius: 50% !important; }
+[data-testid="stChatInputSubmitButton"] button:disabled {
+    background: var(--sidebar) !important; border: 1px solid var(--border) !important; opacity: 1 !important;
+}
+[data-testid="stChatInputSubmitButton"] button:disabled svg { fill: var(--text-muted) !important; }
 [data-testid="stChatInputFileUploadButton"] button,
 [data-testid="stChatInputMicButton"] button {
     color: var(--text-muted) !important; background: transparent !important;
@@ -461,6 +440,10 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stChatInputTextArea"] { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--dm-text) !important; padding: 2px 0 !important; }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; }
 [data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }
+[data-testid="stChatInputSubmitButton"] button:disabled {
+    background: var(--dm-card) !important; border: 1px solid var(--dm-border) !important; opacity: 1 !important;
+}
+[data-testid="stChatInputSubmitButton"] button:disabled svg { fill: var(--dm-text) !important; }
 [data-testid="stChatInputFileUploadButton"] button,
 [data-testid="stChatInputMicButton"] button {
     color: var(--dm-text) !important; background: transparent !important;
@@ -487,9 +470,6 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-baseweb="menu"] li, [data-baseweb="option"] { color: var(--dm-text) !important; }
 [data-baseweb="menu"] li:hover, [data-baseweb="option"]:hover { background: var(--dm-card2) !important; }
 
-.st-key-plus_modal_box { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
-.st-key-plus_modal_box .stButton button { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
-.st-key-plus_modal_box .stButton button:hover { background: var(--dm-card2) !important; border-color: var(--dm-accent) !important; }
 
 [data-testid="stAudioInput"],
 [data-testid="stAudioInput"] > div { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }

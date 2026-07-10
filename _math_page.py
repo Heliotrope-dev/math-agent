@@ -946,36 +946,45 @@ _last_asst_a = next((m for m in reversed(st.session_state.messages)
                      if m["role"] == "assistant"), None)
 _can_act = bool(_last_user_q and _last_asst_a)
 
-# ── 加号面板（举一反三 / 引导模式）弹窗式 ────────────────────────────────────
-# 图片/文件/语音不再需要自己拼面板——Streamlit 原生 chat_input 的 accept_file /
-# accept_audio 直接把这几个功能做进输入框本身，天然跟输入框是同一个组件、
-# 同一个位置，不存在"跟着一起滑动"的问题。
-if st.session_state.get("show_plus"):
-    st.markdown('<div class="plus-modal-backdrop"></div>', unsafe_allow_html=True)
-    # 用 st.container(key=...) 而不是手写 <div> 标签——st.container 的 key 会被
-    # Streamlit 自动转成真实的 CSS class（st-key-<key>），包裹的内容是真的嵌套在
-    # 这个容器里；手写 <div>...</div> 靠两次独立的 st.markdown 调用拼接，浏览器会
-    # 把每次调用的 HTML 片段各自解析闭合，中间的按钮实际上并不会被嵌套进去。
-    with st.container(key="plus_modal_box"):
-        gc1, gc2 = st.columns(2)
-        with gc1:
-            # 点了先"暂存"，不直接发送——误触了在下面的确认条里还能点"取消"
-            if st.button("举一反三", key="gp_sim", use_container_width=True,
-                         disabled=not _can_act):
-                if _can_act:
-                    st.session_state["_similar_pending"] = {
-                        "question": _last_user_q,
-                        "answer": _last_asst_a["content"][:400],
-                    }
-                    st.session_state.show_plus = False
-                    st.rerun()
-        with gc2:
-            _gm_active = st.session_state.guide_mode
-            _gm_lbl = "引导✓" if _gm_active else "引导"
-            if st.button(_gm_lbl, key="gp_guide", use_container_width=True):
-                st.session_state.guide_mode = not _gm_active
-                st.session_state.show_plus = False
-                st.rerun()
+# ── 三个常驻小按钮：图片 / 举一反三 / 引导 ───────────────────────────────────
+# 不再用弹窗——点哪个就直接触发那个功能，没有"先点+号再选"这层。
+# accept_file 原生参数在触屏设备上会被识别成"拖文件手势"卡死在拖放界面
+# （用户反馈：点完举一反三，输入框变成一直要求拖文件进来），所以图片上传
+# 改回一个独立的简单按钮，不再用 chat_input 的 accept_file；语音继续用
+# accept_audio——这个用户确认过没问题，不动。
+guide_mode = st.session_state.guide_mode
+
+_btn1, _btn2, _btn3 = st.columns(3, gap="small")
+with _btn1:
+    if st.button("图片", key="tb_photo", use_container_width=True,
+                 type="primary" if st.session_state.get("show_photo") else "secondary"):
+        st.session_state.show_photo = not st.session_state.get("show_photo", False)
+        st.session_state["_panel_just_toggled"] = True
+        st.rerun()
+with _btn2:
+    if st.button("举一反三", key="gp_sim", use_container_width=True, disabled=not _can_act):
+        if _can_act:
+            # 先"暂存"，不直接发送——误触了在下面的确认条里还能点"取消"
+            st.session_state["_similar_pending"] = {
+                "question": _last_user_q,
+                "answer": _last_asst_a["content"][:400],
+            }
+            st.rerun()
+with _btn3:
+    _gm_active = st.session_state.guide_mode
+    if st.button("引导✓" if _gm_active else "引导", key="gp_guide", use_container_width=True,
+                 type="primary" if _gm_active else "secondary"):
+        st.session_state.guide_mode = not _gm_active
+        st.rerun()
+
+if st.session_state.get("show_photo"):
+    _pf = st.file_uploader("上传图片，AI 自动识别并解答", type=["jpg", "jpeg", "png", "webp", "heic"],
+                           key="photo_inline")
+    if _pf:
+        st.session_state["_direct_image"] = _pf.getvalue()
+        st.session_state["_direct_input"] = "请解答图片中的数学题"
+        st.session_state.show_photo = False
+        st.rerun()
 
 # ── 举一反三确认条：误触了能取消，不会直接就发出去 ────────────────────────────
 if st.session_state.get("_similar_pending"):
@@ -991,47 +1000,18 @@ if st.session_state.get("_similar_pending"):
             st.session_state["_similar"] = st.session_state.pop("_similar_pending")
             st.rerun()
 
-# ── 加号（举一反三 / 引导模式）──────────────────────────────────────────────
-# 模型选择砍掉了：目前真正稳定跑通的只有 DeepSeek 一个（其它是拍题用的视觉模型，
-# 由 route_model 自动路由，不需要用户手选），selected_model 固定走第782行的
-# 默认值（DEFAULT_MODEL = "deepseek-chat"），不再单独维护一份。
-# 这个按钮改成普通文档流里的小按钮，不再用 position:sticky/fixed 硬贴在输入框
-# 上方——之前反复出问题就是因为这套定位跟 chat_input 自己的固定容器不是一回事。
-# 现在只是个安静地跟着页面正常滚动的小按钮，简单、不会跟输入框错位。
-guide_mode = st.session_state.guide_mode
-
-if st.button("✕" if st.session_state.get("show_plus") else "＋ 举一反三 / 引导",
-             key="tb_plus", use_container_width=False):
-    st.session_state.show_plus = not st.session_state.get("show_plus", False)
-    st.session_state["_panel_just_toggled"] = True
-    st.rerun()
-
 # ── 文字输入（固定底部）──────────────────────────────────────────────────────
 prefill = st.session_state.pop("prefill", "")
 _direct_input = st.session_state.pop("_direct_input", None)
+_direct_image = st.session_state.pop("_direct_image", None)
 _panel_just_toggled = st.session_state.pop("_panel_just_toggled", False)
 
-# accept_file / accept_audio：图片、文本文件、语音录音都是输入框原生自带的功能，
-# 跟文字在同一次提交里一起送出，不再需要我们自己拼"先选文件→出现待发条→再发送"
-# 这套两段式流程。
-typed = st.chat_input(
-    "输入数学题，支持 LaTeX 符号…",
-    accept_file="multiple",
-    file_type=["jpg", "jpeg", "png", "webp", "heic", "txt", "md"],
-    accept_audio=True,
-)
+typed = st.chat_input("输入数学题，支持 LaTeX 符号…", accept_audio=True)
 
 _typed_text = ""
-_typed_images: list = []
-_typed_textfiles: list = []
 _typed_audio = None
 if typed is not None:
     _typed_text = (typed.text or "").strip()
-    for _f in (typed.files or []):
-        if _f.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".heic")):
-            _typed_images.append(_f)
-        else:
-            _typed_textfiles.append(_f)
     _typed_audio = typed.audio
 
 # 语音：先识别成文字，跟同一次提交里打的字拼在一起
@@ -1043,7 +1023,7 @@ if _typed_audio is not None:
     else:
         st.error(f"语音识别失败：{_vt_err}" if _vt_err else "未识别到语音内容，请重试")
 
-_native_submitted = typed is not None and (_typed_text or _typed_images or _typed_textfiles or _typed_audio is not None)
+_native_submitted = typed is not None and (_typed_text or _typed_audio is not None)
 
 # 确定是否"提交"：面板刚切换时强制跳过，避免误触发
 _submitted = (not _panel_just_toggled) and (
@@ -1061,19 +1041,11 @@ if _submitted:
     if _similar_ctx:
         user_input = "举一反三"
         display_text = "举一反三"
-    elif _typed_images:
-        _img_bytes = _typed_images[0].getvalue()
+    elif _direct_image is not None:
+        _img_bytes = _direct_image
         _img_b64_bubble = base64.b64encode(compress_image(_img_bytes, max_size=400)).decode()
         user_input = _eff_text.strip() or "请解答图片中的数学题"
-        display_text = _eff_text.strip() if _eff_text.strip() else "图片题目"
-    elif _typed_textfiles:
-        _file_parts = [
-            f"[文件：{_f.name}]\n{_f.getvalue().decode('utf-8', errors='replace')}"
-            for _f in _typed_textfiles
-        ]
-        _file_ctx = "\n\n".join(_file_parts)
-        user_input = (_file_ctx + "\n\n说明：" + _eff_text if _eff_text.strip() else _file_ctx)
-        display_text = f"{_typed_textfiles[0].name}  {_eff_text}".strip()
+        display_text = "图片题目"
     elif _eff_text:
         user_input = _eff_text
         display_text = _eff_text
