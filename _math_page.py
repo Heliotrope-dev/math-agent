@@ -267,6 +267,17 @@ try {
         if (sb) sb.classList.remove('ma-sb-open');
         backdrop.classList.remove('active');
         btn.innerHTML = '&#9776;';  // ☰
+        // 手机端关闭动画结束后，顶部有时候会有一块没重绘（WebKit合成层的
+        // 常见渲染bug：滑出动画的fixed定位侧栏消失后，底下内容没被要求重画）。
+        // 强制摸一下 transform 触发一次重排，把这块区域"敲醒"。
+        setTimeout(function() {
+            var main = doc.querySelector('[data-testid="stMain"]') || doc.querySelector('.stApp');
+            if (main) {
+                main.style.transform = 'translateZ(0)';
+                void main.offsetHeight;
+                main.style.transform = '';
+            }
+        }, 300);
     }
 
     btn.addEventListener('click', function(e) {
@@ -367,15 +378,18 @@ try {
             '[data-testid="stMain"] [data-testid="stVerticalBlock"]{gap:0.6rem!important}' +
         '}';
     doc.head.appendChild(s);
-    /* 清除侧边栏工具栏残留：+/− 叶节点全部 display:none */
+    /* 清除侧边栏工具栏残留：Streamlit 列宽调节控件的 +/− 碎片文字，
+       之前只匹配"完全等于 + 或 − 或 -"，漏掉了带包裹span/其他减号变体的情况
+       （用户反馈："课程入口"列表里有些字看不全，就是这些没清干净的碎片）。
+       放宽成：允许套一层子节点，匹配全部由 +/-/−/–/— 组成的1~2个字符短文本。 */
     function _hideSbPlus(){
         try{
             var sb=doc.querySelector('[data-testid="stSidebar"]');
             if(!sb)return;
             sb.querySelectorAll('*').forEach(function(el){
-                if(el.childElementCount===0){
+                if(el.childElementCount<=1){
                     var t=el.textContent.trim();
-                    if(t==='+' || t==='−' || t==='-')
+                    if(t.length>0 && t.length<=2 && /^[+\-−–—]+$/.test(t))
                         el.style.setProperty('display','none','important');
                 }
             });
@@ -1005,6 +1019,36 @@ typed = st.chat_input(
     file_type=["jpg", "jpeg", "png", "webp", "heic", "txt", "md"],
     accept_audio=True,
 )
+
+# ── 修复"点其他按钮触发的 rerun 会把输入框卡死在拖拽区"的bug ─────────────────
+# chat_input 的图片/文件拖拽功能底层用的是 react-dropzone，它自己在组件内部
+# 维护一个"是否正在拖拽"的状态，靠浏览器原生的 dragenter/dragleave 事件维持。
+# 点其他按钮触发 st.rerun() 时，Streamlit 会整体重新渲染，如果这次重渲染恰好
+# 发生在拖拽事件序列中间，配对的 dragleave 就丢了，状态永远卡在"正在拖拽"，
+# 组件就一直显示大大的"Drag and drop files here"而不是正常的紧凑输入框。
+# 这里每次脚本重跑后，都主动往输入框补发一个 dragleave 事件，哄骗
+# react-dropzone 认为"拖拽已经结束"，把状态复位——不改动 accept_file 本身。
+_cv1.html("""
+<script>
+(function(){
+try {
+    var doc = window.parent.document;
+    function resetDrag() {
+        var input = doc.querySelector('[data-testid="stChatInput"]');
+        if (!input) return;
+        var evt;
+        try { evt = new DragEvent('dragleave', {bubbles: true, cancelable: true}); }
+        catch(e) { evt = new Event('dragleave', {bubbles: true, cancelable: true}); }
+        input.dispatchEvent(evt);
+        doc.dispatchEvent(evt);
+    }
+    resetDrag();
+    setTimeout(resetDrag, 80);
+    setTimeout(resetDrag, 300);
+} catch(e) {}
+})();
+</script>
+""", height=1)
 
 _typed_text = ""
 _typed_images: list = []
