@@ -951,8 +951,15 @@ for i, msg in enumerate(st.session_state.messages):
                     "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "image_b64": _prev_msg.get("image_b64", "") if _prev_msg else "",
                 })
-                _save_wrong_book(st.session_state.get("user_email",""), st.session_state.wrong_book)
-                st.rerun()
+                _ok = _save_wrong_book(st.session_state.get("user_email", ""), st.session_state.wrong_book)
+                if not _ok:
+                    st.error(
+                        f"存入错题本失败（email={st.session_state.get('user_email') or '空'}），"
+                        "这条题目只在当前页面里，刷新后会丢失。"
+                    )
+                    st.session_state.wrong_book.pop()
+                else:
+                    st.rerun()
 
 # ── 新消息占位容器（必须在工具栏之前声明，确保新消息渲染在工具栏上方）────────
 _new_turn = st.container()
