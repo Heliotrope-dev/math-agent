@@ -227,14 +227,14 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stBottom"] > div > div { background: var(--bg) !important; }
 /* 输入框 + 工具栏合并成一张卡片（跟 Claude 输入区一致的观感）：
    工具栏是卡片上半部分，输入框是下半部分，中间无缝拼接、外沿统一圆角。 */
-[data-testid="stChatInputContainer"] {
+[data-testid="stChatInput"] {
     background: var(--surface) !important;
     border: 1.5px solid var(--border) !important;
     border-top: none !important;
     border-radius: 0 0 20px 20px !important;
     padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important;
 }
-[data-testid="stChatInputContainer"]:focus-within {
+[data-testid="stChatInput"]:focus-within {
     border-color: var(--accent) !important;
     box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important;
 }
@@ -498,8 +498,8 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div { background: var(--dm-bg) !important; }
-[data-testid="stChatInputContainer"] { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-top: none !important; border-radius: 0 0 20px 20px !important; padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important; }
-[data-testid="stChatInputContainer"]:focus-within { border-color: var(--dm-accent) !important; box-shadow: 0 0 0 3px rgba(91,140,255,0.15) !important; }
+[data-testid="stChatInput"] { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-top: none !important; border-radius: 0 0 20px 20px !important; padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important; }
+[data-testid="stChatInput"]:focus-within { border-color: var(--dm-accent) !important; box-shadow: 0 0 0 3px rgba(91,140,255,0.15) !important; }
 [data-testid="stChatInputTextArea"] { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--dm-text) !important; padding: 2px 0 !important; }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; }
 [data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }

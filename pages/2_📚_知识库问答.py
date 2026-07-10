@@ -35,15 +35,15 @@ try{{
     var s = el || doc.createElement('style');
     if (!el) {{ s.id = SID; doc.head.appendChild(s); }}
     s.textContent =
-        '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
-        '[data-testid="stChatInputContainer"]>div,[data-testid="stChatInputContainer"]>div>div{{background:#16162A!important}}' +
+        '[data-testid="stChatInput"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
+        '[data-testid="stChatInput"]>div,[data-testid="stChatInput"]>div>div{{background:#16162A!important}}' +
         '[data-testid="stChatInputTextArea"]{{background:#16162A!important;color:#DEE1F5!important;-webkit-text-fill-color:#DEE1F5!important;caret-color:#DEE1F5!important;border:none!important}}' +
         '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
         '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}' +
         '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
         '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}';
     function applyInline() {{
-        var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
+        var inp = doc.querySelector('[data-testid="stChatInput"]');
         if (inp) {{
             inp.style.setProperty('background','#16162A','important');
             inp.style.setProperty('border','1.5px solid #282845','important');

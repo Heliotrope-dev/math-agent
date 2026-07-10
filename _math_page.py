@@ -683,7 +683,7 @@ try{{
     if (!dark) {{
         if (el) el.remove();
         if (doc._dmObs) {{ doc._dmObs.disconnect(); doc._dmObs = null; }}
-        var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
+        var inp = doc.querySelector('[data-testid="stChatInput"]');
         if (inp) {{
             ['background','border','border-radius','box-shadow'].forEach(function(p){{ inp.style.removeProperty(p); }});
             inp.querySelectorAll('*').forEach(function(d){{ d.style.removeProperty('background'); }});
@@ -710,8 +710,8 @@ try{{
         '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
         '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}' +
         '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){{background:#16162A!important;border:1.5px solid #282845!important;border-bottom:none!important;border-radius:20px 20px 0 0!important}}' +
-        '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-top:none!important;border-radius:0 0 20px 20px!important;box-shadow:none!important}}' +
-        '[data-testid="stChatInputContainer"]>div,[data-testid="stChatInputContainer"]>div>div{{background:#16162A!important}}' +
+        '[data-testid="stChatInput"]{{background:#16162A!important;border:1.5px solid #282845!important;border-top:none!important;border-radius:0 0 20px 20px!important;box-shadow:none!important}}' +
+        '[data-testid="stChatInput"]>div,[data-testid="stChatInput"]>div>div{{background:#16162A!important}}' +
         '[data-testid="stChatInput"]{{background:#16162A!important}}' +
         '[data-testid="stChatInputTextArea"]{{background:#16162A!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important;-webkit-text-fill-color:#DEE1F5!important;caret-color:#DEE1F5!important}}' +
         '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
@@ -736,7 +736,7 @@ try{{
     }}
     function applyInline() {{
         /* 输入框容器 */
-        var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
+        var inp = doc.querySelector('[data-testid="stChatInput"]');
         if (inp) {{
             inp.style.setProperty('background','#16162A','important');
             inp.style.setProperty('border','1.5px solid #282845','important');
