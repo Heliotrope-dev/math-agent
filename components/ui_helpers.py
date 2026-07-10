@@ -171,7 +171,7 @@ a[data-testid="stPageLink-NavLink"]:focus {
     z-index: 299; backdrop-filter: blur(2px);
 }
 .st-key-plus_modal_box {
-    position: fixed !important; left: 50% !important; bottom: 90px !important;
+    position: fixed !important; left: 50% !important; bottom: 150px !important;
     transform: translateX(-50%) !important; width: min(420px, 90vw) !important;
     z-index: 300 !important; box-shadow: 0 12px 40px rgba(0,0,0,0.25) !important;
     background: var(--surface) !important; border: 1px solid var(--border) !important;
@@ -213,8 +213,12 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stChatInputMicButton"] button {
     color: var(--text-muted) !important; background: transparent !important;
 }
+[data-testid="stChatInputFileUploadButton"] svg,
+[data-testid="stChatInputMicButton"] svg { fill: var(--text-muted) !important; }
 [data-testid="stChatInputFileUploadButton"] button:hover,
 [data-testid="stChatInputMicButton"] button:hover { color: var(--accent) !important; }
+[data-testid="stChatInputFileUploadButton"] button:hover svg,
+[data-testid="stChatInputMicButton"] button:hover svg { fill: var(--accent) !important; }
 [data-testid="stChatInputApproveButton"] button { background: var(--accent) !important; }
 [data-testid="stChatInputCancelButton"] button { color: var(--text-muted) !important; }
 
@@ -459,10 +463,14 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }
 [data-testid="stChatInputFileUploadButton"] button,
 [data-testid="stChatInputMicButton"] button {
-    color: var(--dm-muted) !important; background: transparent !important;
+    color: var(--dm-text) !important; background: transparent !important;
 }
+[data-testid="stChatInputFileUploadButton"] svg,
+[data-testid="stChatInputMicButton"] svg { fill: var(--dm-text) !important; }
 [data-testid="stChatInputFileUploadButton"] button:hover,
 [data-testid="stChatInputMicButton"] button:hover { color: var(--dm-accent) !important; }
+[data-testid="stChatInputFileUploadButton"] button:hover svg,
+[data-testid="stChatInputMicButton"] button:hover svg { fill: var(--dm-accent) !important; }
 [data-testid="stChatInputApproveButton"] button { background: var(--dm-accent) !important; }
 [data-testid="stChatInputCancelButton"] button { color: var(--dm-muted) !important; }
 

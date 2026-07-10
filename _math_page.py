@@ -959,10 +959,11 @@ if st.session_state.get("show_plus"):
     with st.container(key="plus_modal_box"):
         gc1, gc2 = st.columns(2)
         with gc1:
+            # 点了先"暂存"，不直接发送——误触了在下面的确认条里还能点"取消"
             if st.button("举一反三", key="gp_sim", use_container_width=True,
                          disabled=not _can_act):
                 if _can_act:
-                    st.session_state["_similar"] = {
+                    st.session_state["_similar_pending"] = {
                         "question": _last_user_q,
                         "answer": _last_asst_a["content"][:400],
                     }
@@ -975,6 +976,20 @@ if st.session_state.get("show_plus"):
                 st.session_state.guide_mode = not _gm_active
                 st.session_state.show_plus = False
                 st.rerun()
+
+# ── 举一反三确认条：误触了能取消，不会直接就发出去 ────────────────────────────
+if st.session_state.get("_similar_pending"):
+    _sp1, _sp2, _sp3 = st.columns([5, 1, 1])
+    with _sp1:
+        st.caption("将生成一道同类练习题，确认发送？")
+    with _sp2:
+        if st.button("取消", key="sim_cancel", use_container_width=True):
+            del st.session_state["_similar_pending"]
+            st.rerun()
+    with _sp3:
+        if st.button("确认", key="sim_confirm", use_container_width=True, type="primary"):
+            st.session_state["_similar"] = st.session_state.pop("_similar_pending")
+            st.rerun()
 
 # ── 加号（举一反三 / 引导模式）──────────────────────────────────────────────
 # 模型选择砍掉了：目前真正稳定跑通的只有 DeepSeek 一个（其它是拍题用的视觉模型，
