@@ -28,7 +28,7 @@ st.markdown(
 pg = st.navigation(
     [
         st.Page("_math_page.py", title="数学解题", icon="🧮", default=True),
-        st.Page("pages/2_📚_知识库问答.py", title="知识库问答", icon="📚"),
+        st.Page("pages/2_📚_知识库问答.py", title="知识库问答"),
     ],
     position="hidden",
 )

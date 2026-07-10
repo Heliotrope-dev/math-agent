@@ -145,7 +145,7 @@ def render_sidebar(engine: RAGEngine) -> None:
         for source, count in sorted(doc_counts.items()):
             col_name, col_del = st.columns([4, 1])
             col_name.markdown(f"**{source}**  \n{count} 段落")
-            if col_del.button("🗑", key=f"del::{source}", help=f"删除 {source}"):
+            if col_del.button("删除", key=f"del::{source}", help=f"删除 {source}"):
                 engine.delete_document(source)
                 st.rerun()
 
@@ -199,7 +199,7 @@ def render_chat(engine: RAGEngine) -> None:
             chunks = engine.query(question)
             answer = engine.generate_answer(question, chunks, st.session_state.rag_messages[:-1])
         except Exception as e:
-            answer = f"⚠️ {e}"
+            answer = f"出错：{e}"
             chunks = []
 
     st.markdown(answer)
