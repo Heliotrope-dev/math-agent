@@ -955,21 +955,16 @@ _last_asst_a = next((m for m in reversed(st.session_state.messages)
                      if m["role"] == "assistant"), None)
 _can_act = bool(_last_user_q and _last_asst_a)
 
-# ── 三个常驻小按钮：加号（图片/文件） / 举一反三 / 引导 ─────────────────────
-# 举一反三、引导是常驻按钮，点哪个直接触发哪个。图片/文件收在"+"里面
-# （用 st.container(key=...) 装，不用手写 <div>，避免之前的"假嵌套"bug）。
-# accept_file 原生参数在触屏设备上会被识别成"拖文件手势"卡死在拖放界面，
-# 所以图片/文件上传都是自己的 file_uploader，不走 chat_input 的 accept_file；
-# 语音继续用 accept_audio——这个用户确认过没问题，不动。
+# ── 两个常驻小按钮：举一反三 / 引导 ─────────────────────────────────────────
+# 图片/文件恢复用 chat_input 原生的 accept_file——选完贴在输入框上方，打完字
+# 一起发送，这个体验用户明确说好，比自己拼 file_uploader 面板更顺。之前撤掉
+# 是因为在"举一反三"触发的rerun附近观察到输入框卡死在拖拽区的情况；现在
+# 举一反三已经改成常驻按钮（不再经过"+"弹窗那层rerun链路），先按用户要求
+# 恢复，如果同类问题复现，再回头从这个交互路径继续查。
 guide_mode = st.session_state.guide_mode
 
-_btn1, _btn2, _btn3 = st.columns(3, gap="small")
+_btn1, _btn2 = st.columns(2, gap="small")
 with _btn1:
-    if st.button("✕" if st.session_state.get("show_plus") else "＋", key="tb_plus", use_container_width=True):
-        st.session_state.show_plus = not st.session_state.get("show_plus", False)
-        st.session_state["_panel_just_toggled"] = True
-        st.rerun()
-with _btn2:
     if st.button("举一反三", key="gp_sim", use_container_width=True, disabled=not _can_act):
         if _can_act:
             # 先"暂存"，不直接发送——误触了在下面的确认条里还能点"取消"
@@ -978,47 +973,11 @@ with _btn2:
                 "answer": _last_asst_a["content"][:400],
             }
             st.rerun()
-with _btn3:
+with _btn2:
     _gm_active = st.session_state.guide_mode
     if st.button("引导✓" if _gm_active else "引导", key="gp_guide", use_container_width=True,
                  type="primary" if _gm_active else "secondary"):
         st.session_state.guide_mode = not _gm_active
-        st.rerun()
-
-if st.session_state.get("show_plus"):
-    with st.container(key="plus_inline_box"):
-        _pc1, _pc2 = st.columns(2, gap="small")
-        with _pc1:
-            if st.button("图片", key="tb_photo", use_container_width=True,
-                         type="primary" if st.session_state.get("show_photo") else "secondary"):
-                st.session_state.show_photo = not st.session_state.get("show_photo", False)
-                st.session_state.show_file = False
-                st.session_state["_panel_just_toggled"] = True
-                st.rerun()
-        with _pc2:
-            if st.button("文件", key="tb_file", use_container_width=True,
-                         type="primary" if st.session_state.get("show_file") else "secondary"):
-                st.session_state.show_file = not st.session_state.get("show_file", False)
-                st.session_state.show_photo = False
-                st.session_state["_panel_just_toggled"] = True
-                st.rerun()
-
-if st.session_state.get("show_photo"):
-    _pf = st.file_uploader("上传图片，AI 自动识别并解答", type=["jpg", "jpeg", "png", "webp", "heic"],
-                           key="photo_inline")
-    if _pf:
-        st.session_state["_direct_image"] = _pf.getvalue()
-        st.session_state["_direct_input"] = "请解答图片中的数学题"
-        st.session_state.show_photo = False
-        st.rerun()
-
-if st.session_state.get("show_file"):
-    _ff = st.file_uploader("上传文本文件，内容会附加到问题里", type=["txt", "md"], key="file_inline")
-    if _ff:
-        _fc = _ff.getvalue().decode("utf-8", errors="replace")
-        st.session_state["_direct_file"] = {"name": _ff.name, "content": _fc}
-        st.session_state["_direct_input"] = "已上传文件"
-        st.session_state.show_file = False
         st.rerun()
 
 # ── 举一反三确认条：误触了能取消，不会直接就发出去 ────────────────────────────
@@ -1038,16 +997,26 @@ if st.session_state.get("_similar_pending"):
 # ── 文字输入（固定底部）──────────────────────────────────────────────────────
 prefill = st.session_state.pop("prefill", "")
 _direct_input = st.session_state.pop("_direct_input", None)
-_direct_image = st.session_state.pop("_direct_image", None)
-_direct_file = st.session_state.pop("_direct_file", None)
 _panel_just_toggled = st.session_state.pop("_panel_just_toggled", False)
 
-typed = st.chat_input("输入数学题，支持 LaTeX 符号…", accept_audio=True)
+typed = st.chat_input(
+    "输入数学题，支持 LaTeX 符号…",
+    accept_file="multiple",
+    file_type=["jpg", "jpeg", "png", "webp", "heic", "txt", "md"],
+    accept_audio=True,
+)
 
 _typed_text = ""
+_typed_images: list = []
+_typed_textfiles: list = []
 _typed_audio = None
 if typed is not None:
     _typed_text = (typed.text or "").strip()
+    for _f in (typed.files or []):
+        if _f.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".heic")):
+            _typed_images.append(_f)
+        else:
+            _typed_textfiles.append(_f)
     _typed_audio = typed.audio
 
 # 语音：先识别成文字，跟同一次提交里打的字拼在一起
@@ -1059,7 +1028,7 @@ if _typed_audio is not None:
     else:
         st.error(f"语音识别失败：{_vt_err}" if _vt_err else "未识别到语音内容，请重试")
 
-_native_submitted = typed is not None and (_typed_text or _typed_audio is not None)
+_native_submitted = typed is not None and (_typed_text or _typed_images or _typed_textfiles or _typed_audio is not None)
 
 # 确定是否"提交"：面板刚切换时强制跳过，避免误触发
 _submitted = (not _panel_just_toggled) and (
@@ -1077,14 +1046,19 @@ if _submitted:
     if _similar_ctx:
         user_input = "举一反三"
         display_text = "举一反三"
-    elif _direct_image is not None:
-        _img_bytes = _direct_image
+    elif _typed_images:
+        _img_bytes = _typed_images[0].getvalue()
         _img_b64_bubble = base64.b64encode(compress_image(_img_bytes, max_size=400)).decode()
         user_input = _eff_text.strip() or "请解答图片中的数学题"
-        display_text = "图片题目"
-    elif _direct_file is not None:
-        user_input = f"[文件：{_direct_file['name']}]\n{_direct_file['content']}"
-        display_text = _direct_file['name']
+        display_text = _eff_text.strip() if _eff_text.strip() else "图片题目"
+    elif _typed_textfiles:
+        _file_parts = [
+            f"[文件：{_f.name}]\n{_f.getvalue().decode('utf-8', errors='replace')}"
+            for _f in _typed_textfiles
+        ]
+        _file_ctx = "\n\n".join(_file_parts)
+        user_input = (_file_ctx + "\n\n说明：" + _eff_text if _eff_text.strip() else _file_ctx)
+        display_text = f"{_typed_textfiles[0].name}  {_eff_text}".strip()
     elif _eff_text:
         user_input = _eff_text
         display_text = _eff_text
