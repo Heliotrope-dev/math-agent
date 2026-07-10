@@ -172,6 +172,26 @@ def _invalidate_token(token: str):
     _sb_delete("sessions", {"token": f"eq.{token}"})
 
 
+# ── 对话历史持久化（Supabase REST）───────────────────────────────────────────
+# 只存 role/content 文字内容，不存图片（base64图片会让表迅速膨胀，而且
+# image_b64 只是给气泡显示用的，不影响后续对话的文字上下文）。
+
+def _save_message(email: str, role: str, content: str) -> bool:
+    if not email or not content:
+        return False
+    return _sb_post("chat_messages", {"email": email, "role": role, "content": content})
+
+
+def _load_recent_messages(email: str, limit: int = 20) -> list:
+    if not email:
+        return []
+    rows = _sb_get("chat_messages", {
+        "email": f"eq.{email}", "select": "role,content",
+        "order": "created_at.desc", "limit": str(limit),
+    })
+    return list(reversed(rows))
+
+
 # ── 错题本持久化（Supabase REST）─────────────────────────────────────────────
 
 def _load_wrong_book(email: str) -> list:
@@ -192,12 +212,12 @@ def _save_wrong_book(email: str, wb: list) -> bool:
     for q in existing_qs - new_qs:
         _sb_delete("wrong_book", {"email": f"eq.{email}", "question": f"eq.{q}"})
 
-    # 插入新增的条目
+    # 插入新增的条目（image_b64 仅存 session_state，不写库，避免表结构不匹配）
     to_add = [item for item in (wb or []) if item["question"] not in existing_qs]
     if to_add:
         rows = [
             {"email": email, "question": item["question"],
-             "saved_at": item.get("saved_at", ""), "image_b64": item.get("image_b64", "")}
+             "saved_at": item.get("saved_at", "")}
             for item in to_add
         ]
         return _sb_post("wrong_book", rows)

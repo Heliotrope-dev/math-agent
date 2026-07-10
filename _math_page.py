@@ -35,6 +35,7 @@ from components.auth import (
     _hash_pw, _check_pw, _user_exists, _check_user,
     _register_user, _create_token, _validate_token,
     _load_wrong_book, _save_wrong_book,
+    _save_message, _load_recent_messages,
 )
 from components.ui_helpers import _BASE_CSS, _DARK_CSS
 from components.config import get_secret, DEFAULT_MODEL, ADMIN_EMAIL, OCR_MODEL
@@ -666,7 +667,8 @@ def transcribe_audio(audio_file) -> tuple[str, str]:
 
 # ── Session state ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    # 登录后从数据库读回最近的对话历史，不再每次刷新都从空白开始
+    st.session_state.messages = _load_recent_messages(st.session_state.get("user_email", ""))
 if "wrong_book" not in st.session_state:
     # 登录后从磁盘加载，未登录为空
     st.session_state.wrong_book = _load_wrong_book(st.session_state.get("user_email", ""))
@@ -1207,6 +1209,7 @@ if user_input:
     if _img_bytes and "_img_b64_bubble" in locals():
         _msg_record["image_b64"] = _img_b64_bubble
     st.session_state.messages.append(_msg_record)
+    _save_message(st.session_state.get("user_email", ""), "user", user_input)
 
     with _new_turn:
         # 用户气泡
@@ -1397,4 +1400,5 @@ if user_input:
         "role": "assistant", "content": answer, "tags": tags, "trace": trace,
         "practice": practice, "images": _new_images if stream is not None else [],
     })
+    _save_message(st.session_state.get("user_email", ""), "assistant", answer)
     st.rerun()  # 刷新让欢迎页消失、聊天历史正确显示
