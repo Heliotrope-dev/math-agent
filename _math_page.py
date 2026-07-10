@@ -38,7 +38,7 @@ from components.auth import (
     _save_message, _load_recent_messages,
 )
 from components.ui_helpers import _BASE_CSS, _DARK_CSS
-from components.config import get_secret, DEFAULT_MODEL, ADMIN_EMAIL, OCR_MODEL
+from components.config import get_secret, DEFAULT_MODEL
 from components.sidebar import render_sidebar
 
 def _show_login_page():
@@ -595,50 +595,51 @@ def extract_practice(text):
     practice = match.group(1).strip()
     return text[:match.start()].rstrip(), practice
 
-def ocr_math_image(image_bytes):
-    """拍题 OCR：用 SiliconFlow Qwen-VL 识别图片中的数学题文字。"""
-    key = get_secret("SILICONFLOW_API_KEY")
-    if not key:
-        return "（未配置 SILICONFLOW_API_KEY，无法识别图片）"
-    try:
-        from agent import MathAgent
-        with MathAgent(use_local=False, model=OCR_MODEL) as agent:
-            result = agent.solve(
-                "请识别图片中的数学题，只输出题目原文，不要解答",
-                image_bytes=image_bytes,
-            )
-            if hasattr(result, '__iter__') and not isinstance(result, str):
-                return "".join(c.choices[0].delta.content or "" for c in result)
-            return result
-    except Exception as e:
-        return f"识别失败：{e}"
-
-
 def _summarize_wrongbook_entry(question: str, answer: str) -> str:
     """把"存入错题本"的条目总结成独立可读的格式：[学科] 知识点：完整题目。
 
     question 有时只是用户当时的简短指代（拍图配的"第六题"这种），题目的
     真正内容要从 answer（解题过程里转述的题目）里还原出来——不然错题本里
     存的是"第六题"，下次刷新/复习时 AI 根本不知道说的是哪道题。
+
+    不走 MathAgent.solve()——它固定带着"你是数学助教"系统提示词，非首轮
+    输入会被强制加上"请解题："前缀，进入解题模式（要求分步骤、调用工具、
+    $$ 包裹最终答案），跟这里要的"只输出一行摘要"完全对不上（实测输出会
+    带解题格式和多余换行）。这里直接调 API，不带那层系统提示词。
     """
+    key = get_secret("DEEPSEEK_API_KEY")
+    if not key:
+        return question
     try:
-        from agent import MathAgent
-        with MathAgent(use_local=False) as agent:
-            result = agent.solve(
-                "下面是一道题目当时的简短说法，以及它的完整解答过程。"
-                "请把它总结成错题本条目，格式：[学科] 知识点：完整题目内容\n"
-                "要求：\n"
-                "1. 题目内容要完整、可独立理解——不看图片、不看历史对话，"
-                "单看这一句话就知道题目在问什么、能重新解答；\n"
-                "2. 学科用最贴切的一个词（如 微积分/线性代数/概率统计/复变函数/"
-                "数值分析 等）；\n"
-                "3. 知识点简短（4~8字）；\n"
-                "4. 只输出这一句话，不要解答、不要多余说明。\n\n"
-                f"当时的简短说法：{question}\n\n完整解答：{answer[:1000]}"
-            )
-            if hasattr(result, "__iter__") and not isinstance(result, str):
-                result = "".join(c.choices[0].delta.content or "" for c in result)
-            return (result or "").strip() or question
+        import httpx
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=key,
+            base_url="https://api.deepseek.com",
+            http_client=httpx.Client(trust_env=False, verify=True,
+                                      timeout=httpx.Timeout(30.0, connect=10.0)),
+        )
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{
+                "role": "user",
+                "content": (
+                    "下面是一道题目当时的简短说法，以及它的完整解答过程。"
+                    "请把它总结成错题本条目，格式：[学科] 知识点：完整题目内容\n"
+                    "要求：\n"
+                    "1. 题目内容要完整、可独立理解——不看图片、不看历史对话，"
+                    "单看这一句话就知道题目在问什么、能重新解答；\n"
+                    "2. 学科用最贴切的一个词（如 微积分/线性代数/概率统计/复变函数/"
+                    "数值分析 等）；\n"
+                    "3. 知识点简短（4~8字）；\n"
+                    "4. 只输出这一句话，不要解答、不要多余说明、不要换行。\n\n"
+                    f"当时的简短说法：{question}\n\n完整解答：{answer[:1000]}"
+                ),
+            }],
+            max_tokens=200,
+        )
+        result = (resp.choices[0].message.content or "").strip()
+        return result.splitlines()[0].strip() if result else question
     except Exception:
         return question
 
@@ -1340,13 +1341,15 @@ if user_input:
                 _solve_local = False
                 _use_guide = guide_mode and not _img_bytes and not _sim_data
                 if _img_bytes and not get_secret("SILICONFLOW_API_KEY"):
-                    # 没有视觉 API，先 OCR 成文字再解题
-                    status.update(label="识别图片内容…")
-                    _ocr = ocr_math_image(_img_bytes)
-                    if _ocr and not _ocr.startswith("（"):
-                        solve_input = f"请解答以下题目：{_ocr}"
-                        if user_input and user_input != "请解答图片中的数学题":
-                            solve_input += f"\n（补充说明：{user_input}）"
+                    # ocr_math_image 本身也要用 SILICONFLOW_API_KEY 的视觉模型做识别，
+                    # 这个key不存在时它注定识别失败——之前这里会先摆出"识别图片内容…"
+                    # 的假动作，识别必然失败后又静默把图片丢掉，模型拿着空气瞎猜，
+                    # 用户完全不知道发生了什么。改成直接告诉模型如实说明情况。
+                    status.update(label="⚠️ 未配置图片识别能力")
+                    solve_input = (
+                        "（用户上传了一张图片，但当前环境未配置图片识别所需的 API Key，"
+                        "无法查看图片内容。请告知用户图片识别功能暂未配置，建议改用文字描述题目。）"
+                    )
                     _img_bytes = None  # 已转为文字，不再发图
                 # 智能路由：有图 → 视觉模型；短闲聊 → 轻量模型
                 # 仅在用户处于默认模型（或必须切视觉）时生效，不覆盖用户的显式选择

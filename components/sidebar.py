@@ -20,10 +20,13 @@ _ALL_COURSES = [
 def render_sidebar() -> None:
     """侧边栏全部内容：在 app.py 的 `with st.sidebar:` 块内调用。"""
     _uemail = st.session_state.get("user_email", "")
+    # 注册时邮箱只校验了"含有@"，理论上可以塞入 <script> 这类内容；这里渲染到
+    # unsafe_allow_html 的 HTML 里之前必须转义，否则是存储型 XSS。
+    _uemail_safe = _uemail.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     # ── 用户信息 + 退出 ──────────────────────────────────────────────────────
     st.markdown(
-        f'<p class="sb-email" style="font-size:0.75rem;color:#888;margin:10px 0 10px">{_uemail}</p>',
+        f'<p class="sb-email" style="font-size:0.75rem;color:#888;margin:10px 0 10px">{_uemail_safe}</p>',
         unsafe_allow_html=True,
     )
     _sb_top_left, _sb_top_right = st.columns([3, 1])
