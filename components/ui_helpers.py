@@ -221,26 +221,26 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stColumn"] { background: transparent !important; }
 [data-testid="element-container"] { background: transparent !important; }
 
-[data-testid="stPills"] { margin-top: 8px !important; }
-div[data-testid="stPills"] > div > label > div,
-div[data-testid="stPills"] button,
-div[data-testid="stPills"] [role="radio"],
-div[data-testid="stPills"] [role="button"] {
+[data-testid="stButtonGroup"] { margin-top: 8px !important; }
+div[data-testid="stButtonGroup"] > div > label > div,
+div[data-testid="stButtonGroup"] button,
+div[data-testid="stButtonGroup"] [role="radio"],
+div[data-testid="stButtonGroup"] [role="button"] {
     background-color: var(--surface) !important;
     border: 1px solid var(--border) !important;
     border-radius: 20px !important; color: var(--text-muted) !important;
     font-size: 0.78rem !important; padding: 3px 12px !important;
 }
-div[data-testid="stPills"] button:hover,
-div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="stPills"] button[aria-selected="true"],
-div[data-testid="stPills"] [aria-checked="true"],
-div[data-testid="stPills"] [aria-selected="true"] {
+div[data-testid="stButtonGroup"] button:hover,
+div[data-testid="stButtonGroup"] button[aria-checked="true"],
+div[data-testid="stButtonGroup"] button[aria-selected="true"],
+div[data-testid="stButtonGroup"] [aria-checked="true"],
+div[data-testid="stButtonGroup"] [aria-selected="true"] {
     background-color: var(--accent) !important;
     border-color: var(--accent) !important; color: #ffffff !important;
 }
-div[data-testid="stPills"] p,
-div[data-testid="stPills"] span { color: inherit !important; background: transparent !important; }
+div[data-testid="stButtonGroup"] p,
+div[data-testid="stButtonGroup"] span { color: inherit !important; background: transparent !important; }
 
 .stButton button { border-radius: var(--radius-sm) !important; font-size: 0.84rem !important; }
 .stButton button[kind="primary"] { background: var(--accent) !important; border: none !important; color: #fff !important; }
@@ -535,16 +535,16 @@ small, .caption { color: var(--dm-muted) !important; }
 .login-logo-title { color: var(--dm-text) !important; }
 .login-logo-sub { color: var(--dm-muted) !important; }
 
-div[data-testid="stPills"] > div > label > div,
-div[data-testid="stPills"] button,
-div[data-testid="stPills"] [role="radio"],
-div[data-testid="stPills"] [role="button"] { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
-div[data-testid="stPills"] > div > label > div:hover,
-div[data-testid="stPills"] button:hover,
-div[data-testid="stPills"] [role="radio"]:hover,
-div[data-testid="stPills"] button[aria-selected="true"],
-div[data-testid="stPills"] [aria-checked="true"],
-div[data-testid="stPills"] [aria-selected="true"] { background: var(--dm-accent) !important; color: #fff !important; border-color: var(--dm-accent) !important; }
+div[data-testid="stButtonGroup"] > div > label > div,
+div[data-testid="stButtonGroup"] button,
+div[data-testid="stButtonGroup"] [role="radio"],
+div[data-testid="stButtonGroup"] [role="button"] { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
+div[data-testid="stButtonGroup"] > div > label > div:hover,
+div[data-testid="stButtonGroup"] button:hover,
+div[data-testid="stButtonGroup"] [role="radio"]:hover,
+div[data-testid="stButtonGroup"] button[aria-selected="true"],
+div[data-testid="stButtonGroup"] [aria-checked="true"],
+div[data-testid="stButtonGroup"] [aria-selected="true"] { background: var(--dm-accent) !important; color: #fff !important; border-color: var(--dm-accent) !important; }
 
 [data-testid="stStatusWidget"] { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
 

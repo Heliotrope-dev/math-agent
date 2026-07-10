@@ -371,7 +371,7 @@ try {
             '[data-testid="stSidebar"] [data-testid="stElementToolbar"]{display:none!important}' +
             '[data-testid="stSidebar"] [data-testid="stToolbar"]{display:none!important}' +
             /* 课程 pills */
-            '[data-testid="stSidebar"] [data-testid="stPills"] button{display:inline-flex!important;font-size:0.72rem!important;padding:2px 8px!important}' +
+            '[data-testid="stSidebar"] [data-testid="stButtonGroup"] button{display:inline-flex!important;font-size:0.72rem!important;padding:2px 8px!important}' +
             /* 主页：换一批按钮不换行 */
             '[data-testid="stMain"] .stButton>button{white-space:nowrap!important}' +
             /* 主页：区块间距收紧 */
@@ -742,10 +742,10 @@ try{{
         '[role="listbox"]{{background:#1E1E35!important}}' +
         '[data-testid="stSelectboxVirtualDropdown"]{{background:#1E1E35!important}}' +
         /* Pills — 未选中深色，选中蓝色 */
-        '[data-testid="stPills"]>div>label>div,[data-testid="stPills"] button,[data-testid="stPills"] [role="radio"],[data-testid="stPills"] [role="button"]{{background:#1E1E38!important;border-color:#282845!important;color:#DEE1F5!important}}' +
-        '[data-testid="stPills"] [aria-checked="true"],[data-testid="stPills"] [aria-selected="true"],[data-testid="stPills"] button[aria-selected="true"]{{background:#5B8CFF!important;color:#fff!important;border-color:#5B8CFF!important}}';
+        '[data-testid="stButtonGroup"]>div>label>div,[data-testid="stButtonGroup"] button,[data-testid="stButtonGroup"] [role="radio"],[data-testid="stButtonGroup"] [role="button"]{{background:#1E1E38!important;border-color:#282845!important;color:#DEE1F5!important}}' +
+        '[data-testid="stButtonGroup"] [aria-checked="true"],[data-testid="stButtonGroup"] [aria-selected="true"],[data-testid="stButtonGroup"] button[aria-selected="true"]{{background:#5B8CFF!important;color:#fff!important;border-color:#5B8CFF!important}}';
     function applyPills(doc) {{
-        doc.querySelectorAll('[data-testid="stPills"] button,[data-testid="stPills"] [role="radio"],[data-testid="stPills"]>div>label>div').forEach(function(p){{
+        doc.querySelectorAll('[data-testid="stButtonGroup"] button,[data-testid="stButtonGroup"] [role="radio"],[data-testid="stButtonGroup"]>div>label>div').forEach(function(p){{
             var sel = p.getAttribute('aria-checked')==='true'||p.getAttribute('aria-selected')==='true';
             p.style.setProperty('background', sel?'#5B8CFF':'#1E1E38','important');
             p.style.setProperty('border-color', sel?'#5B8CFF':'#282845','important');
