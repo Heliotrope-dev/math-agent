@@ -614,6 +614,35 @@ def ocr_math_image(image_bytes):
         return f"识别失败：{e}"
 
 
+def _summarize_wrongbook_entry(question: str, answer: str) -> str:
+    """把"存入错题本"的条目总结成独立可读的格式：[学科] 知识点：完整题目。
+
+    question 有时只是用户当时的简短指代（拍图配的"第六题"这种），题目的
+    真正内容要从 answer（解题过程里转述的题目）里还原出来——不然错题本里
+    存的是"第六题"，下次刷新/复习时 AI 根本不知道说的是哪道题。
+    """
+    try:
+        from agent import MathAgent
+        with MathAgent(use_local=False) as agent:
+            result = agent.solve(
+                "下面是一道题目当时的简短说法，以及它的完整解答过程。"
+                "请把它总结成错题本条目，格式：[学科] 知识点：完整题目内容\n"
+                "要求：\n"
+                "1. 题目内容要完整、可独立理解——不看图片、不看历史对话，"
+                "单看这一句话就知道题目在问什么、能重新解答；\n"
+                "2. 学科用最贴切的一个词（如 微积分/线性代数/概率统计/复变函数/"
+                "数值分析 等）；\n"
+                "3. 知识点简短（4~8字）；\n"
+                "4. 只输出这一句话，不要解答、不要多余说明。\n\n"
+                f"当时的简短说法：{question}\n\n完整解答：{answer[:1000]}"
+            )
+            if hasattr(result, "__iter__") and not isinstance(result, str):
+                result = "".join(c.choices[0].delta.content or "" for c in result)
+            return (result or "").strip() or question
+    except Exception:
+        return question
+
+
 def transcribe_audio(audio_file) -> tuple[str, str]:
     """语音转文字，使用 SiliconFlow SenseVoiceSmall（中英文优化）。"""
     sf_key = get_secret("SILICONFLOW_API_KEY")
@@ -1020,10 +1049,13 @@ for i, msg in enumerate(st.session_state.messages):
         _prev_msg = next((m for m in reversed(st.session_state.messages[:i])
                           if m["role"] == "user"), None)
         _prev_q = _prev_msg["content"] if _prev_msg else ""
-        if _prev_q and not any(w["question"] == _prev_q for w in st.session_state.wrong_book):
+        _wb_saved_raw = st.session_state.setdefault("_wb_saved_raw", set())
+        if _prev_q and _prev_q not in _wb_saved_raw:
             if st.button("存入错题本", key=f"wb_add_{i}", use_container_width=False):
+                with st.spinner("整理错题内容…"):
+                    _summary = _summarize_wrongbook_entry(_prev_q, msg["content"])
                 st.session_state.wrong_book.append({
-                    "question": _prev_q,
+                    "question": _summary,
                     "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "image_b64": _prev_msg.get("image_b64", "") if _prev_msg else "",
                 })
@@ -1035,6 +1067,7 @@ for i, msg in enumerate(st.session_state.messages):
                     )
                     st.session_state.wrong_book.pop()
                 else:
+                    _wb_saved_raw.add(_prev_q)
                     st.rerun()
 
 # ── 新消息占位容器（必须在工具栏之前声明，确保新消息渲染在工具栏上方）────────
@@ -1091,6 +1124,7 @@ if st.session_state.get("_similar_pending"):
 # ── 文字输入（固定底部）──────────────────────────────────────────────────────
 prefill = st.session_state.pop("prefill", "")
 _direct_input = st.session_state.pop("_direct_input", None)
+_direct_image = st.session_state.pop("_direct_image", None)
 _panel_just_toggled = st.session_state.pop("_panel_just_toggled", False)
 
 typed = st.chat_input(
@@ -1166,7 +1200,8 @@ _native_submitted = typed is not None and (_typed_text or _typed_images or _type
 
 # 确定是否"提交"：面板刚切换时强制跳过，避免误触发
 _submitted = (not _panel_just_toggled) and (
-    _native_submitted or (_direct_input is not None) or bool(_similar_ctx) or bool(prefill)
+    _native_submitted or (_direct_input is not None) or (_direct_image is not None)
+    or bool(_similar_ctx) or bool(prefill)
 )
 _eff_text = _direct_input if _direct_input is not None else (_typed_text if typed is not None else prefill)
 
@@ -1180,6 +1215,11 @@ if _submitted:
     if _similar_ctx:
         user_input = "举一反三"
         display_text = "举一反三"
+    elif _direct_image is not None:
+        _img_bytes = _direct_image
+        _img_b64_bubble = base64.b64encode(compress_image(_img_bytes, max_size=400)).decode()
+        user_input = _eff_text.strip() or "请解答图片中的数学题"
+        display_text = _eff_text.strip() if _eff_text.strip() else "图片题目"
     elif _typed_images:
         _img_bytes = _typed_images[0].getvalue()
         _img_b64_bubble = base64.b64encode(compress_image(_img_bytes, max_size=400)).decode()

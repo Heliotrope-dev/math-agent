@@ -196,6 +196,13 @@ def _load_recent_messages(email: str, limit: int = 20) -> list:
     return list(reversed(rows))
 
 
+def _delete_messages(email: str) -> bool:
+    """只删 chat_messages（对话历史），不碰 wrong_book 表。"""
+    if not email:
+        return False
+    return _sb_delete("chat_messages", {"email": f"eq.{email}"})
+
+
 # ── 错题本持久化（Supabase REST）─────────────────────────────────────────────
 
 def _load_wrong_book(email: str) -> list:

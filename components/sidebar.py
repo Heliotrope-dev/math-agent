@@ -4,6 +4,7 @@ import streamlit as st
 import streamlit.components.v1 as _cv1
 
 from components.auth import (
+    _delete_messages,
     _invalidate_token,
     _load_user_profile,
     _save_wrong_book,
@@ -75,14 +76,11 @@ def render_sidebar() -> None:
                 _rw = random.choice(wrong_book)
                 _rw_img = _rw.get("image_b64", "")
                 if _rw_img:
-                    st.session_state["pending_attachment"] = {
-                        "type": "image",
-                        "bytes": base64.b64decode(_rw_img),
-                        "name": "错题图片",
-                    }
+                    st.session_state["_direct_image"] = base64.b64decode(_rw_img)
                     _rw_txt = _rw["question"].lstrip("📷").strip()
-                    if _rw_txt and _rw_txt != "图片题目":
-                        st.session_state["prefill"] = _rw_txt
+                    st.session_state["_direct_input"] = (
+                        _rw_txt if _rw_txt and _rw_txt != "图片题目" else "请解答图片中的数学题"
+                    )
                 else:
                     st.session_state["_direct_input"] = (
                         f"【错题复习】请重新完整解答这道我之前做错的题：{_rw['question']}"
@@ -97,13 +95,14 @@ def render_sidebar() -> None:
                     if st.button("重做", key=f"wb_redo_{wi}", use_container_width=True):
                         _wb_img = wp.get("image_b64", "")
                         if _wb_img:
-                            _img_bytes_wb = base64.b64decode(_wb_img)
-                            st.session_state["pending_attachment"] = {
-                                "type": "image", "bytes": _img_bytes_wb, "name": "错题图片"
-                            }
+                            # pending_attachment 是旧机制的字段，chat_input 改用
+                            # 原生 accept_file 之后已经不会被读取了；改成走现在
+                            # 实际生效的 _direct_image/_direct_input 通道。
+                            st.session_state["_direct_image"] = base64.b64decode(_wb_img)
                             _txt = wp["question"].lstrip("📷").strip()
-                            if _txt and _txt != "图片题目":
-                                st.session_state["prefill"] = _txt
+                            st.session_state["_direct_input"] = (
+                                _txt if _txt and _txt != "图片题目" else "请解答图片中的数学题"
+                            )
                         else:
                             st.session_state["prefill"] = wp["question"]
                         st.rerun()
@@ -234,6 +233,7 @@ def render_sidebar() -> None:
         with _cc1:
             if st.button("确定清空", key="confirm_yes", use_container_width=True, type="primary"):
                 st.session_state.messages = []
+                _delete_messages(_uemail)  # 只删对话历史，错题本（wrong_book 表）不受影响
                 st.session_state.pop("prefill", None)
                 st.session_state.pop("_confirm_clear", None)
                 st.rerun()
