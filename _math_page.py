@@ -1236,8 +1236,13 @@ if user_input:
                 "calculator":      "符号计算",
             }
             if _sim_data:
+                # "question" 有时只是用户的简短指代（比如拍图时配的"第六题"），
+                # 真正的题目内容在 "answer" 里（上一轮解题过程会转述题目）——
+                # 之前只传了 question，answer 抓了但没用上，模型看不到具体是
+                # 哪道题，只能瞎编一道通用题。两个都传。
                 solve_input = (
                     f"上一题：{_sim_data['question']}\n\n"
+                    f"上一题的解答（题目内容包含在其中）：{_sim_data['answer']}\n\n"
                     "请出一道相似但不同的练习题，标注题型和难度，只出题不解答。"
                 )
                 solve_history = []
