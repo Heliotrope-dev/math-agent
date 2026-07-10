@@ -4,6 +4,48 @@ import re
 
 import fitz
 
+from components.config import OCR_MODEL, get_secret
+
+_MAX_OCR_PAGES = 30  # 扫描版 PDF 逐页跑视觉模型 OCR，封顶页数防止超大文件耗时/费用失控
+
+
+def _ocr_page_text(image_bytes: bytes) -> str:
+    """用视觉模型识别一页 PDF 渲染图里的全部文字（通用文档OCR）。
+
+    不走 MathAgent.solve()——它固定带着"你是数学助教"的系统提示词，会把任何图片
+    都往"找数学题"上带偏（实测：喂一张简历图片进去，模型会回复"未找到数学题"，
+    完全无视了要求它做通用文字识别的用户指令）。这里直接调 API，不带那层系统提示词。
+    """
+    import base64
+    import httpx
+    from openai import OpenAI
+    from tools import compress_image
+
+    key = get_secret("SILICONFLOW_API_KEY")
+    image_bytes = compress_image(image_bytes, max_size=1600, quality=85)
+    b64 = base64.b64encode(image_bytes).decode()
+    client = OpenAI(
+        api_key=key,
+        base_url="https://api.siliconflow.cn/v1",
+        http_client=httpx.Client(trust_env=False, verify=True, timeout=httpx.Timeout(60.0, connect=15.0)),
+    )
+    resp = client.chat.completions.create(
+        model=OCR_MODEL,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": (
+                    "请识别并逐字输出这张图片里的所有文字内容，保持原有段落顺序，"
+                    "不要总结、不要遗漏、不要额外解读，只输出识别到的文字原文；"
+                    "如果这页没有任何文字，只输出：（空白页）"
+                )},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+            ],
+        }],
+        max_tokens=4096,
+    )
+    return resp.choices[0].message.content or ""
+
 
 def parse_pdf(file_bytes: bytes, filename: str) -> list[dict]:
     docs = []
@@ -17,10 +59,31 @@ def parse_pdf(file_bytes: bytes, filename: str) -> list[dict]:
             if not text:
                 continue
             docs.append({"text": text, "source": filename, "page": page_no + 1})
+
+        if not docs:
+            # 没有可提取的文字层——大概率是扫描版，或文字被设计工具拍平成图片/轮廓。
+            # 逐页渲染成图片，走视觉模型 OCR 兜底。
+            if not get_secret("SILICONFLOW_API_KEY"):
+                raise ValueError(
+                    f"「{filename}」没有可提取的文本，可能是扫描版 PDF；"
+                    "OCR 兜底识别需要配置 SILICONFLOW_API_KEY，当前未配置。"
+                )
+            n_pages = min(pdf.page_count, _MAX_OCR_PAGES)
+            for page_no in range(n_pages):
+                pix = pdf[page_no].get_pixmap(dpi=150)
+                img_bytes = pix.tobytes("jpeg")
+                text = _ocr_page_text(img_bytes).strip()
+                if text and text != "（空白页）" and not text.startswith("识别失败"):
+                    docs.append({"text": text, "source": filename, "page": page_no + 1})
+            if pdf.page_count > _MAX_OCR_PAGES:
+                docs.append({
+                    "text": f"（注意：本文档共 {pdf.page_count} 页，OCR 兜底仅识别了前 {_MAX_OCR_PAGES} 页）",
+                    "source": filename, "page": _MAX_OCR_PAGES + 1,
+                })
     finally:
         pdf.close()
     if not docs:
-        raise ValueError(f"「{filename}」没有可提取的文本，可能是扫描版 PDF。")
+        raise ValueError(f"「{filename}」没有可提取的文本，OCR 兜底也未能识别到任何内容。")
     return docs
 
 

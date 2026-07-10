@@ -106,13 +106,22 @@ def render_sidebar(engine: RAGEngine) -> None:
         if missing:
             st.error("缺少配置：" + "、".join(missing))
 
+        _uploader_key = f"doc_uploader_{st.session_state.get('_uploader_gen', 0)}"
         uploaded_files = st.file_uploader(
             "上传文档",
             type=["pdf", "txt", "md"],
             accept_multiple_files=True,
             help="支持 PDF / TXT / Markdown，同名文件自动覆盖",
+            key=_uploader_key,
         )
-        if uploaded_files and st.button("处理文件", use_container_width=True, type="primary"):
+        _col_proc, _col_clear = st.columns([3, 1])
+        with _col_proc:
+            _do_process = uploaded_files and st.button("处理文件", use_container_width=True, type="primary")
+        with _col_clear:
+            if st.button("清空", use_container_width=True, help="清空已选文件，重新选择"):
+                st.session_state["_uploader_gen"] = st.session_state.get("_uploader_gen", 0) + 1
+                st.rerun()
+        if _do_process:
             progress = st.progress(0.0, text="开始处理…")
             total_chunks, errors = 0, []
             for i, f in enumerate(uploaded_files):
@@ -126,6 +135,7 @@ def render_sidebar(engine: RAGEngine) -> None:
                 st.success(f"已添加 {total_chunks} 个段落")
             for err in errors:
                 st.error(err)
+                st.caption("处理失败的文件可以点上面「清空」重新选择再试一次。")
 
         st.divider()
         st.caption("已上传文档")
