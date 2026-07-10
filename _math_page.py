@@ -679,18 +679,27 @@ try{{
     if (!dark) {{
         if (el) el.remove();
         if (doc._dmObs) {{ doc._dmObs.disconnect(); doc._dmObs = null; }}
-        var inp = doc.querySelector('[data-testid="stChatInput"]');
-        if (inp) {{
-            ['background','border','border-radius','box-shadow'].forEach(function(p){{ inp.style.removeProperty(p); }});
-            inp.querySelectorAll('*').forEach(function(d){{ d.style.removeProperty('background'); }});
-            inp.querySelectorAll('textarea,input').forEach(function(t){{
-                ['color','background','-webkit-text-fill-color','caret-color'].forEach(function(p){{ t.style.removeProperty(p); }});
+        function cleanup() {{
+            var inp = doc.querySelector('[data-testid="stChatInput"]');
+            if (inp) {{
+                ['background','border','border-top','border-radius','box-shadow'].forEach(function(p){{ inp.style.removeProperty(p); }});
+                inp.querySelectorAll('*').forEach(function(d){{ d.style.removeProperty('background'); }});
+                inp.querySelectorAll('textarea,input').forEach(function(t){{
+                    ['color','background','-webkit-text-fill-color','caret-color'].forEach(function(p){{ t.style.removeProperty(p); }});
+                }});
+            }}
+            doc.querySelectorAll('[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]').forEach(function(bt){{
+                ['background','border','box-shadow'].forEach(function(p){{ bt.style.removeProperty(p); }});
+                bt.querySelectorAll('*').forEach(function(el2){{ el2.style.removeProperty('background'); }});
             }});
         }}
-        doc.querySelectorAll('[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]').forEach(function(bt){{
-            bt.style.removeProperty('background');
-            bt.querySelectorAll('*').forEach(function(el2){{ el2.style.removeProperty('background'); }});
-        }});
+        // chat_input 在切换主题触发的 rerun 里可能稍晚才挂载完成（Streamlit 的
+        // 异步渲染跟这段 JS 不是同步的），只清一次可能清早了、清了个寂寞——
+        // 残留的内联样式是我们自己用JS硬设的，React 不会主动清掉，所以要多试几次。
+        cleanup();
+        setTimeout(cleanup, 60);
+        setTimeout(cleanup, 250);
+        setTimeout(cleanup, 600);
         return;
     }}
     var s = el || doc.createElement('style');
