@@ -819,17 +819,48 @@ if _cur_course and _cur_course in _COURSE_TOPICS:
             st.rerun()
 
 # ── 欢迎页（无对话时）────────────────────────────────────────────────────────
+# 新用户（没有学习记录）看现有的示例题/知识点选择欢迎屏；老用户（有过学习记录）
+# 换成"欢迎回来"式的个性化提示——上次学到哪、薄弱点是什么、错题本还有什么，
+# 而不是每次都从头看一遍通用示例。
 if not st.session_state.messages:
-    if _cur_course and _cur_course in _COURSE_TOPICS:
-        # ── 课程模式：显示知识点选择 ──
-        st.markdown(
-            f'<div class="greeting-wrap">'
-            f'<div class="greeting-sub">选择一个知识点，AI 将从定义、定理到例题系统讲解</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+    _profile = st.session_state.get("user_profile", {})
 
+    if _cur_course and _cur_course in _COURSE_TOPICS:
+        # ── 课程模式 ──
         _topics = _COURSE_TOPICS[_cur_course]
+        _course_hist = [r for r in _profile.get("all", []) if r.get("course") == _cur_course]
+
+        if _course_hist:
+            _last_in_course = max(_course_hist, key=lambda r: r.get("last_visited") or "")
+            _studied = {r["topic"] for r in _course_hist}
+            _weak_in_course = [r for r in _course_hist if r["visit_count"] >= 2]
+            _remaining = [t for t in _topics if t not in _studied]
+
+            _sub_parts = [f"上次学到「{_last_in_course['topic']}」"]
+            if _weak_in_course:
+                _sub_parts.append(f"薄弱点：{_weak_in_course[0]['topic']}")
+            if _remaining:
+                _sub_parts.append(f"还有 {len(_remaining)} 个知识点没学")
+            st.markdown(
+                f'<div class="greeting-wrap">'
+                f'<div class="greeting-main">继续学习 {_cur_course}</div>'
+                f'<div class="greeting-sub">{"，".join(_sub_parts)}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(f"继续「{_last_in_course['topic']}」", key="course_continue", use_container_width=False):
+                _track_topic(st.session_state.get("user_email", ""), _cur_course, _last_in_course["topic"])
+                st.session_state.pop("user_profile", None)
+                st.session_state["_direct_input"] = f"【知识点讲解】{_cur_course} · {_last_in_course['topic']}"
+                st.rerun()
+        else:
+            st.markdown(
+                f'<div class="greeting-wrap">'
+                f'<div class="greeting-sub">选择一个知识点，AI 将从定义、定理到例题系统讲解</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
         _tcols = st.columns(2, gap="small")
         for _ti, _topic in enumerate(_topics):
             with _tcols[_ti % 2]:
@@ -842,28 +873,71 @@ if not st.session_state.messages:
                     st.rerun()
 
     else:
-        # ── 默认模式：示例题 ──
-        st.markdown(
-            '<div class="greeting-wrap">'
-            '<div class="greeting-main">你好，有什么数学问题？</div>'
-            '<div class="greeting-sub">微积分 &nbsp;·&nbsp; 方程 &nbsp;·&nbsp; 线性代数 &nbsp;·&nbsp; 概率统计 &nbsp;·&nbsp; 拍题上传</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+        # ── 默认模式 ──
+        _recent = _profile.get("recent", [])
+        _weak = _profile.get("weak", [])
+        _is_returning = bool(_recent) or bool(st.session_state.wrong_book)
 
-        examples = st.session_state.example_set
-        cols = st.columns(2, gap="small")
-        for idx, ex in enumerate(examples):
-            with cols[idx % 2]:
-                if st.button(ex, key=f"ex_{idx}", use_container_width=True):
-                    st.session_state["_direct_input"] = ex
+        if _is_returning:
+            _last = _recent[0] if _recent else None
+            _sub_parts = []
+            if _last:
+                _sub_parts.append(f"上次学到「{_last['course']} · {_last['topic']}」")
+            if _weak:
+                _sub_parts.append(f"{len(_weak)} 个知识点还需要巩固")
+            if st.session_state.wrong_book:
+                _sub_parts.append(f"错题本里有 {len(st.session_state.wrong_book)} 道题待复习")
+            st.markdown(
+                '<div class="greeting-wrap">'
+                '<div class="greeting-main">欢迎回来</div>'
+                f'<div class="greeting-sub">{"，".join(_sub_parts) if _sub_parts else "继续上次的学习，或者问点新问题"}</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            _rcols = st.columns(2, gap="small")
+            with _rcols[0]:
+                if _last and st.button(f"继续「{_last['topic']}」", key="continue_last", use_container_width=True):
+                    st.session_state["current_course"] = _last.get("course", "")
+                    st.session_state.pop("user_profile", None)
+                    st.session_state["_direct_input"] = f"【知识点讲解】{_last.get('course','')} · {_last['topic']}"
                     st.rerun()
+            with _rcols[1]:
+                if st.session_state.wrong_book and st.button("复习一道错题", key="review_wrongbook", use_container_width=True):
+                    st.session_state["_direct_input"] = st.session_state.wrong_book[-1]["question"]
+                    st.rerun()
+            if _weak:
+                st.markdown('<p style="font-size:0.8rem;color:#888;margin:10px 0 4px">薄弱知识点</p>', unsafe_allow_html=True)
+                _wcols = st.columns(2, gap="small")
+                for _wi, _w in enumerate(_weak[:4]):
+                    with _wcols[_wi % 2]:
+                        if st.button(_w["topic"], key=f"weak_home_{_wi}", use_container_width=True):
+                            st.session_state["current_course"] = _w.get("course", "")
+                            st.session_state.pop("user_profile", None)
+                            st.session_state["_direct_input"] = f"【知识点讲解】{_w.get('course','')} · {_w['topic']}"
+                            st.rerun()
+        else:
+            # 新用户：示例题
+            st.markdown(
+                '<div class="greeting-wrap">'
+                '<div class="greeting-main">你好，有什么数学问题？</div>'
+                '<div class="greeting-sub">微积分 &nbsp;·&nbsp; 方程 &nbsp;·&nbsp; 线性代数 &nbsp;·&nbsp; 概率统计 &nbsp;·&nbsp; 拍题上传</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
-        _, mid, _ = st.columns([3, 2, 3])
-        with mid:
-            if st.button("↻ 换一批", key="refresh_ex", use_container_width=True):
-                st.session_state.example_set = _get_examples()
-                st.rerun()
+            examples = st.session_state.example_set
+            cols = st.columns(2, gap="small")
+            for idx, ex in enumerate(examples):
+                with cols[idx % 2]:
+                    if st.button(ex, key=f"ex_{idx}", use_container_width=True):
+                        st.session_state["_direct_input"] = ex
+                        st.rerun()
+
+            _, mid, _ = st.columns([3, 2, 3])
+            with mid:
+                if st.button("↻ 换一批", key="refresh_ex", use_container_width=True):
+                    st.session_state.example_set = _get_examples()
+                    st.rerun()
 
         st.markdown("""
         <div class="feature-grid">
