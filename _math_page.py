@@ -940,9 +940,6 @@ for i, msg in enumerate(st.session_state.messages):
                 + '</div>',
                 unsafe_allow_html=True,
             )
-        if msg.get("trace"):
-            with st.expander("工具调用详情", expanded=False):
-                st.code(msg["trace"], language="text")
         # ── 存入错题本按钮 ──
         _prev_msg = next((m for m in reversed(st.session_state.messages[:i])
                           if m["role"] == "user"), None)
@@ -1036,11 +1033,21 @@ try {
     function resetDrag() {
         var input = doc.querySelector('[data-testid="stChatInput"]');
         if (!input) return;
-        var evt;
-        try { evt = new DragEvent('dragleave', {bubbles: true, cancelable: true}); }
-        catch(e) { evt = new Event('dragleave', {bubbles: true, cancelable: true}); }
-        input.dispatchEvent(evt);
-        doc.dispatchEvent(evt);
+        // dispatchEvent 只会经过目标节点的"祖先路径"，传不到它的子节点里——
+        // react-dropzone 真正绑监听器的元素大概率在 stChatInput 内部更深的
+        // 地方，只冲外层这一个节点发事件够不着。改成对里面每个子节点都补发。
+        var targets = [input];
+        input.querySelectorAll('*').forEach(function(el){ targets.push(el); });
+        ['dragleave', 'dragend'].forEach(function(type) {
+            targets.forEach(function(t) {
+                var evt;
+                try { evt = new DragEvent(type, {bubbles: true, cancelable: true}); }
+                catch(e) { evt = new Event(type, {bubbles: true, cancelable: true}); }
+                try { t.dispatchEvent(evt); } catch(e2) {}
+            });
+        });
+        doc.dispatchEvent(new Event('dragleave', {bubbles: true}));
+        doc.dispatchEvent(new Event('dragend', {bubbles: true}));
     }
     resetDrag();
     setTimeout(resetDrag, 80);
@@ -1299,9 +1306,6 @@ if user_input:
                     + '</div>',
                     unsafe_allow_html=True,
                 )
-            if trace:
-                with st.expander("工具调用详情", expanded=False):
-                    st.code(trace, language="text")
 
     st.session_state.messages.append({
         "role": "assistant", "content": answer, "tags": tags, "trace": trace,
