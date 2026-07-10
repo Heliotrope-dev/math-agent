@@ -1240,6 +1240,15 @@ if user_input:
                 else:
                     solve_history = history
 
+                # 专题模式下每轮都限定学科范围，防止多轮对话聊着聊着跑题到别的学科
+                if _cur_course:
+                    solve_input = (
+                        f"[当前专题：{_cur_course}。请只围绕本学科相关内容回答；"
+                        f"如果这个问题明显不属于{_cur_course}，礼貌说明一下，"
+                        f"并引导用户回到{_cur_course}的话题，不要跑题去讲解其他学科内容。]\n\n"
+                        f"{solve_input}"
+                    )
+
             with st.status("思考中…", expanded=True) as status:
                 def on_tool_call(name, args, result):
                     label = _TOOL_LABELS.get(name, name)
