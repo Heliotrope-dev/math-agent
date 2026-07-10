@@ -149,7 +149,7 @@ def render_chat(engine: RAGEngine) -> None:
     """, unsafe_allow_html=True)
 
     if engine.collection.count() == 0:
-        st.info("👆 请先在左侧上传文档")
+        st.info("请先在左侧上传文档")
 
     if "rag_messages" not in st.session_state:
         st.session_state.rag_messages = []
@@ -166,7 +166,7 @@ def render_chat(engine: RAGEngine) -> None:
             st.markdown('<div class="asst-bubble-marker"></div>', unsafe_allow_html=True)
             st.markdown(msg["content"])
             if msg.get("chunks"):
-                with st.expander(f"📎 参考来源（{len(msg['chunks'])} 条）"):
+                with st.expander(f"参考来源（{len(msg['chunks'])} 条）"):
                     for i, c in enumerate(msg["chunks"], 1):
                         st.markdown(f"**{i}. {c['source']} · 第{c['page']}页** （相关度 {1 - c['distance']:.0%}）")
                         st.markdown(f'<p style="font-size:0.8rem;color:var(--text-muted);line-height:1.6;margin:4px 0 0">{c["text"][:400]}{"…" if len(c["text"]) > 400 else ""}</p>', unsafe_allow_html=True)
@@ -194,7 +194,7 @@ def render_chat(engine: RAGEngine) -> None:
 
     st.markdown(answer)
     if chunks:
-        with st.expander(f"📎 参考来源（{len(chunks)} 条）"):
+        with st.expander(f"参考来源（{len(chunks)} 条）"):
             for i, c in enumerate(chunks, 1):
                 st.markdown(f"**{i}. {c['source']} · 第{c['page']}页** （相关度 {1 - c['distance']:.0%}）")
                 st.text(c["text"][:400] + ("…" if len(c["text"]) > 400 else ""))

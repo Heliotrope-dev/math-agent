@@ -547,7 +547,7 @@ def fix_latex(text):
         if r'\begin{' in inner:
             return f'\n$$\n{inner}\n$$\n'
         return m.group(0)
-    text = re.sub(r'\$(?!\$)([^\$]{1,2000}?)\$(?!\$)', _upgrade_matrix, text)
+    text = re.sub(r'(?<!\$)\$(?!\$)([^\$]{1,2000}?)(?<!\$)\$(?!\$)', _upgrade_matrix, text)
 
     # 修复奇数个 $$（未关闭的块公式）
     if text.count('$$') % 2 != 0:
@@ -555,11 +555,22 @@ def fix_latex(text):
 
     return text
 
+def _clean_tag(t: str) -> str:
+    """去掉 LaTeX/markdown，保留纯文字知识点名，截断至 20 字。"""
+    t = re.sub(r'\$\$[\s\S]*?\$\$', '', t)
+    t = re.sub(r'\$[^\$\n]{1,200}?\$', '', t)
+    t = re.sub(r'\\[a-zA-Z]+(?:\{[^}]*\})*', '', t)
+    t = re.sub(r'\*+', '', t)
+    t = re.sub(r'[{}\[\]|\\]', '', t)
+    t = re.sub(r'\s+', ' ', t).strip().strip('·。，,.;：:')
+    return t[:20]
+
 def extract_tags(text):
     match = re.search(r'📚\s*\*{0,2}知识点\*{0,2}\s*[：:](.*?)$', text, re.MULTILINE)
     if not match:
         return text, []
-    tags = [t.strip() for t in re.split(r'[·・,，、]+', match.group(1).strip()) if t.strip()]
+    raw = [t.strip() for t in re.split(r'[·・,，、]+', match.group(1).strip()) if t.strip()]
+    tags = [c for t in raw if (c := _clean_tag(t))]
     return text[:match.start()].rstrip(), tags
 
 def extract_practice(text):
@@ -698,8 +709,8 @@ try{{
         '[data-testid="stSidebarCollapsedButton"]:hover{{background:rgba(255,255,255,0.1)!important}}' +
         '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
         '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}' +
-        '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){{background:#0D0D14!important}}' +
-        '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
+        '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){{background:#16162A!important;border:1.5px solid #282845!important;border-bottom:none!important;border-radius:20px 20px 0 0!important}}' +
+        '[data-testid="stChatInputContainer"]{{background:#16162A!important;border:1.5px solid #282845!important;border-top:none!important;border-radius:0 0 20px 20px!important;box-shadow:none!important}}' +
         '[data-testid="stChatInputContainer"]>div,[data-testid="stChatInputContainer"]>div>div{{background:#16162A!important}}' +
         '[data-testid="stChatInput"]{{background:#16162A!important}}' +
         '[data-testid="stChatInputTextArea"]{{background:#16162A!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important;-webkit-text-fill-color:#DEE1F5!important;caret-color:#DEE1F5!important}}' +
@@ -711,14 +722,26 @@ try{{
         '[data-baseweb="option"]:hover,[data-baseweb="option"][aria-selected="true"]{{background:#2A2A4A!important}}' +
         '[role="option"]{{background:#1E1E35!important;color:#DEE1F5!important}}' +
         '[role="listbox"]{{background:#1E1E35!important}}' +
-        '[data-testid="stSelectboxVirtualDropdown"]{{background:#1E1E35!important}}';
+        '[data-testid="stSelectboxVirtualDropdown"]{{background:#1E1E35!important}}' +
+        /* Pills — 未选中深色，选中蓝色 */
+        '[data-testid="stPills"]>div>label>div,[data-testid="stPills"] button,[data-testid="stPills"] [role="radio"],[data-testid="stPills"] [role="button"]{{background:#1E1E38!important;border-color:#282845!important;color:#DEE1F5!important}}' +
+        '[data-testid="stPills"] [aria-checked="true"],[data-testid="stPills"] [aria-selected="true"],[data-testid="stPills"] button[aria-selected="true"]{{background:#5B8CFF!important;color:#fff!important;border-color:#5B8CFF!important}}';
+    function applyPills(doc) {{
+        doc.querySelectorAll('[data-testid="stPills"] button,[data-testid="stPills"] [role="radio"],[data-testid="stPills"]>div>label>div').forEach(function(p){{
+            var sel = p.getAttribute('aria-checked')==='true'||p.getAttribute('aria-selected')==='true';
+            p.style.setProperty('background', sel?'#5B8CFF':'#1E1E38','important');
+            p.style.setProperty('border-color', sel?'#5B8CFF':'#282845','important');
+            p.style.setProperty('color', sel?'#ffffff':'#DEE1F5','important');
+        }});
+    }}
     function applyInline() {{
         /* 输入框容器 */
         var inp = doc.querySelector('[data-testid="stChatInputContainer"]');
         if (inp) {{
             inp.style.setProperty('background','#16162A','important');
             inp.style.setProperty('border','1.5px solid #282845','important');
-            inp.style.setProperty('border-radius','24px','important');
+            inp.style.setProperty('border-top','none','important');
+            inp.style.setProperty('border-radius','0 0 20px 20px','important');
             inp.style.setProperty('box-shadow','none','important');
             inp.querySelectorAll('*').forEach(function(d){{
                 d.style.setProperty('background','#16162A','important');
@@ -736,6 +759,7 @@ try{{
                 el2.style.setProperty('background','#0D0D14','important');
             }});
         }});
+        applyPills(doc);
     }}
     function apply() {{ s.textContent = CSS; applyInline(); }}
     apply();
@@ -768,7 +792,7 @@ if _cur_course and _cur_course in _COURSE_TOPICS:
     _cb_left, _cb_right = st.columns([5, 1])
     with _cb_left:
         st.markdown(
-            f'<div class="course-banner">📖 {_cur_course}</div>',
+            f'<div class="course-banner">{_cur_course}</div>',
             unsafe_allow_html=True,
         )
     with _cb_right:
@@ -857,7 +881,8 @@ for i, msg in enumerate(st.session_state.messages):
                 f'<img src="data:image/jpeg;base64,{msg["image_b64"]}" '
                 f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'
             )
-        _safe_txt = msg["content"].replace("<", "&lt;").replace(">", "&gt;")
+        _disp_txt = msg.get("display", msg["content"])
+        _safe_txt = _disp_txt.replace("<", "&lt;").replace(">", "&gt;")
         st.markdown(
             f'<div class="msg-row-user">'
             f'<div class="bubble-user">{_img_html}{_safe_txt}</div>'
@@ -882,7 +907,7 @@ for i, msg in enumerate(st.session_state.messages):
                 st.rerun()
         if msg.get("practice"):
             st.markdown(
-                '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
+                '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">同类练习题</p>',
                 unsafe_allow_html=True,
             )
             if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
@@ -906,7 +931,7 @@ for i, msg in enumerate(st.session_state.messages):
                           if m["role"] == "user"), None)
         _prev_q = _prev_msg["content"] if _prev_msg else ""
         if _prev_q and not any(w["question"] == _prev_q for w in st.session_state.wrong_book):
-            if st.button("📌 存入错题本", key=f"wb_add_{i}", use_container_width=False):
+            if st.button("存入错题本", key=f"wb_add_{i}", use_container_width=False):
                 st.session_state.wrong_book.append({
                     "question": _prev_q,
                     "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -937,17 +962,17 @@ if st.session_state.get("show_plus"):
         )
         gc1, gc2, gc3, gc4 = st.columns(4)
         with gc1:
-            if st.button("🖼️\n\n图片", key="gp_photo", use_container_width=True):
+            if st.button("图片", key="gp_photo", use_container_width=True):
                 st.session_state.show_plus = False
                 st.session_state.show_photo = True
                 st.rerun()
         with gc2:
-            if st.button("📄\n\n文件", key="gp_file", use_container_width=True):
+            if st.button("文件", key="gp_file", use_container_width=True):
                 st.session_state.show_plus = False
                 st.session_state.show_file = True
                 st.rerun()
         with gc3:
-            if st.button("🎯\n\n举一反三", key="gp_sim", use_container_width=True,
+            if st.button("举一反三", key="gp_sim", use_container_width=True,
                          disabled=not _can_act):
                 if _can_act:
                     st.session_state["_similar"] = {
@@ -958,7 +983,7 @@ if st.session_state.get("show_plus"):
                     st.rerun()
         with gc4:
             _gm_active = st.session_state.guide_mode
-            _gm_lbl = "🧭\n\n引导✓" if _gm_active else "🧭\n\n引导"
+            _gm_lbl = "引导✓" if _gm_active else "引导"
             if st.button(_gm_lbl, key="gp_guide", use_container_width=True):
                 st.session_state.guide_mode = not _gm_active
                 st.session_state.show_plus = False
@@ -968,7 +993,7 @@ if st.session_state.get("show_plus"):
 # ── 图片面板：手机点"Browse files"会弹出相机/相册选择 ──────────────────────
 if st.session_state.get("show_photo"):
     _pf = st.file_uploader(
-        "📷  拍照 / 从相册选取",
+        "拍照 / 从相册选取",
         type=["jpg", "jpeg", "png", "webp", "heic"],
         key="photo_inline",
         label_visibility="visible",
@@ -982,7 +1007,7 @@ if st.session_state.get("show_photo"):
 
 # ── 文件面板：txt/md 内容附加到消息里 ───────────────────────────────────────
 if st.session_state.get("show_file"):
-    _ff = st.file_uploader("📄 选择文本文件", type=["txt","md"],
+    _ff = st.file_uploader("选择文本文件", type=["txt","md"],
                            key="file_inline", label_visibility="visible")
     if _ff:
         _fc = _ff.read().decode("utf-8", errors="replace")
@@ -994,7 +1019,7 @@ if st.session_state.get("show_file"):
 
 # ── 麦克风面板（录完直接识别发送）───────────────────────────────────────────
 if st.session_state.get("show_mic"):
-    _av = st.audio_input("🎙️ 说出数学题（支持中英文）", key="mic_input",
+    _av = st.audio_input("说出数学题（支持中英文）", key="mic_input",
                          label_visibility="visible")
     if _av:
         with st.spinner("识别中…"):
@@ -1032,7 +1057,7 @@ if _patt:
             f'{_icon_html}'
             f'<span style="font-size:0.8rem;color:#555;overflow:hidden;'
             f'text-overflow:ellipsis;white-space:nowrap">'
-            f'📎 {_label} · 补充说明后发送</span>'
+            f'{_label} · 补充说明后发送</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -1123,19 +1148,19 @@ _img_b64_bubble = None
 
 if _submitted:
     if _similar_ctx:
-        user_input = "🎯 举一反三"
-        display_text = "🎯 举一反三"
+        user_input = "举一反三"
+        display_text = "举一反三"
     elif _patt_send:
         att = _patt_send
         if att["type"] == "image":
             _img_bytes = att["bytes"]
             _img_b64_bubble = base64.b64encode(compress_image(_img_bytes, max_size=400)).decode()
             user_input = _eff_text.strip() or "请解答图片中的数学题"
-            display_text = ("📷 " + _eff_text.strip()) if _eff_text.strip() else "📷 图片题目"
+            display_text = _eff_text.strip() if _eff_text.strip() else "图片题目"
         elif att["type"] == "file":
             _file_ctx = f"[文件：{att.get('name','')}]\n{att['content']}"
             user_input = (_file_ctx + "\n\n说明：" + _eff_text if _eff_text.strip() else _file_ctx)
-            display_text = f"📄 {att.get('name','')}  {_eff_text}".strip()
+            display_text = f"{att.get('name','')}  {_eff_text}".strip()
     elif _eff_text:
         user_input = _eff_text
         display_text = _eff_text
@@ -1143,7 +1168,12 @@ if _submitted:
 # ── Agent 解题（渲染到 _new_turn 容器，确保在工具栏上方显示）──────────────────
 if user_input:
     _sim_data = _similar_ctx if _similar_ctx else None
-    _msg_record = {"role": "user", "content": display_text or user_input}
+    # content = 实际问题（传入 LLM 历史），display = 气泡显示文本
+    _msg_record = {
+        "role": "user",
+        "content": user_input,
+        "display": display_text or user_input,
+    }
     if _img_bytes and "_img_b64_bubble" in locals():
         _msg_record["image_b64"] = _img_b64_bubble
     st.session_state.messages.append(_msg_record)
@@ -1253,13 +1283,13 @@ if user_input:
                     elif "429" in err_str or "rate" in err_str:
                         friendly = "⏳ 请求过于频繁，请等待几秒再试"
                     elif "401" in err_str or "unauthorized" in err_str or "key" in err_str:
-                        friendly = "🔑 API Key 配置异常，请联系管理员"
+                        friendly = "API Key 配置异常，请联系管理员"
                     elif "502" in err_str or "503" in err_str:
-                        friendly = "🔧 模型服务暂时不可用，请稍后重试"
+                        friendly = "模型服务暂时不可用，请稍后重试"
                     else:
-                        friendly = f"💥 解题出错：{str(exc)[:80]}"
+                        friendly = f"解题出错：{str(exc)[:80]}"
                     stream, err = None, friendly
-                    status.update(label="❌ 出错了", state="error", expanded=True)
+                    status.update(label="出错了", state="error", expanded=True)
                 if not err:
                     status.update(label="完成", state="complete", expanded=False)
 
@@ -1281,9 +1311,9 @@ if user_input:
                     _vbuf = buf.getvalue()
                     _vstatus = _verify_answer(answer, _vbuf)
                     if _vstatus == "✅":
-                        st.caption("✅ SymPy 交叉验证通过")
+                        st.caption("SymPy 交叉验证通过")
                     elif _vstatus == "⚠️":
-                        st.caption("⚠️ 答案与 SymPy 计算结果不一致，建议人工核查")
+                        st.caption("答案与 SymPy 计算结果不一致，建议人工核查")
                     if tags:
                         _ntcols = st.columns(len(tags))
                         for _nti, _ntag in enumerate(tags):
@@ -1292,7 +1322,7 @@ if user_input:
                                     st.session_state["_direct_input"] = f"请详细讲解「{_ntag}」：定义、推导过程和典型例题"
                     if practice:
                         st.markdown(
-                            f'<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">🧪 同类练习题</p>',
+                            f'<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">同类练习题</p>',
                             unsafe_allow_html=True,
                         )
                         if st.button(practice, key="practice_new", use_container_width=True):

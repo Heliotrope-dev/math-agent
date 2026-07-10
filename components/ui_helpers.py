@@ -178,25 +178,28 @@ a[data-testid="stPageLink-NavLink"]:focus {
 
 .toolbar-btn { display: flex !important; align-items: center !important; justify-content: center !important; }
 .toolbar-btn button {
-    background: var(--surface) !important;
-    border: 1px solid var(--border) !important;
+    background: transparent !important;
+    border: none !important;
     font-size: 1.1rem !important; padding: 0 !important;
-    border-radius: 50% !important; color: var(--text-muted) !important;
+    border-radius: 8px !important; color: var(--text-muted) !important;
     height: 36px !important; width: 36px !important;
     min-height: 36px !important; min-width: 36px !important;
     max-height: 36px !important; max-width: 36px !important;
     display: flex !important; align-items: center !important; justify-content: center !important;
     box-shadow: none !important;
 }
-.toolbar-btn button:hover { background: var(--sidebar) !important; border-color: var(--accent) !important; color: var(--accent) !important; }
+.toolbar-btn button:hover { background: rgba(0,0,0,0.06) !important; color: var(--accent) !important; }
 
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div { background: var(--bg) !important; }
+/* 输入框 + 工具栏合并成一张卡片（跟 Claude 输入区一致的观感）：
+   工具栏是卡片上半部分，输入框是下半部分，中间无缝拼接、外沿统一圆角。 */
 [data-testid="stChatInputContainer"] {
     background: var(--surface) !important;
     border: 1.5px solid var(--border) !important;
-    border-radius: 24px !important;
+    border-top: none !important;
+    border-radius: 0 0 20px 20px !important;
     padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important;
 }
 [data-testid="stChatInputContainer"]:focus-within {
@@ -212,8 +215,12 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stChatInputSubmitButton"] button { background: var(--accent) !important; border-radius: 50% !important; }
 
 [data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
-    position: sticky !important; bottom: 72px !important; z-index: 200 !important;
-    background: var(--bg) !important; padding: 4px 0 2px !important; margin: 0 !important;
+    position: sticky !important; bottom: 62px !important; z-index: 200 !important;
+    background: var(--surface) !important;
+    border: 1.5px solid var(--border) !important;
+    border-bottom: none !important;
+    border-radius: 20px 20px 0 0 !important;
+    padding: 6px 10px !important; margin: 0 !important;
 }
 .course-banner-row [data-testid="stHorizontalBlock"],
 [data-testid="stHorizontalBlock"]:has(.course-banner) { align-items: stretch !important; }
@@ -225,11 +232,11 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="element-container"] { background: transparent !important; }
 
 .toolbar-model [data-testid="stSelectbox"] > div > div {
-    border: 1px solid var(--border) !important;
-    background: var(--surface) !important;
+    border: none !important;
+    background: transparent !important;
     font-size: 0.82rem !important; color: var(--text) !important;
-    padding: 2px 12px !important; min-height: 36px !important; max-height: 36px !important;
-    border-radius: 20px !important; box-shadow: none !important;
+    padding: 2px 8px !important; min-height: 36px !important; max-height: 36px !important;
+    border-radius: 8px !important; box-shadow: none !important;
 }
 
 [data-testid="stPills"] { margin-top: 8px !important; }
@@ -459,16 +466,16 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div { background: var(--dm-bg) !important; }
-[data-testid="stChatInputContainer"] { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-radius: 24px !important; padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important; }
+[data-testid="stChatInputContainer"] { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-top: none !important; border-radius: 0 0 20px 20px !important; padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important; }
 [data-testid="stChatInputContainer"]:focus-within { border-color: var(--dm-accent) !important; box-shadow: 0 0 0 3px rgba(91,140,255,0.15) !important; }
 [data-testid="stChatInputTextArea"] { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--dm-text) !important; padding: 2px 0 !important; }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; }
 [data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }
 
-[data-testid="stHorizontalBlock"]:has(.toolbar-btn) { background: var(--dm-bg) !important; }
-.toolbar-model [data-testid="stSelectbox"] > div > div { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; min-height: 36px !important; max-height: 36px !important; }
-.toolbar-btn button { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-muted) !important; }
-.toolbar-btn button:hover { background: var(--dm-card2) !important; border-color: var(--dm-accent) !important; color: var(--dm-text) !important; }
+[data-testid="stHorizontalBlock"]:has(.toolbar-btn) { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-bottom: none !important; border-radius: 20px 20px 0 0 !important; }
+.toolbar-model [data-testid="stSelectbox"] > div > div { background: transparent !important; border: none !important; color: var(--dm-text) !important; min-height: 36px !important; max-height: 36px !important; }
+.toolbar-btn button { background: transparent !important; border: none !important; color: var(--dm-muted) !important; }
+.toolbar-btn button:hover { background: rgba(255,255,255,0.08) !important; color: var(--dm-text) !important; }
 
 [data-testid="stFileUploaderDropzone"] button,
 [data-testid="stFileUploadDropzone"] button { background: var(--dm-surface) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }
@@ -526,9 +533,16 @@ small, .caption { color: var(--dm-muted) !important; }
 .login-logo-title { color: var(--dm-text) !important; }
 .login-logo-sub { color: var(--dm-muted) !important; }
 
-div[data-testid="stPills"] button { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
+div[data-testid="stPills"] > div > label > div,
+div[data-testid="stPills"] button,
+div[data-testid="stPills"] [role="radio"],
+div[data-testid="stPills"] [role="button"] { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
+div[data-testid="stPills"] > div > label > div:hover,
 div[data-testid="stPills"] button:hover,
-div[data-testid="stPills"] button[aria-selected="true"] { background: var(--dm-accent) !important; color: #fff !important; }
+div[data-testid="stPills"] [role="radio"]:hover,
+div[data-testid="stPills"] button[aria-selected="true"],
+div[data-testid="stPills"] [aria-checked="true"],
+div[data-testid="stPills"] [aria-selected="true"] { background: var(--dm-accent) !important; color: #fff !important; border-color: var(--dm-accent) !important; }
 
 [data-testid="stStatusWidget"] { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
 
