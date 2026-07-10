@@ -952,14 +952,11 @@ _last_asst_a = next((m for m in reversed(st.session_state.messages)
                      if m["role"] == "assistant"), None)
 _can_act = bool(_last_user_q and _last_asst_a)
 
-# ── 加号面板（4 功能：图片 / 文件 / 举一反三 / 引导模式）────────────────────
+# ── 加号面板（4 功能：图片 / 文件 / 举一反三 / 引导模式）弹窗式 ──────────────
 if st.session_state.get("show_plus"):
+    st.markdown('<div class="plus-modal-backdrop"></div>', unsafe_allow_html=True)
     with st.container():
-        st.markdown(
-            '<div style="background:#F5F0EB;border:1px solid #D4CEC8;'
-            'border-radius:16px;padding:12px 8px;margin:6px 0">',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="plus-panel plus-modal">', unsafe_allow_html=True)
         gc1, gc2, gc3, gc4 = st.columns(4)
         with gc1:
             if st.button("图片", key="gp_photo", use_container_width=True):
@@ -1038,24 +1035,34 @@ if _patt:
         _thumb_b64 = base64.b64encode(compress_image(_patt["bytes"], max_size=80)).decode()
         _icon_html = (
             f'<img src="data:image/jpeg;base64,{_thumb_b64}" '
-            f'style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0">'
+            f'style="width:40px;height:40px;object-fit:cover;border-radius:8px;flex-shrink:0">'
         )
         _label = _patt.get("name", "图片")
     elif _patt["type"] == "file":
-        _icon_html = '<span style="font-size:1.4rem">📄</span>'
+        _icon_html = (
+            '<div style="width:40px;height:40px;border-radius:8px;flex-shrink:0;'
+            'background:var(--sidebar);border:1px solid var(--border);'
+            'display:flex;align-items:center;justify-content:center;'
+            'font-size:0.62rem;font-weight:600;color:var(--text-muted)">文件</div>'
+        )
         _label = _patt.get("name", "文件")
     else:
-        _icon_html = '<span style="font-size:1.4rem">🎙️</span>'
+        _icon_html = (
+            '<div style="width:40px;height:40px;border-radius:8px;flex-shrink:0;'
+            'background:var(--sidebar);border:1px solid var(--border);'
+            'display:flex;align-items:center;justify-content:center;'
+            'font-size:0.62rem;font-weight:600;color:var(--text-muted)">语音</div>'
+        )
         _label = "语音"
 
+    st.markdown('<div class="attach-preview-sticky">', unsafe_allow_html=True)
     _pa_col, _px_col = st.columns([10, 1])
     with _pa_col:
         st.markdown(
             f'<div style="display:flex;align-items:center;gap:10px;'
-            f'background:#F5F0EB;border:1px solid #D4CEC8;border-radius:12px;'
-            f'padding:8px 12px;margin:4px 0">'
+            f'background:var(--surface);border-radius:12px;padding:6px 4px">'
             f'{_icon_html}'
-            f'<span style="font-size:0.8rem;color:#555;overflow:hidden;'
+            f'<span style="font-size:0.8rem;color:var(--text);overflow:hidden;'
             f'text-overflow:ellipsis;white-space:nowrap">'
             f'{_label} · 补充说明后发送</span>'
             f'</div>',
@@ -1065,6 +1072,7 @@ if _patt:
         if st.button("✕", key="cancel_attach"):
             del st.session_state["pending_attachment"]
             st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ── 底部工具栏 ───────────────────────────────────────────────────────────────
 guide_mode = st.session_state.guide_mode
@@ -1080,22 +1088,21 @@ _copts     = list(CLOUD_PROVIDERS.keys())
 _clabels   = [_MODEL_LABELS.get(m, m) for m in _copts]
 _def_idx   = _copts.index("deepseek-chat")
 
+# 左：加号（附件/功能） + 模型选择；右：麦克风——贴近输入框自带的发送按钮，
+# 视觉上凑成"输入框右下角"一组，跟 Claude 的加号在左、麦克风+发送在右一致。
 try:
-    _tb_mic, _tb_model, _tb_plus = st.columns([1, 6, 1], gap="small", vertical_alignment="center")
+    _tb_plus, _tb_model, _tb_mic = st.columns([1, 6, 1], gap="small", vertical_alignment="center")
 except TypeError:
-    _tb_mic, _tb_model, _tb_plus = st.columns([1, 6, 1], gap="small")
+    _tb_plus, _tb_model, _tb_mic = st.columns([1, 6, 1], gap="small")
 
-with _tb_mic:
+with _tb_plus:
     st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
-    _mic_active = st.session_state.get("show_mic")
-    if st.button("✕" if _mic_active else "🎙️", key="tb_mic", help="语音输入"):
-        if _mic_active:
-            st.session_state.show_mic = False
-        else:
-            st.session_state.show_mic = True
-        st.session_state.show_plus = False
+    if st.button("✕" if st.session_state.get("show_plus") else "＋", key="tb_plus", help="附件 / 拍题"):
+        st.session_state.show_plus = not st.session_state.get("show_plus", False)
+        st.session_state.show_mic = False
         st.session_state.show_photo = False
         st.session_state.show_file = False
+        st.session_state["_panel_just_toggled"] = True
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1109,14 +1116,17 @@ with _tb_model:
     st.session_state["_sel_model"] = selected_model
     st.markdown('</div>', unsafe_allow_html=True)
 
-with _tb_plus:
-    st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
-    if st.button("✕" if st.session_state.get("show_plus") else "➕", key="tb_plus", help="附件 / 拍题"):
-        st.session_state.show_plus = not st.session_state.get("show_plus", False)
-        st.session_state.show_mic = False
+with _tb_mic:
+    st.markdown('<div class="toolbar-btn mic-btn">', unsafe_allow_html=True)
+    _mic_active = st.session_state.get("show_mic")
+    if st.button("✕" if _mic_active else "语音", key="tb_mic", help="语音输入"):
+        if _mic_active:
+            st.session_state.show_mic = False
+        else:
+            st.session_state.show_mic = True
+        st.session_state.show_plus = False
         st.session_state.show_photo = False
         st.session_state.show_file = False
-        st.session_state["_panel_just_toggled"] = True
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
