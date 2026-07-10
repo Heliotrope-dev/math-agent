@@ -477,6 +477,16 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stFileUploaderDropzone"] button:hover,
 [data-testid="stFileUploadDropzone"] button:hover { background: var(--dm-card2) !important; border-color: var(--dm-accent) !important; }
 [data-testid="stFileUploaderFileName"] { color: var(--dm-text) !important; }
+/* 选中文件后显示的那张卡片（文件名+大小+删除按钮），testid 名字不固定，
+   用 stFileUploader 整个容器的通配子元素兜底，把默认的白底都盖掉 */
+[data-testid="stFileUploader"] * { background-color: var(--dm-surface) !important; }
+[data-testid="stFileUploader"] { color: var(--dm-text) !important; }
+[data-testid="stFileUploaderDropzone"], [data-testid="stFileUploadDropzone"] { background: transparent !important; }
+[data-testid="stFileUploaderDropzone"] *, [data-testid="stFileUploadDropzone"] * { background-color: transparent !important; }
+[data-testid="stFileUploaderDropzone"] button, [data-testid="stFileUploadDropzone"] button { background-color: var(--dm-surface) !important; }
+[data-testid="stFileUploaderDeleteBtn"] button, [data-testid="stFileUploader"] button[kind="icon"] {
+    background-color: transparent !important; color: var(--dm-muted) !important;
+}
 
 [data-testid="stSelectbox"] > div > div,
 [data-baseweb="select"] > div { background: var(--dm-surface) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }
