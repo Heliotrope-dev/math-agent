@@ -377,11 +377,15 @@ _CALC_POOL = ProcessPoolExecutor(max_workers=2)
 _CALC_TIMEOUT = 15  # 秒
 
 
+def _preprocess_expr(expression: str) -> str:
+    """把用户手写的 ^ 幂运算符号替换成 Python/SymPy 的 **。"""
+    return _re.sub(r'(?<=[\d)a-zA-Z])\^(?=[\d(\-a-zA-Z])', '**', expression)
+
+
 def _calc_impl(expression: str, operation: str, variable: str) -> str:
     """在子进程中执行 SymPy 计算——只有进程能真正 kill 挂死的 SymPy。"""
-    import re
     import sympy as sp
-    expr_str = re.sub(r'(?<=[\d)a-zA-Z])\^(?=[\d(\-a-zA-Z])', '**', expression)
+    expr_str = _preprocess_expr(expression)
     var = sp.Symbol(variable)
 
     if operation == "evaluate":
@@ -457,6 +461,100 @@ def _run_calculator(expression: str, operation: str, variable: str = "x") -> str
             f"计算出错：{exc}\n"
             "提示：请使用 Python/SymPy 语法，例如用 x**2 代替 x²，用 * 表示乘法。"
         )
+
+
+# ── 答案验证：判断模型最终答案与 calculator 的计算结果是否数学等价 ────────────
+# 用于抓一类常见的 LLM 失误——工具算对了，但抄到最终答案时抄错/漏负号/约分错。
+from sympy.parsing.sympy_parser import (
+    parse_expr as _parse_expr,
+    standard_transformations as _std_transforms,
+    implicit_multiplication_application as _implicit_mul,
+)
+_LOOSE_TRANSFORMS = _std_transforms + (_implicit_mul,)
+
+_LATEX_STRIP = _re.compile(r'\$+|\\\(|\\\)|\\\[|\\\]|\\left|\\right|\\,|\\;')
+_ANSWER_PREFIX = _re.compile(r'^(答案|结果|即|解得?)\s*[:：]?\s*')
+_VAR_EQ_PREFIX = _re.compile(r'^[a-zA-Z]\w*\s*=\s*(.+)$')
+
+
+def _clean_answer_text(s: str) -> str:
+    """去除 LaTeX 包裹符号、"答案："前缀，剩下待拆分/sympify 的核心内容。"""
+    s = _LATEX_STRIP.sub('', s).strip()
+    s = _ANSWER_PREFIX.sub('', s).strip()
+    return s.strip()
+
+
+def _extract_calc_value(tool_result: str) -> str:
+    """从 calculator 格式化输出（如 "解：[2, -2]" / "数值结果：3.0"）里抠出真正的结果片段。
+
+    取最后一行、最后一个 分隔符（：/:/=）之后的内容；'≈' 之后的近似值丢弃，优先用精确值；
+    不定积分的任意常数 "+ C" 去掉（注意：这只是文本层面处理，不代表已严谨判断反导函数等价）。
+    """
+    lines = [ln for ln in tool_result.strip().splitlines() if ln.strip()]
+    if not lines:
+        return tool_result.strip()
+    last_line = lines[-1]
+    if '≈' in last_line:
+        last_line = last_line.split('≈', 1)[0]
+    sep_idx = max((last_line.rfind(sep) for sep in ('：', ':', '=')), default=-1)
+    if sep_idx != -1:
+        last_line = last_line[sep_idx + 1:]
+    last_line = _re.sub(r'\+\s*[Cc]\s*$', '', last_line)
+    return last_line.strip()
+
+
+def _to_value_set(s: str) -> "list | None":
+    """把一段文本解析成一组 SymPy 值（支持逗号分隔的多解、[] 包裹的列表）。解析失败返回 None。
+
+    "x = "这类前缀要在按逗号拆分之后、逐个解再去掉——'x=2, x=-2'两个解都各自带前缀。
+    """
+    s = _clean_answer_text(s).strip('[]{}')
+    parts = [p.strip() for p in _re.split(r'[,;，；]', s) if p.strip()]
+    if not parts:
+        return None
+    values = []
+    for p in parts:
+        m = _VAR_EQ_PREFIX.match(p)
+        if m:
+            p = m.group(1)
+        try:
+            values.append(_parse_expr(_preprocess_expr(p), transformations=_LOOSE_TRANSFORMS))
+        except Exception:
+            return None
+    return values
+
+
+def answers_equivalent(parsed_answer: str, tool_result: str, tol: float = 1e-6) -> bool:
+    """判断模型最终答案（parsed_answer）与 calculator 的计算结果（tool_result）在数学上是否等价。
+
+    用 SymPy 判断"是否相等"，而不是字符串比较——'x=2'、'2'、'2.0' 应视为等价。
+    多解按集合匹配（不关心顺序），数量不一致视为不等价（保守策略：宁可多重试一次，
+    不漏掉模型漏抄了某个解的情况）。
+    """
+    a = _to_value_set(parsed_answer)
+    b = _to_value_set(_extract_calc_value(tool_result))
+    if a is None or b is None or len(a) != len(b):
+        return False
+    remaining = list(b)
+    for va in a:
+        match_idx = None
+        for i, vb in enumerate(remaining):
+            try:
+                if sp.simplify(va - vb) == 0:
+                    match_idx = i
+                    break
+            except Exception:
+                pass
+            try:
+                if abs(complex(sp.N(va)) - complex(sp.N(vb))) < tol:
+                    match_idx = i
+                    break
+            except Exception:
+                pass
+        if match_idx is None:
+            return False
+        remaining.pop(match_idx)
+    return True
 
 
 # RAG 懒加载索引（首次调用时构建，需要 Ollama 在线；失败后 5 分钟重试）
