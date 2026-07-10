@@ -162,44 +162,30 @@ a[data-testid="stPageLink-NavLink"]:focus {
 }
 .guide-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-.plus-panel {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 16px; padding: 16px 12px; margin: 8px 0;
+/* 加号面板：弹窗式，居中浮层 + 半透明遮罩，不再把下面内容往上顶。
+   用 st.container(key="plus_modal_box") 包裹内容——Streamlit 会把 key 转成
+   真实的 CSS class（st-key-<key>），内容是真的嵌套在这个容器里，不是靠手写
+   <div> 标签硬凑（那种写法在浏览器里不会真正嵌套，坑详见 commit 记录）。 */
+.plus-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+    z-index: 299; backdrop-filter: blur(2px);
 }
-.plus-panel .stButton button {
+.st-key-plus_modal_box {
+    position: fixed !important; left: 50% !important; bottom: 90px !important;
+    transform: translateX(-50%) !important; width: min(420px, 90vw) !important;
+    z-index: 300 !important; box-shadow: 0 12px 40px rgba(0,0,0,0.25) !important;
+    background: var(--surface) !important; border: 1px solid var(--border) !important;
+    border-radius: 16px !important; padding: 16px 12px !important;
+}
+.st-key-plus_modal_box .stButton button {
     background: var(--surface) !important; border: 1px solid var(--border) !important;
     border-radius: var(--radius) !important; padding: 14px 6px !important;
     height: 76px !important; font-size: 0.82rem !important; color: var(--text-muted) !important;
     box-shadow: none !important;
 }
-.plus-panel .stButton button:hover {
+.st-key-plus_modal_box .stButton button:hover {
     border-color: var(--accent) !important; color: var(--accent) !important;
 }
-
-/* 加号面板改成弹窗：居中浮层 + 半透明遮罩，不再把下面内容往上顶 */
-.plus-modal-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.35);
-    z-index: 299; backdrop-filter: blur(2px);
-}
-.plus-modal {
-    position: fixed !important; left: 50% !important; bottom: 90px !important;
-    transform: translateX(-50%) !important; width: min(420px, 90vw) !important;
-    z-index: 300 !important; box-shadow: 0 12px 40px rgba(0,0,0,0.25) !important;
-}
-
-.toolbar-btn { display: flex !important; align-items: center !important; justify-content: center !important; }
-.toolbar-btn button {
-    background: transparent !important;
-    border: none !important;
-    font-size: 1.1rem !important; padding: 0 !important;
-    border-radius: 8px !important; color: var(--text-muted) !important;
-    height: 36px !important; width: 36px !important;
-    min-height: 36px !important; min-width: 36px !important;
-    max-height: 36px !important; max-width: 36px !important;
-    display: flex !important; align-items: center !important; justify-content: center !important;
-    box-shadow: none !important;
-}
-.toolbar-btn button:hover { background: rgba(0,0,0,0.06) !important; color: var(--accent) !important; }
 
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
@@ -209,8 +195,7 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stChatInput"] {
     background: var(--surface) !important;
     border: 1.5px solid var(--border) !important;
-    border-top: none !important;
-    border-radius: 0 0 20px 20px !important;
+    border-radius: 24px !important;
     padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important;
 }
 [data-testid="stChatInput"]:focus-within {
@@ -233,14 +218,6 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stChatInputApproveButton"] button { background: var(--accent) !important; }
 [data-testid="stChatInputCancelButton"] button { color: var(--text-muted) !important; }
 
-[data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
-    position: sticky !important; bottom: 62px !important; z-index: 200 !important;
-    background: var(--surface) !important;
-    border: 1.5px solid var(--border) !important;
-    border-bottom: none !important;
-    border-radius: 20px 20px 0 0 !important;
-    padding: 6px 10px !important; margin: 0 !important;
-}
 .course-banner-row [data-testid="stHorizontalBlock"],
 [data-testid="stHorizontalBlock"]:has(.course-banner) { align-items: stretch !important; }
 [data-testid="stHorizontalBlock"]:has(.course-banner) [data-testid="stButton"] button {
@@ -249,14 +226,6 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stHorizontalBlock"] { background: transparent !important; }
 [data-testid="stColumn"] { background: transparent !important; }
 [data-testid="element-container"] { background: transparent !important; }
-
-.toolbar-model [data-testid="stSelectbox"] > div > div {
-    border: none !important;
-    background: transparent !important;
-    font-size: 0.82rem !important; color: var(--text) !important;
-    padding: 2px 8px !important; min-height: 36px !important; max-height: 36px !important;
-    border-radius: 8px !important; box-shadow: none !important;
-}
 
 [data-testid="stPills"] { margin-top: 8px !important; }
 div[data-testid="stPills"] > div > label > div,
@@ -407,8 +376,6 @@ button[kind="secondary"][data-testid*="wb_add"] {
     .bubble-user { max-width: 80vw !important; font-size: 0.9rem !important; }
     .bubble-asst-wrap { font-size: 0.9rem !important; }
     .greeting-main { font-size: 1.4rem !important; }
-    .toolbar-model [data-testid="stSelectbox"] > div > div { font-size: 0.72rem !important; padding: 2px 8px !important; min-height: 32px !important; max-height: 32px !important; }
-    .toolbar-btn button { width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; font-size: 1rem !important; }
     .av { width: 28px !important; height: 28px !important; font-size: 0.9rem !important; }
     .app-header-title { font-size: 0.9rem !important; }
     [data-testid="stChatInputTextArea"] { font-size: 0.9rem !important; }
@@ -485,7 +452,7 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div { background: var(--dm-bg) !important; }
-[data-testid="stChatInput"] { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-top: none !important; border-radius: 0 0 20px 20px !important; padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important; }
+[data-testid="stChatInput"] { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-radius: 24px !important; padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important; }
 [data-testid="stChatInput"]:focus-within { border-color: var(--dm-accent) !important; box-shadow: 0 0 0 3px rgba(91,140,255,0.15) !important; }
 [data-testid="stChatInputTextArea"] { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--dm-text) !important; padding: 2px 0 !important; }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; }
@@ -498,11 +465,6 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stChatInputMicButton"] button:hover { color: var(--dm-accent) !important; }
 [data-testid="stChatInputApproveButton"] button { background: var(--dm-accent) !important; }
 [data-testid="stChatInputCancelButton"] button { color: var(--dm-muted) !important; }
-
-[data-testid="stHorizontalBlock"]:has(.toolbar-btn) { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-bottom: none !important; border-radius: 20px 20px 0 0 !important; }
-.toolbar-model [data-testid="stSelectbox"] > div > div { background: transparent !important; border: none !important; color: var(--dm-text) !important; min-height: 36px !important; max-height: 36px !important; }
-.toolbar-btn button { background: transparent !important; border: none !important; color: var(--dm-muted) !important; }
-.toolbar-btn button:hover { background: rgba(255,255,255,0.08) !important; color: var(--dm-text) !important; }
 
 [data-testid="stFileUploaderDropzone"] button,
 [data-testid="stFileUploadDropzone"] button { background: var(--dm-surface) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }
@@ -517,9 +479,9 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-baseweb="menu"] li, [data-baseweb="option"] { color: var(--dm-text) !important; }
 [data-baseweb="menu"] li:hover, [data-baseweb="option"]:hover { background: var(--dm-card2) !important; }
 
-.plus-panel { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
-.plus-panel .stButton button { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
-.plus-panel .stButton button:hover { background: var(--dm-card2) !important; border-color: var(--dm-accent) !important; }
+.st-key-plus_modal_box { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
+.st-key-plus_modal_box .stButton button { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
+.st-key-plus_modal_box .stButton button:hover { background: var(--dm-card2) !important; border-color: var(--dm-accent) !important; }
 
 [data-testid="stAudioInput"],
 [data-testid="stAudioInput"] > div { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }

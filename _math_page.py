@@ -28,7 +28,7 @@ for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
         except Exception:
             pass
 
-from agent import MathAgent, CLOUD_PROVIDERS, route_model
+from agent import MathAgent, route_model
 from tools import get_and_clear_pending_images, compress_image
 from components.auth import (
     _track_topic,
@@ -705,8 +705,7 @@ try{{
         '[data-testid="stSidebarCollapsedButton"]:hover{{background:rgba(255,255,255,0.1)!important}}' +
         '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
         '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}' +
-        '[data-testid="stHorizontalBlock"]:has(.toolbar-btn){{background:#16162A!important;border:1.5px solid #282845!important;border-bottom:none!important;border-radius:20px 20px 0 0!important}}' +
-        '[data-testid="stChatInput"]{{background:#16162A!important;border:1.5px solid #282845!important;border-top:none!important;border-radius:0 0 20px 20px!important;box-shadow:none!important}}' +
+        '[data-testid="stChatInput"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
         '[data-testid="stChatInput"]>div,[data-testid="stChatInput"]>div>div{{background:#16162A!important}}' +
         '[data-testid="stChatInput"]{{background:#16162A!important}}' +
         '[data-testid="stChatInputTextArea"]{{background:#16162A!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important;-webkit-text-fill-color:#DEE1F5!important;caret-color:#DEE1F5!important}}' +
@@ -736,8 +735,7 @@ try{{
         if (inp) {{
             inp.style.setProperty('background','#16162A','important');
             inp.style.setProperty('border','1.5px solid #282845','important');
-            inp.style.setProperty('border-top','none','important');
-            inp.style.setProperty('border-radius','0 0 20px 20px','important');
+            inp.style.setProperty('border-radius','24px','important');
             inp.style.setProperty('box-shadow','none','important');
             inp.querySelectorAll('*').forEach(function(d){{
                 d.style.setProperty('background','#16162A','important');
@@ -954,8 +952,11 @@ _can_act = bool(_last_user_q and _last_asst_a)
 # 同一个位置，不存在"跟着一起滑动"的问题。
 if st.session_state.get("show_plus"):
     st.markdown('<div class="plus-modal-backdrop"></div>', unsafe_allow_html=True)
-    with st.container():
-        st.markdown('<div class="plus-panel plus-modal">', unsafe_allow_html=True)
+    # 用 st.container(key=...) 而不是手写 <div> 标签——st.container 的 key 会被
+    # Streamlit 自动转成真实的 CSS class（st-key-<key>），包裹的内容是真的嵌套在
+    # 这个容器里；手写 <div>...</div> 靠两次独立的 st.markdown 调用拼接，浏览器会
+    # 把每次调用的 HTML 片段各自解析闭合，中间的按钮实际上并不会被嵌套进去。
+    with st.container(key="plus_modal_box"):
         gc1, gc2 = st.columns(2)
         with gc1:
             if st.button("举一反三", key="gp_sim", use_container_width=True,
@@ -974,44 +975,21 @@ if st.session_state.get("show_plus"):
                 st.session_state.guide_mode = not _gm_active
                 st.session_state.show_plus = False
                 st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
-# ── 底部工具栏：加号（举一反三/引导） + 模型选择 ─────────────────────────────
+# ── 加号（举一反三 / 引导模式）──────────────────────────────────────────────
+# 模型选择砍掉了：目前真正稳定跑通的只有 DeepSeek 一个（其它是拍题用的视觉模型，
+# 由 route_model 自动路由，不需要用户手选），selected_model 固定走第782行的
+# 默认值（DEFAULT_MODEL = "deepseek-chat"），不再单独维护一份。
+# 这个按钮改成普通文档流里的小按钮，不再用 position:sticky/fixed 硬贴在输入框
+# 上方——之前反复出问题就是因为这套定位跟 chat_input 自己的固定容器不是一回事。
+# 现在只是个安静地跟着页面正常滚动的小按钮，简单、不会跟输入框错位。
 guide_mode = st.session_state.guide_mode
 
-_MODEL_LABELS = {
-    "deepseek-chat":                   "DeepSeek",
-    "Qwen/Qwen3-VL-30B-A3B-Instruct":  "Qwen3-VL 30B",
-    "Qwen/Qwen3-VL-32B-Instruct":      "Qwen3-VL 32B",
-    "Qwen/Qwen3-VL-32B-Thinking":      "Qwen3 思维链",
-    "Qwen/Qwen3-VL-8B-Instruct":       "Qwen3-VL 8B",
-}
-_copts     = list(CLOUD_PROVIDERS.keys())
-_clabels   = [_MODEL_LABELS.get(m, m) for m in _copts]
-_def_idx   = _copts.index("deepseek-chat")
-
-try:
-    _tb_plus, _tb_model = st.columns([1, 8], gap="small", vertical_alignment="center")
-except TypeError:
-    _tb_plus, _tb_model = st.columns([1, 8], gap="small")
-
-with _tb_plus:
-    st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
-    if st.button("✕" if st.session_state.get("show_plus") else "＋", key="tb_plus", help="举一反三 / 引导模式"):
-        st.session_state.show_plus = not st.session_state.get("show_plus", False)
-        st.session_state["_panel_just_toggled"] = True
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with _tb_model:
-    st.markdown('<div class="toolbar-model">', unsafe_allow_html=True)
-    _sel_label = st.selectbox(
-        "模型", _clabels, index=_def_idx,
-        label_visibility="collapsed", key="tb_model_cloud",
-    )
-    selected_model = _copts[_clabels.index(_sel_label)]
-    st.session_state["_sel_model"] = selected_model
-    st.markdown('</div>', unsafe_allow_html=True)
+if st.button("✕" if st.session_state.get("show_plus") else "＋ 举一反三 / 引导",
+             key="tb_plus", use_container_width=False):
+    st.session_state.show_plus = not st.session_state.get("show_plus", False)
+    st.session_state["_panel_just_toggled"] = True
+    st.rerun()
 
 # ── 文字输入（固定底部）──────────────────────────────────────────────────────
 prefill = st.session_state.pop("prefill", "")
