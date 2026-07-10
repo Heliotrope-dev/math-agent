@@ -658,10 +658,6 @@ if "wrong_book" not in st.session_state:
     st.session_state.wrong_book = _load_wrong_book(st.session_state.get("user_email", ""))
 if "example_set" not in st.session_state:
     st.session_state.example_set = _get_examples()
-if "show_photo" not in st.session_state:
-    st.session_state.show_photo = False
-if "show_file" not in st.session_state:
-    st.session_state.show_file = False
 if "guide_mode" not in st.session_state:
     st.session_state.guide_mode = False
 if "dark_mode" not in st.session_state:
@@ -952,23 +948,16 @@ _last_asst_a = next((m for m in reversed(st.session_state.messages)
                      if m["role"] == "assistant"), None)
 _can_act = bool(_last_user_q and _last_asst_a)
 
-# ── 加号面板（4 功能：图片 / 文件 / 举一反三 / 引导模式）弹窗式 ──────────────
+# ── 加号面板（举一反三 / 引导模式）弹窗式 ────────────────────────────────────
+# 图片/文件/语音不再需要自己拼面板——Streamlit 原生 chat_input 的 accept_file /
+# accept_audio 直接把这几个功能做进输入框本身，天然跟输入框是同一个组件、
+# 同一个位置，不存在"跟着一起滑动"的问题。
 if st.session_state.get("show_plus"):
     st.markdown('<div class="plus-modal-backdrop"></div>', unsafe_allow_html=True)
     with st.container():
         st.markdown('<div class="plus-panel plus-modal">', unsafe_allow_html=True)
-        gc1, gc2, gc3, gc4 = st.columns(4)
+        gc1, gc2 = st.columns(2)
         with gc1:
-            if st.button("图片", key="gp_photo", use_container_width=True):
-                st.session_state.show_plus = False
-                st.session_state.show_photo = True
-                st.rerun()
-        with gc2:
-            if st.button("文件", key="gp_file", use_container_width=True):
-                st.session_state.show_plus = False
-                st.session_state.show_file = True
-                st.rerun()
-        with gc3:
             if st.button("举一反三", key="gp_sim", use_container_width=True,
                          disabled=not _can_act):
                 if _can_act:
@@ -978,7 +967,7 @@ if st.session_state.get("show_plus"):
                     }
                     st.session_state.show_plus = False
                     st.rerun()
-        with gc4:
+        with gc2:
             _gm_active = st.session_state.guide_mode
             _gm_lbl = "引导✓" if _gm_active else "引导"
             if st.button(_gm_lbl, key="gp_guide", use_container_width=True):
@@ -987,94 +976,7 @@ if st.session_state.get("show_plus"):
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ── 图片面板：手机点"Browse files"会弹出相机/相册选择 ──────────────────────
-if st.session_state.get("show_photo"):
-    _pf = st.file_uploader(
-        "拍照 / 从相册选取",
-        type=["jpg", "jpeg", "png", "webp", "heic"],
-        key="photo_inline",
-        label_visibility="visible",
-    )
-    if _pf:
-        _pb_ready = _pf.read()
-        # 自动存为待发附件，关闭面板，用户在聊天框补说明后发送
-        st.session_state["pending_attachment"] = {"type": "image", "bytes": _pb_ready, "name": _pf.name}
-        st.session_state.show_photo = False
-        st.rerun()
-
-# ── 文件面板：txt/md 内容附加到消息里 ───────────────────────────────────────
-if st.session_state.get("show_file"):
-    _ff = st.file_uploader("选择文本文件", type=["txt","md"],
-                           key="file_inline", label_visibility="visible")
-    if _ff:
-        _fc = _ff.read().decode("utf-8", errors="replace")
-        st.code(_fc[:300] + ("…" if len(_fc) > 300 else ""), language="text")
-        # 自动存为待发附件，用户在聊天框补说明后发送
-        st.session_state["pending_attachment"] = {"type": "file", "content": _fc, "name": _ff.name}
-        st.session_state.show_file = False
-        st.rerun()
-
-# ── 麦克风面板（录完直接识别发送）───────────────────────────────────────────
-if st.session_state.get("show_mic"):
-    _av = st.audio_input("说出数学题（支持中英文）", key="mic_input",
-                         label_visibility="visible")
-    if _av:
-        with st.spinner("识别中…"):
-            _vt, _vt_err = transcribe_audio(_av)
-        st.session_state.show_mic = False
-        if _vt:
-            st.session_state["_direct_input"] = _vt
-        else:
-            st.error(f"语音识别失败：{_vt_err}" if _vt_err else "未识别到内容，请重试（录音超过1秒）")
-        st.rerun()
-
-# ── 待发附件预览条（紧凑横条）────────────────────────────────────────────────
-_patt = st.session_state.get("pending_attachment")
-if _patt:
-    if _patt["type"] == "image":
-        _thumb_b64 = base64.b64encode(compress_image(_patt["bytes"], max_size=80)).decode()
-        _icon_html = (
-            f'<img src="data:image/jpeg;base64,{_thumb_b64}" '
-            f'style="width:40px;height:40px;object-fit:cover;border-radius:8px;flex-shrink:0">'
-        )
-        _label = _patt.get("name", "图片")
-    elif _patt["type"] == "file":
-        _icon_html = (
-            '<div style="width:40px;height:40px;border-radius:8px;flex-shrink:0;'
-            'background:var(--sidebar);border:1px solid var(--border);'
-            'display:flex;align-items:center;justify-content:center;'
-            'font-size:0.62rem;font-weight:600;color:var(--text-muted)">文件</div>'
-        )
-        _label = _patt.get("name", "文件")
-    else:
-        _icon_html = (
-            '<div style="width:40px;height:40px;border-radius:8px;flex-shrink:0;'
-            'background:var(--sidebar);border:1px solid var(--border);'
-            'display:flex;align-items:center;justify-content:center;'
-            'font-size:0.62rem;font-weight:600;color:var(--text-muted)">语音</div>'
-        )
-        _label = "语音"
-
-    st.markdown('<div class="attach-preview-sticky">', unsafe_allow_html=True)
-    _pa_col, _px_col = st.columns([10, 1])
-    with _pa_col:
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:10px;'
-            f'background:var(--surface);border-radius:12px;padding:6px 4px">'
-            f'{_icon_html}'
-            f'<span style="font-size:0.8rem;color:var(--text);overflow:hidden;'
-            f'text-overflow:ellipsis;white-space:nowrap">'
-            f'{_label} · 补充说明后发送</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-    with _px_col:
-        if st.button("✕", key="cancel_attach"):
-            del st.session_state["pending_attachment"]
-            st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ── 底部工具栏 ───────────────────────────────────────────────────────────────
+# ── 底部工具栏：加号（举一反三/引导） + 模型选择 ─────────────────────────────
 guide_mode = st.session_state.guide_mode
 
 _MODEL_LABELS = {
@@ -1088,20 +990,15 @@ _copts     = list(CLOUD_PROVIDERS.keys())
 _clabels   = [_MODEL_LABELS.get(m, m) for m in _copts]
 _def_idx   = _copts.index("deepseek-chat")
 
-# 左：加号（附件/功能） + 模型选择；右：麦克风——贴近输入框自带的发送按钮，
-# 视觉上凑成"输入框右下角"一组，跟 Claude 的加号在左、麦克风+发送在右一致。
 try:
-    _tb_plus, _tb_model, _tb_mic = st.columns([1, 6, 1], gap="small", vertical_alignment="center")
+    _tb_plus, _tb_model = st.columns([1, 8], gap="small", vertical_alignment="center")
 except TypeError:
-    _tb_plus, _tb_model, _tb_mic = st.columns([1, 6, 1], gap="small")
+    _tb_plus, _tb_model = st.columns([1, 8], gap="small")
 
 with _tb_plus:
     st.markdown('<div class="toolbar-btn">', unsafe_allow_html=True)
-    if st.button("✕" if st.session_state.get("show_plus") else "＋", key="tb_plus", help="附件 / 拍题"):
+    if st.button("✕" if st.session_state.get("show_plus") else "＋", key="tb_plus", help="举一反三 / 引导模式"):
         st.session_state.show_plus = not st.session_state.get("show_plus", False)
-        st.session_state.show_mic = False
-        st.session_state.show_photo = False
-        st.session_state.show_file = False
         st.session_state["_panel_just_toggled"] = True
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1116,39 +1013,50 @@ with _tb_model:
     st.session_state["_sel_model"] = selected_model
     st.markdown('</div>', unsafe_allow_html=True)
 
-with _tb_mic:
-    st.markdown('<div class="toolbar-btn mic-btn">', unsafe_allow_html=True)
-    _mic_active = st.session_state.get("show_mic")
-    if st.button("✕" if _mic_active else "语音", key="tb_mic", help="语音输入"):
-        if _mic_active:
-            st.session_state.show_mic = False
-        else:
-            st.session_state.show_mic = True
-        st.session_state.show_plus = False
-        st.session_state.show_photo = False
-        st.session_state.show_file = False
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
 # ── 文字输入（固定底部）──────────────────────────────────────────────────────
 prefill = st.session_state.pop("prefill", "")
 _direct_input = st.session_state.pop("_direct_input", None)
 _panel_just_toggled = st.session_state.pop("_panel_just_toggled", False)
-_has_patt = "pending_attachment" in st.session_state
 
+# accept_file / accept_audio：图片、文本文件、语音录音都是输入框原生自带的功能，
+# 跟文字在同一次提交里一起送出，不再需要我们自己拼"先选文件→出现待发条→再发送"
+# 这套两段式流程。
 typed = st.chat_input(
-    "补充说明后发送，或直接发送…" if _has_patt else "输入数学题，支持 LaTeX 符号…"
+    "输入数学题，支持 LaTeX 符号…",
+    accept_file="multiple",
+    file_type=["jpg", "jpeg", "png", "webp", "heic", "txt", "md"],
+    accept_audio=True,
 )
 
+_typed_text = ""
+_typed_images: list = []
+_typed_textfiles: list = []
+_typed_audio = None
+if typed is not None:
+    _typed_text = (typed.text or "").strip()
+    for _f in (typed.files or []):
+        if _f.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".heic")):
+            _typed_images.append(_f)
+        else:
+            _typed_textfiles.append(_f)
+    _typed_audio = typed.audio
+
+# 语音：先识别成文字，跟同一次提交里打的字拼在一起
+if _typed_audio is not None:
+    with st.spinner("识别语音中…"):
+        _vt, _vt_err = transcribe_audio(_typed_audio)
+    if _vt:
+        _typed_text = (_typed_text + "\n" + _vt).strip() if _typed_text else _vt
+    else:
+        st.error(f"语音识别失败：{_vt_err}" if _vt_err else "未识别到语音内容，请重试")
+
+_native_submitted = typed is not None and (_typed_text or _typed_images or _typed_textfiles or _typed_audio is not None)
 
 # 确定是否"提交"：面板刚切换时强制跳过，避免误触发
 _submitted = (not _panel_just_toggled) and (
-    (typed is not None) or (_direct_input is not None) or bool(_similar_ctx) or bool(prefill)
+    _native_submitted or (_direct_input is not None) or bool(_similar_ctx) or bool(prefill)
 )
-_eff_text = _direct_input if _direct_input is not None else (typed if typed is not None else prefill)
-
-# ── 取出附件（仅在发送时消费）────────────────────────────────────────────────
-_patt_send = st.session_state.pop("pending_attachment", None) if _submitted else None
+_eff_text = _direct_input if _direct_input is not None else (_typed_text if typed is not None else prefill)
 
 # ── 构造 user_input 和展示用 display_text ─────────────────────────────────────
 user_input = None
@@ -1160,17 +1068,19 @@ if _submitted:
     if _similar_ctx:
         user_input = "举一反三"
         display_text = "举一反三"
-    elif _patt_send:
-        att = _patt_send
-        if att["type"] == "image":
-            _img_bytes = att["bytes"]
-            _img_b64_bubble = base64.b64encode(compress_image(_img_bytes, max_size=400)).decode()
-            user_input = _eff_text.strip() or "请解答图片中的数学题"
-            display_text = _eff_text.strip() if _eff_text.strip() else "图片题目"
-        elif att["type"] == "file":
-            _file_ctx = f"[文件：{att.get('name','')}]\n{att['content']}"
-            user_input = (_file_ctx + "\n\n说明：" + _eff_text if _eff_text.strip() else _file_ctx)
-            display_text = f"{att.get('name','')}  {_eff_text}".strip()
+    elif _typed_images:
+        _img_bytes = _typed_images[0].getvalue()
+        _img_b64_bubble = base64.b64encode(compress_image(_img_bytes, max_size=400)).decode()
+        user_input = _eff_text.strip() or "请解答图片中的数学题"
+        display_text = _eff_text.strip() if _eff_text.strip() else "图片题目"
+    elif _typed_textfiles:
+        _file_parts = [
+            f"[文件：{_f.name}]\n{_f.getvalue().decode('utf-8', errors='replace')}"
+            for _f in _typed_textfiles
+        ]
+        _file_ctx = "\n\n".join(_file_parts)
+        user_input = (_file_ctx + "\n\n说明：" + _eff_text if _eff_text.strip() else _file_ctx)
+        display_text = f"{_typed_textfiles[0].name}  {_eff_text}".strip()
     elif _eff_text:
         user_input = _eff_text
         display_text = _eff_text

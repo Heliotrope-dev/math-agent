@@ -187,27 +187,6 @@ a[data-testid="stPageLink-NavLink"]:focus {
     z-index: 300 !important; box-shadow: 0 12px 40px rgba(0,0,0,0.25) !important;
 }
 
-/* 待发附件预览：吸附在工具栏正上方，视觉上跟输入框是同一组卡片 */
-.attach-preview-sticky {
-    position: sticky !important; bottom: 104px !important; z-index: 199 !important;
-    background: var(--surface) !important; border: 1.5px solid var(--border) !important;
-    border-bottom: none !important; border-radius: 20px 20px 0 0 !important;
-    padding: 6px 10px 0 !important; margin: 0 !important;
-}
-
-/* 麦克风按钮：文字换成极简线条图标（mask 图形跟随按钮字色，明暗自动适配） */
-.mic-btn button { color: transparent !important; position: relative; }
-.mic-btn button::before {
-    content: ""; position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%, -50%); width: 17px; height: 17px;
-    background-color: var(--text-muted);
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='11' rx='3'/%3E%3Cpath d='M5 10v1a7 7 0 0 0 14 0v-1'/%3E%3Cline x1='12' y1='18' x2='12' y2='22'/%3E%3Cline x1='8' y1='22' x2='16' y2='22'/%3E%3C/svg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='11' rx='3'/%3E%3Cpath d='M5 10v1a7 7 0 0 0 14 0v-1'/%3E%3Cline x1='12' y1='18' x2='12' y2='22'/%3E%3Cline x1='8' y1='22' x2='16' y2='22'/%3E%3C/svg%3E");
-    -webkit-mask-size: contain; mask-size: contain;
-    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-}
-.mic-btn button:hover::before { background-color: var(--accent) !important; }
-
 .toolbar-btn { display: flex !important; align-items: center !important; justify-content: center !important; }
 .toolbar-btn button {
     background: transparent !important;
@@ -245,6 +224,14 @@ a[data-testid="stPageLink-NavLink"]:focus {
 }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; outline: none !important; }
 [data-testid="stChatInputSubmitButton"] button { background: var(--accent) !important; border-radius: 50% !important; }
+[data-testid="stChatInputFileUploadButton"] button,
+[data-testid="stChatInputMicButton"] button {
+    color: var(--text-muted) !important; background: transparent !important;
+}
+[data-testid="stChatInputFileUploadButton"] button:hover,
+[data-testid="stChatInputMicButton"] button:hover { color: var(--accent) !important; }
+[data-testid="stChatInputApproveButton"] button { background: var(--accent) !important; }
+[data-testid="stChatInputCancelButton"] button { color: var(--text-muted) !important; }
 
 [data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
     position: sticky !important; bottom: 62px !important; z-index: 200 !important;
@@ -503,13 +490,18 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 [data-testid="stChatInputTextArea"] { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--dm-text) !important; padding: 2px 0 !important; }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; }
 [data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }
+[data-testid="stChatInputFileUploadButton"] button,
+[data-testid="stChatInputMicButton"] button {
+    color: var(--dm-muted) !important; background: transparent !important;
+}
+[data-testid="stChatInputFileUploadButton"] button:hover,
+[data-testid="stChatInputMicButton"] button:hover { color: var(--dm-accent) !important; }
+[data-testid="stChatInputApproveButton"] button { background: var(--dm-accent) !important; }
+[data-testid="stChatInputCancelButton"] button { color: var(--dm-muted) !important; }
 
 [data-testid="stHorizontalBlock"]:has(.toolbar-btn) { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-bottom: none !important; border-radius: 20px 20px 0 0 !important; }
 .toolbar-model [data-testid="stSelectbox"] > div > div { background: transparent !important; border: none !important; color: var(--dm-text) !important; min-height: 36px !important; max-height: 36px !important; }
 .toolbar-btn button { background: transparent !important; border: none !important; color: var(--dm-muted) !important; }
-.mic-btn button::before { background-color: var(--dm-muted) !important; }
-.mic-btn button:hover::before { background-color: var(--dm-accent) !important; }
-.attach-preview-sticky { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-bottom: none !important; }
 .toolbar-btn button:hover { background: rgba(255,255,255,0.08) !important; color: var(--dm-text) !important; }
 
 [data-testid="stFileUploaderDropzone"] button,
