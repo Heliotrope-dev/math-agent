@@ -233,6 +233,24 @@ Streamlit 内置 MathJax 在流式输出时会和 markdown 解析冲突，导致
 
 开发过程中遇到的几个有代表性的问题，记录在这里。
 
+**思维导图/函数图像里中文全变方块，换了字体后又变形**
+
+`draw_mindmap`/`plot_function` 用 matplotlib 画图，中文字体配置踩了两层坑：
+1. VPS 上装的是 Google Noto 那种多语言合集字体（一个 `.ttc` 文件里塞了 SC/TC/JP/KR
+   好几种字形），但 matplotlib 自己扫描字体文件时只认出了"Noto Sans CJK JP"这一个
+   名字，配置里写的字体名全对不上，实际用的是 matplotlib 自带的 DejaVu Sans——
+   不含任何中文字形，所有中文都画成方块。
+2. 改成显式指定"Noto Sans CJK JP"后中文能显示了，但反馈"字有点变形，一眼就能
+   看出来不对"——Han unification 导致的：中日双方汉字共享同一个 Unicode 码位，
+   但具体笔画在两种印刷传统里不完全一样，用日文字形集画中文，母语读者一眼能
+   看出不自然。
+
+最终方案：`apt install fonts-wqy-microhei`（WenQuanYi 微米黑，专门的简体中文
+字体，不是多语言合集，没有字形选错的问题）。**装完字体后还有一步容易漏**：
+matplotlib 会把扫描到的字体列表缓存在 `~/.cache/matplotlib/fontlist-*.json`，
+新装的字体不会自动生效，得删掉这个缓存文件让它重新扫描。VPS 迁移/重建时这个
+apt 包和清缓存这一步都要记得配置。
+
 **httpx.Client 共享连接池导致请求冻结**
 
 `httpx.Client` 最初放在模块级别，所有 `MathAgent` 实例共享同一个连接池。在并发场景下一个请求阻塞会拖住其余所有请求。改成每个 `MathAgent.__init__` 里独立创建自己的 client 实例解决。
