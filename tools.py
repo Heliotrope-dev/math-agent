@@ -747,7 +747,13 @@ def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
 
         # 课本风格：白底黑线，简洁学术风
         plt.rcParams.update({
-            "font.family": ["DejaVu Sans", "Arial Unicode MS", "sans-serif"],
+            # matplotlib 自己扫描字体文件时，VPS 上装的 Noto Sans CJK 那个
+            # .ttc 合集文件只被它认成"Noto Sans CJK JP"这一个名字（尽管同一个
+            # 文件里也有SC/TC/KR的字形），配置里写"DejaVu Sans"/"Arial Unicode
+            # MS"/"sans-serif"这几个名字都对不上，实际用的还是matplotlib自带的
+            # DejaVu Sans——这个字体压根不含中文字形，所有中文都会画成方块
+            # （日文变体的字形集完整覆盖常用简体中文字符，不影响可读性）。
+            "font.family": ["Noto Sans CJK JP", "DejaVu Sans", "sans-serif"],
             "axes.unicode_minus": False,
             "axes.facecolor": "white",
             "figure.facecolor": "white",
@@ -810,7 +816,13 @@ def _run_draw_mindmap(title: str, branches: list) -> str:
         import matplotlib.patches as patches
 
         plt.rcParams.update({
-            "font.family": ["DejaVu Sans", "Arial Unicode MS", "sans-serif"],
+            # matplotlib 自己扫描字体文件时，VPS 上装的 Noto Sans CJK 那个
+            # .ttc 合集文件只被它认成"Noto Sans CJK JP"这一个名字（尽管同一个
+            # 文件里也有SC/TC/KR的字形），配置里写"DejaVu Sans"/"Arial Unicode
+            # MS"/"sans-serif"这几个名字都对不上，实际用的还是matplotlib自带的
+            # DejaVu Sans——这个字体压根不含中文字形，所有中文都会画成方块
+            # （日文变体的字形集完整覆盖常用简体中文字符，不影响可读性）。
+            "font.family": ["Noto Sans CJK JP", "DejaVu Sans", "sans-serif"],
             "axes.unicode_minus": False,
         })
 
