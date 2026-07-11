@@ -84,6 +84,15 @@ def test_to_value_set_strips_var_eq_prefix():
     assert len(vals) == 2
 
 
+def test_to_value_set_strips_function_notation_prefix():
+    # 模型写导数/积分答案时常带 f'(x)=.../f(x)=... 这种函数记号前缀——
+    # 之前的前缀正则只认简单变量名（x=..），带撇号/括号的直接解析失败，
+    # 一道完全正确的答案被判成"无法验证"。真实跑 eval 数据集时发现的。
+    import sympy as sp
+    vals = _to_value_set("f'(x) = 3x^2 - 3")
+    assert vals == [sp.sympify("3*x**2 - 3")]
+
+
 def test_to_value_set_splits_on_chinese_or():
     # 模型常把多解写成 \boxed{x=2 \text{或} x=-2} 塞进同一个框——之前
     # \text{} 不会被拆包、也没有按"或"拆分，整段当一个表达式 sympify

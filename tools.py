@@ -474,7 +474,7 @@ _LOOSE_TRANSFORMS = _std_transforms + (_implicit_mul,)
 
 _LATEX_STRIP = _re.compile(r'\$+|\\\(|\\\)|\\\[|\\\]|\\left|\\right|\\,|\\;|\\quad|\\qquad|\\!')
 _ANSWER_PREFIX = _re.compile(r'^(答案|结果|即|解得?)\s*[:：]?\s*')
-_VAR_EQ_PREFIX = _re.compile(r'^[a-zA-Z]\w*\s*=\s*(.+)$')
+_VAR_EQ_PREFIX = _re.compile(r"^[a-zA-Z]\w*'?(?:\([^)]*\))?\s*=\s*(.+)$")
 _BOXED_RE = _re.compile(r'\\boxed\s*\{(.*)\}\s*$', _re.DOTALL)
 _FRAC_RE = _re.compile(r'\\[cd]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}')
 _FRAC_SHORT_RE = _re.compile(r'\\[cd]?frac\s*(\w)\s*(\w)')  # \frac12 简写（无花括号，各一个字符）
