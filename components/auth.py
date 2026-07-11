@@ -3,7 +3,7 @@
 import hashlib
 import os
 import secrets as _secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -43,6 +43,24 @@ def _sb_post(table: str, data) -> bool:
         return False
     try:
         r = requests.post(f"{_sb_url()}/{table}", headers=_sb_headers(), json=data, timeout=8)
+        return r.ok
+    except Exception:
+        return False
+
+
+def _sb_upsert(table: str, data, on_conflict: str) -> bool:
+    """插入或更新（按 on_conflict 指定的唯一约束判断冲突）。
+    比"先查存不存在再决定insert/update"更省一次往返，也天然幂等——
+    同样的行重复提交不会报唯一约束冲突，也不会产生重复行。
+    """
+    if not _sb_ready():
+        return False
+    try:
+        headers = {**_sb_headers(), "Prefer": "resolution=merge-duplicates"}
+        r = requests.post(
+            f"{_sb_url()}/{table}", headers=headers, json=data,
+            params={"on_conflict": on_conflict}, timeout=8,
+        )
         return r.ok
     except Exception:
         return False
@@ -124,28 +142,71 @@ def _user_exists(email: str) -> bool:
     return len(_sb_get("users", {"email": f"eq.{email}", "select": "email"})) > 0
 
 
-def _check_user(email: str, pw: str) -> bool:
+_LOCKOUT_THRESHOLD = 5
+_LOCKOUT_SECONDS = 60
+
+
+def _check_user(email: str, pw: str) -> tuple:
+    """返回 (是否登录成功, 失败时的提示信息)。
+
+    失败次数/锁定时间持久化在 users 表的 failed_attempts/locked_until 列——
+    之前是存在 st.session_state 里的，换个隐身窗口/清一下cookie就能绕开
+    5次锁定，起不到实际防暴力破解的作用。
+    """
     rows = _sb_get("users", {
-        "email": f"eq.{email}", "select": "email,password_hash"
+        "email": f"eq.{email}",
+        "select": "email,password_hash,failed_attempts,locked_until",
     })
     if not rows:
-        return False
-    stored = rows[0]["password_hash"]
+        return False, "邮箱或密码不正确"
+    row = rows[0]
+
+    locked_until = row.get("locked_until")
+    if locked_until:
+        try:
+            # 显式用带时区的UTC比较——本地测试时踩过坑：写入用
+            # datetime.now()（无时区），Postgres 把它当UTC存，但如果运行的
+            # 机器本地时区不是UTC（比如开发机是UTC+8），"未来60秒"写进去
+            # 后读出来对着本地时钟一比就成了"8小时前"，锁定形同虚设。
+            # VPS本身是UTC所以之前没测出来，这里改成不依赖宿主机时区。
+            lu = datetime.fromisoformat(locked_until.replace("Z", "+00:00"))
+            now = datetime.now(timezone.utc)
+            if now < lu:
+                wait = int((lu - now).total_seconds()) + 1
+                return False, f"密码错误次数过多，请等待 {wait} 秒后重试"
+        except Exception:
+            pass
+
+    stored = row["password_hash"]
+    ok = False
+    upgrade_hash = None
     # 新格式 PBKDF2
     try:
         salt, h = stored.split("$", 1)
         computed = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hex()
-        if _secrets.compare_digest(computed, h):
-            return True
+        ok = _secrets.compare_digest(computed, h)
     except Exception:
         pass
     # 旧格式 SHA256 无盐 — 验证通过后自动升级
-    if _secrets.compare_digest(hashlib.sha256(pw.encode()).hexdigest(), stored):
+    if not ok and _secrets.compare_digest(hashlib.sha256(pw.encode()).hexdigest(), stored):
+        ok = True
         new_salt = os.urandom(16).hex()
-        new_hash = hashlib.pbkdf2_hmac("sha256", pw.encode(), new_salt.encode(), 100000).hex()
-        _sb_patch("users", {"password_hash": f"{new_salt}${new_hash}"}, {"email": f"eq.{email}"})
-        return True
-    return False
+        upgrade_hash = f"{new_salt}${hashlib.pbkdf2_hmac('sha256', pw.encode(), new_salt.encode(), 100000).hex()}"
+
+    if ok:
+        patch = {"failed_attempts": 0, "locked_until": None}
+        if upgrade_hash:
+            patch["password_hash"] = upgrade_hash
+        _sb_patch("users", patch, {"email": f"eq.{email}"})
+        return True, ""
+
+    attempts = (row.get("failed_attempts") or 0) + 1
+    if attempts >= _LOCKOUT_THRESHOLD:
+        locked_at = (datetime.now(timezone.utc) + timedelta(seconds=_LOCKOUT_SECONDS)).isoformat()
+        _sb_patch("users", {"failed_attempts": 0, "locked_until": locked_at}, {"email": f"eq.{email}"})
+        return False, f"密码连续错误{_LOCKOUT_THRESHOLD}次，请等待{_LOCKOUT_SECONDS}秒后重试"
+    _sb_patch("users", {"failed_attempts": attempts}, {"email": f"eq.{email}"})
+    return False, f"邮箱或密码不正确（还有 {_LOCKOUT_THRESHOLD - attempts} 次机会）"
 
 
 def _register_user(email: str, pw_hash: str):
@@ -212,7 +273,14 @@ def _load_wrong_book(email: str) -> list:
 
 
 def _save_wrong_book(email: str, wb: list) -> bool:
-    """差量更新：只增删变化的条目，消除全量覆盖的数据丢失窗口。"""
+    """差量删除 + 全量upsert：表上有 (email,question) 唯一约束，upsert天然幂等。
+
+    之前insert那一半是"先查一遍现有的，本地算出哪些是新的再insert"——如果
+    _load_wrong_book 因为网络抖动返回了空列表（不代表真的没有），会把所有
+    条目都误判成"新的"重新insert一遍，产生重复行。现在改成每次都把当前
+    wb整个列表做upsert（有唯一约束兜底，重复提交只是覆盖同一行，不会
+    再产生重复），从根上消除这个窗口。
+    """
     if not email:
         return False
     existing = _load_wrong_book(email)
@@ -223,13 +291,12 @@ def _save_wrong_book(email: str, wb: list) -> bool:
     for q in existing_qs - new_qs:
         _sb_delete("wrong_book", {"email": f"eq.{email}", "question": f"eq.{q}"})
 
-    # 插入新增的条目（image_b64 仅存 session_state，不写库，避免表结构不匹配）
-    to_add = [item for item in (wb or []) if item["question"] not in existing_qs]
-    if to_add:
+    # image_b64 仅存 session_state，不写库，避免表结构不匹配
+    if wb:
         rows = [
             {"email": email, "question": item["question"],
              "saved_at": item.get("saved_at", "")}
-            for item in to_add
+            for item in wb
         ]
-        return _sb_post("wrong_book", rows)
+        return _sb_upsert("wrong_book", rows, on_conflict="email,question")
     return True

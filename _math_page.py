@@ -54,15 +54,11 @@ def _show_login_page():
         with tab_l:
             _em = st.text_input("邮箱", key="li_email", placeholder="your@email.com")
             _pw = st.text_input("密码", type="password", key="li_pw")
-            _lockout_until = st.session_state.get("_login_lockout_until", 0)
-            _locked = time.time() < _lockout_until
-            if _locked:
-                _wait_secs = int(_lockout_until - time.time()) + 1
-                st.error(f"密码错误次数过多，请等待 {_wait_secs} 秒后重试")
-            if st.button("登录", type="primary", use_container_width=True, key="do_login", disabled=_locked):
-                if _check_user(_em, _pw):
-                    st.session_state["_login_attempts"] = 0
-                    st.session_state["_login_lockout_until"] = 0
+            if st.button("登录", type="primary", use_container_width=True, key="do_login"):
+                # 失败次数/锁定时间存在 users 表里（跨会话/跨设备生效，不是
+                # 存在 session_state 里换个隐身窗口就能绕开的锁定）
+                _ok, _msg = _check_user(_em, _pw)
+                if _ok:
                     _tok = _create_token(_em)
                     st.query_params["_auth"] = _tok
                     st.session_state["logged_in"] = True
@@ -75,14 +71,7 @@ def _show_login_page():
                     )
                     st.rerun()
                 else:
-                    _attempts = st.session_state.get("_login_attempts", 0) + 1
-                    st.session_state["_login_attempts"] = _attempts
-                    if _attempts >= 5:
-                        st.session_state["_login_lockout_until"] = time.time() + 60
-                        st.session_state["_login_attempts"] = 0
-                        st.error("密码连续错误5次，请等待1分钟后重试")
-                    else:
-                        st.error(f"邮箱或密码不正确（还有 {5 - _attempts} 次机会）")
+                    st.error(_msg)
         with tab_r:
             _rem = st.text_input("邮箱", key="reg_email", placeholder="your@email.com")
             _rpw = st.text_input("密码（至少6位）", type="password", key="reg_pw")
