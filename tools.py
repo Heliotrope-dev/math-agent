@@ -473,8 +473,9 @@ from sympy.parsing.sympy_parser import (
 _LOOSE_TRANSFORMS = _std_transforms + (_implicit_mul,)
 
 _LATEX_STRIP = _re.compile(r'\$+|\\\(|\\\)|\\\[|\\\]|\\left|\\right|\\,|\\;|\\quad|\\qquad|\\!')
+_LATEX_TIMES = _re.compile(r'\\(?:times|cdot)')  # \times / \cdot → 乘号，不是能直接删掉的装饰符
 _ANSWER_PREFIX = _re.compile(r'^(答案|结果|即|解得?)\s*[:：]?\s*')
-_VAR_EQ_PREFIX = _re.compile(r"^[a-zA-Z]\w*'?(?:\([^)]*\))?\s*=\s*(.+)$")
+_BRACED_POW = _re.compile(r'\^\{([^{}]+)\}')  # x^{3} → x**(3)，普通^正则要求指数紧跟数字/字母，遇到花括号包裹的指数会漏
 _BOXED_RE = _re.compile(r'\\boxed\s*\{(.*)\}\s*$', _re.DOTALL)
 _FRAC_RE = _re.compile(r'\\[cd]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}')
 _FRAC_SHORT_RE = _re.compile(r'\\[cd]?frac\s*(\w)\s*(\w)')  # \frac12 简写（无花括号，各一个字符）
@@ -489,6 +490,8 @@ def _normalize_latex(s: str) -> str:
     if m:
         s = m.group(1).strip()
     s = _TEXT_MACRO_RE.sub(r'\1', s)
+    s = _LATEX_TIMES.sub('*', s)  # \times/\cdot 是乘号，不能直接删掉（会变成两个数字挨在一起）
+    s = _BRACED_POW.sub(r'**(\1)', s)
     prev = None
     while prev != s:  # \frac 可能嵌套（如分数里还有分数），反复替换到不再变化
         prev = s
@@ -528,7 +531,9 @@ def _to_value_set(s: str) -> "list | None":
     """把一段文本解析成一组 SymPy 值（支持逗号分隔的多解、"或"/or 分隔的多解、[] 包裹的列表）。
     解析失败返回 None。
 
-    "x = "这类前缀要在拆分之后、逐个解再去掉——'x=2, x=-2'/'x=2 或 x=-2' 每个解都各自带前缀。
+    每个解可能带"x=""f'(x)=""2+3*4="这类前缀——不管前缀是变量名、函数记号
+    还是完整重述的算式，真正要验证的都是最后一个"="后面的值，统一取
+    最后一个"="之后的部分（没有"="就保留原样）。
     """
     s = _clean_answer_text(s).strip('[]{}')
     parts = [p.strip() for p in _re.split(r'[,;，；]|或|(?:\s+or\s+)', s) if p.strip()]
@@ -536,9 +541,9 @@ def _to_value_set(s: str) -> "list | None":
         return None
     values = []
     for p in parts:
-        m = _VAR_EQ_PREFIX.match(p)
-        if m:
-            p = m.group(1)
+        eq_idx = p.rfind('=')
+        if eq_idx != -1:
+            p = p[eq_idx + 1:].strip()
         try:
             values.append(_parse_expr(_preprocess_expr(p), transformations=_LOOSE_TRANSFORMS))
         except Exception:

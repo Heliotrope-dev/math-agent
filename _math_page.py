@@ -346,6 +346,16 @@ try {
             /* 侧栏文字：加了 margin-top（之前只有 margin-bottom），"最近问题"这类
                小标题紧跟在上一个按钮下面时才不会贴太近看着像重叠在一起 */
             '[data-testid="stSidebar"] p{font-size:0.84rem!important;margin:8px 0 6px!important;line-height:1.5!important}' +
+            /* 邮箱/"大一大二大三"这类文字只显示半行：Streamlit 给容器计算过
+               一次固定像素高的inline style，是按它最初的字号/行高定的；
+               我们上面把line-height/font-size用!important覆盖掉之后，
+               文字需要的实际高度变了，但容器还锁在旧的矮高度上，下半截
+               被裁掉。强制这些容器高度自适应内容，不锁死。 */
+            '[data-testid="stSidebar"] [data-testid="element-container"],' +
+            '[data-testid="stSidebar"] [data-testid="stMarkdownContainer"],' +
+            '[data-testid="stSidebar"] [data-testid="stCaptionContainer"],' +
+            '[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]{' +
+                'height:auto!important;min-height:0!important;overflow:visible!important}' +
             /* 按钮：高度自适应，字号小一点防止课程名称溢出 */
             '[data-testid="stSidebar"] .stButton>button{' +
                 'height:auto!important;min-height:36px!important;' +

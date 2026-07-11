@@ -93,6 +93,29 @@ def test_to_value_set_strips_function_notation_prefix():
     assert vals == [sp.sympify("3*x**2 - 3")]
 
 
+def test_to_value_set_strips_restated_equation_prefix():
+    # 模型有时把最终答案写成完整重述的算式"2 + 3 × 4 = 14"而不是单独的
+    # "14"——前缀不是变量名/函数记号，是完整表达式。改成通用规则：不管
+    # 前缀是什么，只取最后一个"="之后的部分。
+    import sympy as sp
+    vals = _to_value_set("2 + 3 * 4 = 14")
+    assert vals == [sp.sympify("14")]
+
+
+def test_to_value_set_handles_latex_times():
+    import sympy as sp
+    vals = _to_value_set(r"2 + 3 \times 4 = 14")
+    assert vals == [sp.sympify("14")]
+
+
+def test_to_value_set_handles_braced_exponent():
+    # x^{3} 这种花括号包裹的指数——之前 _preprocess_expr 的^正则要求指数
+    # 紧跟数字/字母，遇到"{"直接不转换，sympy 解析失败。
+    import sympy as sp
+    vals = _to_value_set(r"\boxed{\frac{x^{3}}{3}}")
+    assert vals == [sp.sympify("x**3/3")]
+
+
 def test_to_value_set_splits_on_chinese_or():
     # 模型常把多解写成 \boxed{x=2 \text{或} x=-2} 塞进同一个框——之前
     # \text{} 不会被拆包、也没有按"或"拆分，整段当一个表达式 sympify
