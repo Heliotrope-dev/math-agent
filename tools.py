@@ -478,14 +478,17 @@ _VAR_EQ_PREFIX = _re.compile(r'^[a-zA-Z]\w*\s*=\s*(.+)$')
 _BOXED_RE = _re.compile(r'\\boxed\s*\{(.*)\}\s*$', _re.DOTALL)
 _FRAC_RE = _re.compile(r'\\[cd]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}')
 _FRAC_SHORT_RE = _re.compile(r'\\[cd]?frac\s*(\w)\s*(\w)')  # \frac12 简写（无花括号，各一个字符）
+_TEXT_MACRO_RE = _re.compile(r'\\text\s*\{([^{}]*)\}')  # \text{或} 这类注释性文字宏，拆包留内容
 
 
 def _normalize_latex(s: str) -> str:
-    """把常见的 LaTeX 数学宏转成 sympy 能读的形式：\\boxed{} 拆包，\\frac{a}{b} / \\frac12 → (a)/(b)。"""
+    """把常见的 LaTeX 数学宏转成 sympy 能读的形式：\\boxed{} 拆包，\\frac{a}{b} / \\frac12 → (a)/(b)，
+    \\text{...} 拆包留文字内容（模型常用 \\boxed{x=2 \\text{或} x=-2} 这种写法把多解并成一个框）。"""
     s = s.strip()
     m = _BOXED_RE.match(s)
     if m:
         s = m.group(1).strip()
+    s = _TEXT_MACRO_RE.sub(r'\1', s)
     prev = None
     while prev != s:  # \frac 可能嵌套（如分数里还有分数），反复替换到不再变化
         prev = s
@@ -522,12 +525,13 @@ def _extract_calc_value(tool_result: str) -> str:
 
 
 def _to_value_set(s: str) -> "list | None":
-    """把一段文本解析成一组 SymPy 值（支持逗号分隔的多解、[] 包裹的列表）。解析失败返回 None。
+    """把一段文本解析成一组 SymPy 值（支持逗号分隔的多解、"或"/or 分隔的多解、[] 包裹的列表）。
+    解析失败返回 None。
 
-    "x = "这类前缀要在按逗号拆分之后、逐个解再去掉——'x=2, x=-2'两个解都各自带前缀。
+    "x = "这类前缀要在拆分之后、逐个解再去掉——'x=2, x=-2'/'x=2 或 x=-2' 每个解都各自带前缀。
     """
     s = _clean_answer_text(s).strip('[]{}')
-    parts = [p.strip() for p in _re.split(r'[,;，；]', s) if p.strip()]
+    parts = [p.strip() for p in _re.split(r'[,;，；]|或|(?:\s+or\s+)', s) if p.strip()]
     if not parts:
         return None
     values = []

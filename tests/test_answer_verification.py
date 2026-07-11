@@ -84,6 +84,20 @@ def test_to_value_set_strips_var_eq_prefix():
     assert len(vals) == 2
 
 
+def test_to_value_set_splits_on_chinese_or():
+    # 模型常把多解写成 \boxed{x=2 \text{或} x=-2} 塞进同一个框——之前
+    # \text{} 不会被拆包、也没有按"或"拆分，整段当一个表达式 sympify
+    # 直接解析失败，判成"无法验证"。真实跑 eval 数据集时抓到的。
+    vals = _to_value_set(r"x = 2 \text{或} x = -2")
+    assert len(vals) == 2
+    assert {v for v in vals} == {2, -2}
+
+
+def test_to_value_set_splits_on_english_or():
+    vals = _to_value_set("x = 2 or x = -2")
+    assert len(vals) == 2
+
+
 def test_to_value_set_parse_failure_returns_none():
     # 注意：sympy 的隐式乘法解析器会把中文字符当成符号变量相乘，不会报错
     # （比如"这不是"会被解析成 这*不*是），所以这里用真正语法非法的输入。

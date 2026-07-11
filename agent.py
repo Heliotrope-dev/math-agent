@@ -23,13 +23,24 @@ from openai import (
 )
 from tools import TOOL_DEFINITIONS, execute_tool, compress_image, answer_supported_by_calcs
 
-_FINAL_ANSWER_RE = re.compile(r'\$\$(.+?)\$\$', re.DOTALL)
+_FINAL_ANSWER_RE = re.compile(r'\$\$(.+?)\$\$|\\\[(.+?)\\\]', re.DOTALL)
 
 
 def _extract_final_answer(text: str) -> Optional[str]:
-    """取文本里最后一个 $$ ... $$ 块——按格式约定，最终答案单独成行放在这里。"""
+    """取文本里最后一个独立公式块——按格式约定，最终答案单独成行放在这里。
+
+    模型虽然被要求用 $$ ... $$，但实际输出里经常写成 LaTeX 的
+    \\[ ... \\] 显示公式定界符（语义等价，模型自己不区分）——之前只认
+    $$，遇到 \\[ \\] 就完全提取不到最终答案，导致自纠错悄悄跳过校验
+    （不是校验失败，是根本没校验到）。用 eval/run_verification_eval.py
+    真实跑数据集时发现的：好几道题模型答案明明是对的，被判定成"无法验证"。
+    """
     matches = _FINAL_ANSWER_RE.findall(text)
-    return matches[-1].strip() if matches else None
+    if not matches:
+        return None
+    last = matches[-1]
+    # findall 对多分支正则返回元组，每个分支没命中的位置是空字符串
+    return next(g for g in last if g).strip()
 
 # macOS system proxy is auto-detected by httpx and blocks localhost; disable explicitly
 

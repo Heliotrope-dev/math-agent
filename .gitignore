@@ -8,3 +8,4 @@ users.json
 sessions.json
 user_data/
 *.webloc
+eval/results_*.json

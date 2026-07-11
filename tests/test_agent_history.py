@@ -28,6 +28,19 @@ def test_extract_final_answer_none_when_absent():
     assert _extract_final_answer("这段话里没有双美元符号公式") is None
 
 
+def test_extract_final_answer_bracket_delimiter():
+    # 模型经常写 LaTeX 的 \[ \] 显示公式定界符而不是约定的 $$——语义等价，
+    # 之前的正则只认 $$，会把这种情况判成"没有最终答案"，自纠错悄悄
+    # 跳过校验。eval/run_verification_eval.py 真实跑数据集时发现的。
+    text = "过程...\n最终答案：\n\\[\n\\boxed{14}\n\\]"
+    assert _extract_final_answer(text) == "\\boxed{14}"
+
+
+def test_extract_final_answer_prefers_last_block_mixed_delimiters():
+    text = "草稿 \\[x^2\\] 之后 $$15$$"
+    assert _extract_final_answer(text) == "15"
+
+
 # ── _msg_len / _truncate_msg ─────────────────────────────────────────────────
 
 def test_msg_len_string_content():
