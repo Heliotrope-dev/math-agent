@@ -340,11 +340,12 @@ try {
             /* email 专属 class，压到 X 按钮下方（只在手机端生效） */
             '[data-testid="stSidebar"] .sb-email{margin-top:52px!important}' +
             /* 区块间距宽松 */
-            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:8px!important}' +
+            '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:12px!important}' +
             /* divider */
             '[data-testid="stSidebar"] hr{margin:6px 0!important;border-width:0.5px!important}' +
-            /* 侧栏文字 */
-            '[data-testid="stSidebar"] p{font-size:0.84rem!important;margin:0 0 4px!important;line-height:1.5!important}' +
+            /* 侧栏文字：加了 margin-top（之前只有 margin-bottom），"最近问题"这类
+               小标题紧跟在上一个按钮下面时才不会贴太近看着像重叠在一起 */
+            '[data-testid="stSidebar"] p{font-size:0.84rem!important;margin:8px 0 6px!important;line-height:1.5!important}' +
             /* 按钮：高度自适应，字号小一点防止课程名称溢出 */
             '[data-testid="stSidebar"] .stButton>button{' +
                 'height:auto!important;min-height:36px!important;' +
@@ -371,7 +372,8 @@ try {
     /* 清除侧边栏工具栏残留：Streamlit 列宽调节控件的 +/− 碎片文字，
        之前只匹配"完全等于 + 或 − 或 -"，漏掉了带包裹span/其他减号变体的情况
        （用户反馈："课程入口"列表里有些字看不全，就是这些没清干净的碎片）。
-       放宽成：允许套一层子节点，匹配全部由 +/-/−/–/— 组成的1~2个字符短文本。 */
+       放宽成：允许套一层子节点，匹配全部由 +/-/−/–/—/× 组成的1~2个字符短文本
+       （后来手机截图里"课程入口"旁边又出现了一个没清掉的×，一并加进白名单）。 */
     function _hideSbPlus(){
         try{
             var sb=doc.querySelector('[data-testid="stSidebar"]');
@@ -379,7 +381,7 @@ try {
             sb.querySelectorAll('*').forEach(function(el){
                 if(el.childElementCount<=1){
                     var t=el.textContent.trim();
-                    if(t.length>0 && t.length<=2 && /^[+\-−–—]+$/.test(t))
+                    if(t.length>0 && t.length<=2 && /^[+\-−–—×✕✖]+$/.test(t))
                         el.style.setProperty('display','none','important');
                 }
             });
