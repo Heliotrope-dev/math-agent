@@ -528,15 +528,15 @@ def _extract_calc_value(tool_result: str) -> str:
 
 
 def _to_value_set(s: str) -> "list | None":
-    """把一段文本解析成一组 SymPy 值（支持逗号分隔的多解、"或"/or 分隔的多解、[] 包裹的列表）。
-    解析失败返回 None。
+    """把一段文本解析成一组 SymPy 值（支持逗号分隔的多解、"或"/"和"/or/and 分隔的
+    多解、[] 包裹的列表）。解析失败返回 None。
 
     每个解可能带"x=""f'(x)=""2+3*4="这类前缀——不管前缀是变量名、函数记号
     还是完整重述的算式，真正要验证的都是最后一个"="后面的值，统一取
     最后一个"="之后的部分（没有"="就保留原样）。
     """
     s = _clean_answer_text(s).strip('[]{}')
-    parts = [p.strip() for p in _re.split(r'[,;，；]|或|(?:\s+or\s+)', s) if p.strip()]
+    parts = [p.strip() for p in _re.split(r'[,;，；]|或|和|(?:\s+(?:or|and)\s+)', s) if p.strip()]
     if not parts:
         return None
     values = []

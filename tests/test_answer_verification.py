@@ -130,6 +130,20 @@ def test_to_value_set_splits_on_english_or():
     assert len(vals) == 2
 
 
+def test_to_value_set_splits_on_chinese_and():
+    # "和"（"和"是并列连接词"和"，跟多解题"两个交点的x坐标"这类语境
+    # 常见——模型有时用"和"而不是"或"连接两个解。真实跑更难的多步题
+    # 评测数据集时抓到的（求两条曲线交点的x坐标）。
+    vals = _to_value_set(r"x = 0 \quad \text{和} \quad x = 2")
+    assert len(vals) == 2
+    assert {v for v in vals} == {0, 2}
+
+
+def test_to_value_set_splits_on_english_and():
+    vals = _to_value_set("x = 3 and x = -3")
+    assert len(vals) == 2
+
+
 def test_to_value_set_parse_failure_returns_none():
     # 注意：sympy 的隐式乘法解析器会把中文字符当成符号变量相乘，不会报错
     # （比如"这不是"会被解析成 这*不*是），所以这里用真正语法非法的输入。
