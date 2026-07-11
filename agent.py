@@ -146,15 +146,15 @@ CLOUD_PROVIDERS = {
     "Qwen/Qwen3-VL-32B-Instruct":     ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
     "Qwen/Qwen3-VL-32B-Thinking":     ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
     "Qwen/Qwen3-VL-8B-Instruct":      ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
-    # DeepSeek（文字解题）
-    "deepseek-chat":                 ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
+    # DeepSeek（文字解题）——deepseek-chat 2026-07-24 停用，迁移到 v4-flash
+    "deepseek-v4-flash":              ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
 }
 
 # ── 智能模型路由 ──────────────────────────────────────────────────────────────
 _DEFAULT_VISION_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 def route_model(problem: str, image_bytes: Optional[bytes] = None,
-                default: str = "deepseek-chat") -> str:
-    """有图 → 视觉模型；纯文字 → deepseek-chat。"""
+                default: str = "deepseek-v4-flash") -> str:
+    """有图 → 视觉模型；纯文字 → deepseek-v4-flash。"""
     has_sf = bool(os.environ.get("SILICONFLOW_API_KEY"))
     if image_bytes:
         return _DEFAULT_VISION_MODEL if has_sf else default
@@ -188,7 +188,7 @@ class MathAgent:
             )
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
-            self.model = model or "deepseek-chat"
+            self.model = model or "deepseek-v4-flash"
             _, base_url, env_key = CLOUD_PROVIDERS.get(self.model, ("", "https://api.deepseek.com", "DEEPSEEK_API_KEY"))
             api_key = os.environ.get(env_key, "")
             if not api_key:

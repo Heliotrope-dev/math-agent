@@ -588,7 +588,7 @@ def _summarize_wrongbook_entry(question: str, answer: str) -> str:
                                       timeout=httpx.Timeout(30.0, connect=10.0)),
         )
         resp = client.chat.completions.create(
-            model="deepseek-chat",
+            model=DEFAULT_MODEL,
             messages=[{
                 "role": "user",
                 "content": (
@@ -1321,7 +1321,7 @@ if user_input:
                     _img_bytes = None  # 已转为文字，不再发图
                 # 智能路由：有图 → 视觉模型；短闲聊 → 轻量模型
                 # 仅在用户处于默认模型（或必须切视觉）时生效，不覆盖用户的显式选择
-                if _img_bytes or selected_model == "deepseek-chat":
+                if _img_bytes or selected_model == DEFAULT_MODEL:
                     _routed = route_model(solve_input, image_bytes=_img_bytes,
                                           default=selected_model)
                     if _routed != _solve_model:

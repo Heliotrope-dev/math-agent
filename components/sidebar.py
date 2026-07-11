@@ -192,9 +192,9 @@ def render_sidebar() -> None:
 
 **模型选择**
 
-底部工具栏可切换模型：
-- `deepseek-chat` — 默认，文字解题最稳定
-- `Qwen3-VL-*` — 视觉能力强，拍题效果好（SiliconFlow）
+系统自动路由，无需手动切换：
+- 文字解题固定用 `deepseek-v4-flash`
+- 拍题时自动切到 `Qwen3-VL-*` 视觉模型（SiliconFlow）
 
 ---
 

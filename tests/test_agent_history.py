@@ -132,14 +132,14 @@ def test_compress_history_summary_capped_at_2000_chars():
 # ── route_model ───────────────────────────────────────────────────────────────
 
 def test_route_model_no_image_returns_default():
-    assert route_model("求导数", image_bytes=None) == "deepseek-chat"
+    assert route_model("求导数", image_bytes=None) == "deepseek-v4-flash"
 
 
 def test_route_model_with_image_no_vision_key(monkeypatch):
     monkeypatch.delenv("SILICONFLOW_API_KEY", raising=False)
-    assert route_model("拍题", image_bytes=b"fake") == "deepseek-chat"
+    assert route_model("拍题", image_bytes=b"fake") == "deepseek-v4-flash"
 
 
 def test_route_model_with_image_and_vision_key(monkeypatch):
     monkeypatch.setenv("SILICONFLOW_API_KEY", "fake-key")
-    assert route_model("拍题", image_bytes=b"fake") != "deepseek-chat"
+    assert route_model("拍题", image_bytes=b"fake") != "deepseek-v4-flash"
