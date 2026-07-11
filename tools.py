@@ -747,13 +747,17 @@ def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
 
         # 课本风格：白底黑线，简洁学术风
         plt.rcParams.update({
-            # matplotlib 自己扫描字体文件时，VPS 上装的 Noto Sans CJK 那个
-            # .ttc 合集文件只被它认成"Noto Sans CJK JP"这一个名字（尽管同一个
-            # 文件里也有SC/TC/KR的字形），配置里写"DejaVu Sans"/"Arial Unicode
-            # MS"/"sans-serif"这几个名字都对不上，实际用的还是matplotlib自带的
-            # DejaVu Sans——这个字体压根不含中文字形，所有中文都会画成方块
-            # （日文变体的字形集完整覆盖常用简体中文字符，不影响可读性）。
-            "font.family": ["Noto Sans CJK JP", "DejaVu Sans", "sans-serif"],
+            # 第一版用"Noto Sans CJK JP"（matplotlib扫描Noto那个多语言合集
+            # .ttc文件时只认出这一个名字，SC/TC/KR的字形虽然在同一个文件里
+            # 但matplotlib的字体扫描器不认）修好了"中文全变方块"，但被反馈
+            # "字有点变形，一眼就能看出来不对"——根源是Han unification：
+            # 中日双方汉字共享同一个Unicode码位，但很多字的具体笔画/字形在
+            # 中文和日文印刷传统里长得不完全一样（比如"骨""令""直"这些字的
+            # 部首写法），用日文字形集渲染中文，对母语读者来说"看得懂但不对劲"。
+            # 换成 WenQuanYi Micro Hei（专门的简体中文字体，装在VPS上，
+            # apt install fonts-wqy-microhei）——它是单一语言的字体，
+            # 没有多语言合集内字形选错的问题。
+            "font.family": ["WenQuanYi Micro Hei", "Noto Sans CJK JP", "DejaVu Sans", "sans-serif"],
             "axes.unicode_minus": False,
             "axes.facecolor": "white",
             "figure.facecolor": "white",
@@ -816,13 +820,17 @@ def _run_draw_mindmap(title: str, branches: list) -> str:
         import matplotlib.patches as patches
 
         plt.rcParams.update({
-            # matplotlib 自己扫描字体文件时，VPS 上装的 Noto Sans CJK 那个
-            # .ttc 合集文件只被它认成"Noto Sans CJK JP"这一个名字（尽管同一个
-            # 文件里也有SC/TC/KR的字形），配置里写"DejaVu Sans"/"Arial Unicode
-            # MS"/"sans-serif"这几个名字都对不上，实际用的还是matplotlib自带的
-            # DejaVu Sans——这个字体压根不含中文字形，所有中文都会画成方块
-            # （日文变体的字形集完整覆盖常用简体中文字符，不影响可读性）。
-            "font.family": ["Noto Sans CJK JP", "DejaVu Sans", "sans-serif"],
+            # 第一版用"Noto Sans CJK JP"（matplotlib扫描Noto那个多语言合集
+            # .ttc文件时只认出这一个名字，SC/TC/KR的字形虽然在同一个文件里
+            # 但matplotlib的字体扫描器不认）修好了"中文全变方块"，但被反馈
+            # "字有点变形，一眼就能看出来不对"——根源是Han unification：
+            # 中日双方汉字共享同一个Unicode码位，但很多字的具体笔画/字形在
+            # 中文和日文印刷传统里长得不完全一样（比如"骨""令""直"这些字的
+            # 部首写法），用日文字形集渲染中文，对母语读者来说"看得懂但不对劲"。
+            # 换成 WenQuanYi Micro Hei（专门的简体中文字体，装在VPS上，
+            # apt install fonts-wqy-microhei）——它是单一语言的字体，
+            # 没有多语言合集内字形选错的问题。
+            "font.family": ["WenQuanYi Micro Hei", "Noto Sans CJK JP", "DejaVu Sans", "sans-serif"],
             "axes.unicode_minus": False,
         })
 
