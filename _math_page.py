@@ -499,39 +499,6 @@ def _get_examples(n=6):
 def get_agent(use_local, model, guide_mode=False):
     return MathAgent(use_local=use_local, model=model, guide_mode=guide_mode)
 
-# ── 答案验证（基于 trace 里的 SymPy 计算结果，无需额外 API 调用）────────────
-def _verify_answer(answer: str, trace: str) -> str | None:
-    """
-    检查模型答案是否与 SymPy 工具的计算结果一致。
-    返回 '✅' / '⚠️' / None（无法判断）。
-    """
-    import re as _r
-    # 从 trace 里提取 calculator 的 solve 结果，例如 "解：[-2, -1]"
-    solve_hits = _r.findall(r'解：(\[.+?\])', trace or "")
-    # 提取数值结果，例如 "数值结果：3.14159..."
-    eval_hits = _r.findall(r'数值结果：([^\n]+)', trace or "")
-
-    def _nums(s):
-        return set(_r.findall(r'-?\d+(?:\.\d+)?', s))
-
-    for hit in solve_hits:
-        nums = _nums(hit)
-        if not nums:
-            continue
-        # 所有 SymPy 解都出现在答案里 → 一致
-        if all(n in answer for n in nums):
-            return "✅"
-        else:
-            return "⚠️"
-
-    for hit in eval_hits:
-        hit = hit.strip()
-        # 只验证纯数字结果（复杂表达式跳过）
-        if _r.match(r'^-?\d+(\.\d+)?$', hit):
-            return "✅" if hit in answer else "⚠️"
-
-    return None  # 没调用 calculator 或结果无法解析，不显示徽标
-
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 def fix_latex(text):
@@ -1391,13 +1358,15 @@ if user_input:
                     clean_answer, tags = extract_tags(raw)
                     answer = fix_latex(clean_answer)
                     ph.markdown(answer)
-                    # 验证徽标：对比 SymPy 工具结果与模型答案
-                    _vbuf = buf.getvalue()
-                    _vstatus = _verify_answer(answer, _vbuf)
-                    if _vstatus == "✅":
-                        st.caption("SymPy 交叉验证通过")
-                    elif _vstatus == "⚠️":
-                        st.caption("答案与 SymPy 计算结果不一致，建议人工核查")
+                    # 验证徽标：直接读 agent.solve() 内部自纠错逻辑跑完之后的真实状态
+                    # （之前是拿 stdout 重定向的buf去正则扒trace文本算的，但 solve()
+                    # 内部走的是 logging 不是 print，buf 实际永远是空的，徽标从来
+                    # 没真正显示过——现在改成直接读 agent 实例上记录的状态，不用猜）。
+                    _vstatus = getattr(_agent, "last_verification", None)
+                    if _vstatus == "verified":
+                        st.caption("✓ 已自动核对计算结果")
+                    elif _vstatus == "corrected":
+                        st.caption("🔧 已自动发现并修正一处计算偏差")
                     if tags:
                         _ntcols = st.columns(len(tags))
                         for _nti, _ntag in enumerate(tags):

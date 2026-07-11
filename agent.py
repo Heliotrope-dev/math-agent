@@ -172,6 +172,7 @@ class MathAgent:
         self.use_local = use_local
         self.guide_mode = guide_mode
         self.max_iterations = max_iterations
+        self.last_verification = None  # solve() 每次调用都会重新设置，见 solve() 的说明
         if use_local:
             _ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/") + "/v1"
             # only disable TLS verification for localhost; remote Ollama should use TLS
@@ -311,7 +312,14 @@ class MathAgent:
 
         on_tool_call(name, args, result): 每次工具调用后回调，result=None 表示调用前。
         返回值：普通模式返回 str；vision/guide 模式返回流式响应对象。
+
+        self.last_verification 记录这一次调用里"答案自纠错"实际发生了什么，
+        供调用方（比如UI）判断要不要展示"已验证/已纠正"提示：
+          None       — 没调用过 calculator，没法验证（vision/guide模式也是这个）
+          "verified" — 调用过 calculator，最终答案跟计算结果核对一致
+          "corrected"— 发现最终答案跟计算结果对不上，已触发一次重新核对
         """
+        self.last_verification = None
         system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
         messages = [{"role": "system", "content": system}]
         if history:
@@ -401,6 +409,7 @@ class MathAgent:
                     parsed = _extract_final_answer(final)
                     if parsed and not answer_supported_by_calcs(parsed, _calc_results):
                         _verify_attempted = True
+                        self.last_verification = "corrected"
                         _log.info("答案自纠错触发：最终答案 %r 在 calculator 结果 %r 里找不到依据", parsed, _calc_results)
                         messages.append(msg)
                         messages.append({
@@ -413,6 +422,8 @@ class MathAgent:
                             ),
                         })
                         continue
+                    elif parsed:
+                        self.last_verification = "verified"
 
                 return final
 
