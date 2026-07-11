@@ -173,6 +173,7 @@ class MathAgent:
         self.guide_mode = guide_mode
         self.max_iterations = max_iterations
         self.last_verification = None  # solve() 每次调用都会重新设置，见 solve() 的说明
+        self.pre_correction_answer = None  # 触发纠错时，纠错前的原始回答
         if use_local:
             _ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/") + "/v1"
             # only disable TLS verification for localhost; remote Ollama should use TLS
@@ -320,6 +321,7 @@ class MathAgent:
           "corrected"— 发现最终答案跟计算结果对不上，已触发一次重新核对
         """
         self.last_verification = None
+        self.pre_correction_answer = None
         system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
         messages = [{"role": "system", "content": system}]
         if history:
@@ -410,6 +412,7 @@ class MathAgent:
                     if parsed and not answer_supported_by_calcs(parsed, _calc_results):
                         _verify_attempted = True
                         self.last_verification = "corrected"
+                        self.pre_correction_answer = final  # 触发纠错前的原始回答，供评测/调试对比修正前后
                         _log.info("答案自纠错触发：最终答案 %r 在 calculator 结果 %r 里找不到依据", parsed, _calc_results)
                         messages.append(msg)
                         messages.append({
