@@ -1379,6 +1379,8 @@ if user_input:
                         st.caption("✓ 已自动核对计算结果")
                     elif _vstatus == "corrected":
                         st.caption("🔧 已自动发现并修正一处计算偏差")
+                    elif _vstatus == "unresolved":
+                        st.warning("⚠️ 这道题的最终答案没能通过自动核实（AI的计算过程跟最终结论对不上），建议自己再验算一遍，不要直接当作确定答案使用。", icon="⚠️")
                     if tags:
                         _ntcols = st.columns(len(tags))
                         for _nti, _ntag in enumerate(tags):
