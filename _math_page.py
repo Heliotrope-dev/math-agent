@@ -341,6 +341,10 @@ try {
                按钮的白底圆角框会直接盖住邮箱文字下半截（看着像被裁剪，
                其实是被盖住了——实测量过邮箱文字自身盒子高度是完整的）。 */
             '[data-testid="stSidebar"] .sb-email{margin-top:52px!important;margin-bottom:18px!important}' +
+            /* 侧边栏里用 st.markdown 手写的小标题（"最近问题"这类，不是
+               st.caption 生成的，不会被 stCaptionContainer 那条规则罩到）
+               同样紧跟按钮，同样要单独给够 margin-bottom。 */
+            '[data-testid="stSidebar"] .sb-label{margin-bottom:14px!important}' +
             /* 区块间距宽松 */
             '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:12px!important}' +
             /* divider */
