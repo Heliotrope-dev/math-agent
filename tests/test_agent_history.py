@@ -2,7 +2,7 @@
 长对话压缩摘要、最终答案提取。全部本地计算，不发起任何 API 调用。
 """
 
-from agent import MathAgent, _extract_final_answer, route_model, _MAX_HISTORY_TURNS, _MAX_MSG_CHARS
+from agent import MathAgent, _extract_final_answer, route_model, _MAX_HISTORY_TURNS, _MAX_MSG_CHARS, _iter_with_timeout
 
 
 def _turn(i):
@@ -255,3 +255,47 @@ def test_solve_stream_marks_unresolved_when_correction_still_mismatches(monkeypa
     assert calls["n"] == 3  # 只重试一次，不会无限循环
     assert agent.last_verification == "unresolved"
     assert "没能通过自动核实" in full_text
+
+
+# ── _iter_with_timeout（流式卡死看门狗）─────────────────────────────────────────
+# 线上真实踩过一次坑：流式请求连接没报错也没断开，就是不再产生新数据，
+# 卡死了整个页面。这个函数是补上的超时保护，专门测它本身可靠。
+
+def test_iter_with_timeout_passes_through_normal_iterator():
+    assert list(_iter_with_timeout(iter([1, 2, 3]), timeout_seconds=5.0)) == [1, 2, 3]
+
+
+def test_iter_with_timeout_raises_when_stalled(monkeypatch):
+    import time as _time
+
+    def stalled():
+        yield 1
+        yield 2
+        _time.sleep(1.5)
+        yield 3  # 不应该被消费到，应该在这之前就超时
+
+    got = []
+    raised = False
+    try:
+        for x in _iter_with_timeout(stalled(), timeout_seconds=0.3):
+            got.append(x)
+    except TimeoutError:
+        raised = True
+    assert raised
+    assert got == [1, 2]
+
+
+def test_iter_with_timeout_propagates_underlying_exception():
+    def boom():
+        yield 1
+        raise ValueError("上游炸了")
+
+    got = []
+    raised = None
+    try:
+        for x in _iter_with_timeout(boom(), timeout_seconds=5.0):
+            got.append(x)
+    except ValueError as e:
+        raised = e
+    assert got == [1]
+    assert raised is not None and "上游炸了" in str(raised)
