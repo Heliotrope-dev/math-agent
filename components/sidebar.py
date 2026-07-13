@@ -1,4 +1,5 @@
 import random
+import re
 import base64
 import streamlit as st
 import streamlit.components.v1 as _cv1
@@ -89,31 +90,45 @@ def render_sidebar() -> None:
                         f"【错题复习】请重新完整解答这道我之前做错的题：{_rw['question']}"
                     )
                 st.rerun()
+            # 按 "[学科]" 前缀分组显示——_summarize_wrongbook_entry() 存进去的
+            # question 固定是 "[学科] 知识点：完整题目" 格式，直接解析这个前缀
+            # 分组，不用额外存字段。解析不出学科的（比如老数据、格式异常的）
+            # 归到"其他"，不会丢条目。分组后组内仍按 wi（原始下标）排列，
+            # 重做/删除用的还是 wrong_book 里的真实下标，不受分组显示影响。
+            _groups: dict[str, list[int]] = {}
             for wi, wp in enumerate(wrong_book):
-                q_preview = wp["question"][:48] + ("…" if len(wp["question"]) > 48 else "")
-                st.markdown(f"**{wi+1}.** {q_preview}")
-                st.caption(wp.get("saved_at", ""))
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("重做", key=f"wb_redo_{wi}", use_container_width=True):
-                        _wb_img = wp.get("image_b64", "")
-                        if _wb_img:
-                            # pending_attachment 是旧机制的字段，chat_input 改用
-                            # 原生 accept_file 之后已经不会被读取了；改成走现在
-                            # 实际生效的 _direct_image/_direct_input 通道。
-                            st.session_state["_direct_image"] = base64.b64decode(_wb_img)
-                            _txt = wp["question"].lstrip("📷").strip()
-                            st.session_state["_direct_input"] = (
-                                _txt if _txt and _txt != "图片题目" else "请解答图片中的数学题"
-                            )
-                        else:
-                            st.session_state["prefill"] = wp["question"]
-                        st.rerun()
-                with c2:
-                    if st.button("删除", key=f"wb_del_{wi}", use_container_width=True):
-                        st.session_state.wrong_book.pop(wi)
-                        _save_wrong_book(_uemail, st.session_state.wrong_book)
-                        st.rerun()
+                _m = re.match(r"^\[([^\]]+)\]", wp["question"])
+                _subject = _m.group(1) if _m else "其他"
+                _groups.setdefault(_subject, []).append(wi)
+
+            for _subject, _idxs in _groups.items():
+                st.caption(f"📂 {_subject}（{len(_idxs)}）")
+                for wi in _idxs:
+                    wp = wrong_book[wi]
+                    q_preview = wp["question"][:48] + ("…" if len(wp["question"]) > 48 else "")
+                    st.markdown(f"**{wi+1}.** {q_preview}")
+                    st.caption(wp.get("saved_at", ""))
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("重做", key=f"wb_redo_{wi}", use_container_width=True):
+                            _wb_img = wp.get("image_b64", "")
+                            if _wb_img:
+                                # pending_attachment 是旧机制的字段，chat_input 改用
+                                # 原生 accept_file 之后已经不会被读取了；改成走现在
+                                # 实际生效的 _direct_image/_direct_input 通道。
+                                st.session_state["_direct_image"] = base64.b64decode(_wb_img)
+                                _txt = wp["question"].lstrip("📷").strip()
+                                st.session_state["_direct_input"] = (
+                                    _txt if _txt and _txt != "图片题目" else "请解答图片中的数学题"
+                                )
+                            else:
+                                st.session_state["prefill"] = wp["question"]
+                            st.rerun()
+                    with c2:
+                        if st.button("删除", key=f"wb_del_{wi}", use_container_width=True):
+                            st.session_state.wrong_book.pop(wi)
+                            _save_wrong_book(_uemail, st.session_state.wrong_book)
+                            st.rerun()
 
     # ── 学习档案 ──────────────────────────────────────────────────────────────
     if "user_profile" not in st.session_state:
@@ -126,14 +141,31 @@ def render_sidebar() -> None:
             if _weak:
                 st.caption("薄弱点（多次学习）")
                 for _w in _weak:
-                    _label = f"{_w['topic']} ×{_w['visit_count']}"
-                    if st.button(_label, key=f"weak_{_w['topic']}", use_container_width=True):
-                        st.session_state["current_course"] = _w.get("course", "")
-                        st.session_state.messages = []
-                        st.session_state["_direct_input"] = (
-                            f"【知识点讲解】{_w.get('course','')} · {_w['topic']}"
-                        )
-                        st.rerun()
+                    st.markdown(f"**{_w['topic']}** ×{_w['visit_count']}")
+                    _wc1, _wc2 = st.columns(2)
+                    with _wc1:
+                        if st.button("讲解", key=f"weak_explain_{_w['topic']}", use_container_width=True):
+                            st.session_state["current_course"] = _w.get("course", "")
+                            st.session_state.messages = []
+                            st.session_state["_direct_input"] = (
+                                f"【知识点讲解】{_w.get('course','')} · {_w['topic']}"
+                            )
+                            st.rerun()
+                    with _wc2:
+                        # 针对性练习推送：复用"举一反三"那套"只出题不解答"的
+                        # prompt写法，但这里没有"上一题"可以参照，直接照着
+                        # 薄弱知识点本身出题，走普通 _direct_input 通道即可，
+                        # 不需要 _sim_data 那套（那套是给"照着上一题仿写"用的）。
+                        if st.button("练习", key=f"weak_practice_{_w['topic']}", use_container_width=True,
+                                     type="primary"):
+                            st.session_state["current_course"] = _w.get("course", "")
+                            st.session_state.messages = []
+                            st.session_state["_direct_input"] = (
+                                f"请针对『{_w.get('course','')} · {_w['topic']}』这个薄弱知识点，"
+                                "出一道练习题给我做（只出题，不要解答），标注题型和难度。"
+                                "所有数学公式必须用 LaTeX 并加 $ 包裹（行内 $...$，独立公式 $$...$$）。"
+                            )
+                            st.rerun()
             if _recent:
                 st.caption("最近学过")
                 for _r in _recent[:4]:
