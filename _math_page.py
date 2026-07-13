@@ -339,7 +339,7 @@ try {
                margin-bottom 单独给够，否则跟下面"退出登录"按钮挨太近，
                按钮的白底圆角框会直接盖住邮箱文字下半截（看着像被裁剪，
                其实是被盖住了——实测量过邮箱文字自身盒子高度是完整的）。 */
-            '[data-testid="stSidebar"] .sb-email{margin-top:52px!important;margin-bottom:18px!important}' +
+            '[data-testid="stSidebar"] .sb-email{margin-top:8px!important;margin-bottom:18px!important}' +
             /* 侧边栏里用 st.markdown 手写的小标题（"最近问题"这类，不是
                st.caption 生成的，不会被 stCaptionContainer 那条规则罩到）
                同样紧跟按钮，同样要单独给够 margin-bottom。 */
@@ -408,17 +408,16 @@ try {
             });
         }catch(e){}
     }
-    /* email 找第一个 element-container，直接设 margin-top 清 X 按钮 */
-    function _fixSbEmail(){
-        try{
-            var sb=doc.querySelector('[data-testid="stSidebar"]');
-            if(!sb)return;
-            var ec=sb.querySelector('[data-testid="stElementContainer"]');
-            if(ec && !ec._emailFixed){ec.style.setProperty('margin-top','52px','important');ec._emailFixed=true;}
-        }catch(e){}
-    }
-    _hideSbPlus(); _fixSbEmail();
-    new MutationObserver(function(){_hideSbPlus();_fixSbEmail();})
+    /* 邮箱上方留白由 CSS 里 .sb-email{margin-top:...} 一处控制（往上找就
+       在这个文件"手机端 CSS 强制注入"那段）。这里以前还有个 _fixSbEmail()
+       JS 函数，找第一个 stElementContainer 硬设 52px 内联 margin-top——
+       两处各管一次，内联 !important 比 CSS !important 优先级高，改 CSS
+       那处怎么调都被这里焊死的 52px 盖掉，调了等于没调。JS 这处本来是死
+       代码（testid 写错过，从没匹配上），今天顺手把 testid 改对之后才
+       第一次真正跑起来，反而跟 CSS 那处打架。删掉这处，只留 CSS 一处
+       调整入口。 */
+    _hideSbPlus();
+    new MutationObserver(_hideSbPlus)
         .observe(doc.body,{childList:true,subtree:true});
 } catch(e) {}
 })();
