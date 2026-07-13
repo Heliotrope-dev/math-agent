@@ -132,6 +132,7 @@ try {
     }
 } catch(e2) {}
 
+try {
     // ── 1. localStorage 自动登录 ──────────────────────────────────
     var url = new URL(window.parent.location.href);
     if (!url.searchParams.get('_auth')) {
@@ -145,7 +146,6 @@ try {
                 window.parent.location.replace(url.toString());
             }, 800);
         }
-    }
     }
 
     // ── 2. 睡眠唤醒后自动重连 ────────────────────────────────────
@@ -331,14 +331,16 @@ try {
         'button[data-testid="stBaseButton-headerNoPadding"]{display:none!important}' +
         '@media(max-width:768px){' +
             '[data-testid="stSidebarCollapseButton"]{display:none!important}' +
-            '[data-testid="collapsedControl"]{display:none!important}' +
             /* stHeader 是 fixed，stMain 已有 Streamlit 自身的 margin-top，不需要再加 */
             '.block-container{padding-top:4px!important}' +
             /* 侧边栏：X 按钮绝对定位不占流，inner div 只留正常内边距 */
             '[data-testid="stSidebar"]{padding-top:0!important}' +
             '[data-testid="stSidebar"]>div:first-child{padding:6px 12px 12px!important}' +
-            /* email 专属 class，压到 X 按钮下方（只在手机端生效） */
-            '[data-testid="stSidebar"] .sb-email{margin-top:52px!important}' +
+            /* email 专属 class，压到 X 按钮下方（只在手机端生效）；
+               margin-bottom 单独给够，否则跟下面"退出登录"按钮挨太近，
+               按钮的白底圆角框会直接盖住邮箱文字下半截（看着像被裁剪，
+               其实是被盖住了——实测量过邮箱文字自身盒子高度是完整的）。 */
+            '[data-testid="stSidebar"] .sb-email{margin-top:52px!important;margin-bottom:18px!important}' +
             /* 区块间距宽松 */
             '[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:12px!important}' +
             /* divider */
@@ -346,16 +348,20 @@ try {
             /* 侧栏文字：加了 margin-top（之前只有 margin-bottom），"最近问题"这类
                小标题紧跟在上一个按钮下面时才不会贴太近看着像重叠在一起 */
             '[data-testid="stSidebar"] p{font-size:0.84rem!important;margin:8px 0 6px!important;line-height:1.5!important}' +
-            /* 邮箱/"大一大二大三"这类文字只显示半行：Streamlit 给容器计算过
-               一次固定像素高的inline style，是按它最初的字号/行高定的；
-               我们上面把line-height/font-size用!important覆盖掉之后，
-               文字需要的实际高度变了，但容器还锁在旧的矮高度上，下半截
-               被裁掉。强制这些容器高度自适应内容，不锁死。 */
-            '[data-testid="stSidebar"] [data-testid="element-container"],' +
+            /* 容器高度自适应，不锁死（防止旧inline高度把内容夹住）。
+               注意：Streamlit 的 element-container 测试id 在新版本里已经
+               改成了 stElementContainer（没有连字符的驼峰式），旧选择器
+               一直没匹配上，这里一并改过来。 */
+            '[data-testid="stSidebar"] [data-testid="stElementContainer"],' +
             '[data-testid="stSidebar"] [data-testid="stMarkdownContainer"],' +
             '[data-testid="stSidebar"] [data-testid="stCaptionContainer"],' +
             '[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]{' +
                 'height:auto!important;min-height:0!important;overflow:visible!important}' +
+            /* "最近问题"/"大一大二大三"这类小标题（st.caption）真正的问题：
+               不是被裁剪，是下面紧跟着的按钮离得太近，按钮的白底圆角框
+               直接盖住了文字下半截（实测过，caption 自身盒子高度是完整的，
+               是被盖住不是被切）。单独给 caption 补够 margin-bottom。 */
+            '[data-testid="stSidebar"] [data-testid="stCaptionContainer"]{margin-bottom:14px!important}' +
             /* 按钮：高度自适应，字号小一点防止课程名称溢出 */
             '[data-testid="stSidebar"] .stButton>button{' +
                 'height:auto!important;min-height:36px!important;' +
@@ -404,7 +410,7 @@ try {
         try{
             var sb=doc.querySelector('[data-testid="stSidebar"]');
             if(!sb)return;
-            var ec=sb.querySelector('[data-testid="element-container"]');
+            var ec=sb.querySelector('[data-testid="stElementContainer"]');
             if(ec && !ec._emailFixed){ec.style.setProperty('margin-top','52px','important');ec._emailFixed=true;}
         }catch(e){}
     }
@@ -700,11 +706,11 @@ try{{
     var CSS =
         ':root{{--background-color:#0D0D14!important;--secondary-background-color:#16162A!important;--text-color:#DEE1F5!important}}' +
         'body,html,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"]{{background:#0D0D14!important}}' +
-        '[data-testid="stSidebar"] *,[data-testid="stSidebar"] [data-testid="stSidebarCollapsedButton"] *{{color:#DEE1F5!important}}' +
+        '[data-testid="stSidebar"] *,[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] *{{color:#DEE1F5!important}}' +
         '[data-testid="stSidebar"] .stButton button{{font-size:0.78rem!important;white-space:normal!important;line-height:1.3!important}}' +
-        '[data-testid="stSidebarCollapsedButton"] svg,[data-testid="stSidebarCollapsedButton"] path{{fill:#DEE1F5!important;color:#DEE1F5!important}}' +
-        'button[data-testid="stSidebarCollapsedButton"]{{background:transparent!important}}' +
-        '[data-testid="stSidebarCollapsedButton"]:hover{{background:rgba(255,255,255,0.1)!important}}' +
+        '[data-testid="stSidebarCollapseButton"] svg,[data-testid="stSidebarCollapseButton"] path{{fill:#DEE1F5!important;color:#DEE1F5!important}}' +
+        'button[data-testid="stSidebarCollapseButton"]{{background:transparent!important}}' +
+        '[data-testid="stSidebarCollapseButton"]:hover{{background:rgba(255,255,255,0.1)!important}}' +
         '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
         '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}' +
         '[data-testid="stChatInput"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +

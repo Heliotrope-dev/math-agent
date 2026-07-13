@@ -26,7 +26,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
 html, body { background: var(--bg) !important; }
 .stApp, [data-testid="stAppViewContainer"],
-[data-testid="stMain"], [data-testid="block-container"],
+[data-testid="stMain"], [data-testid="stMainBlockContainer"],
 section.main, .main, .block-container,
 [data-testid="stBottom"], .stBottom,
 [data-testid="stBottomBlockContainer"],
@@ -37,7 +37,7 @@ footer {
 }
 p, span, label, div, li, td, th, h1, h2, h3, h4 { color: var(--text) !important; }
 #MainMenu, header { visibility: hidden; }
-[data-testid="block-container"] { padding-bottom: 180px !important; }
+[data-testid="stMainBlockContainer"] { padding-bottom: 180px !important; }
 
 header[data-testid="stHeader"] {
     background: var(--surface) !important;
@@ -219,7 +219,7 @@ a[data-testid="stPageLink-NavLink"]:focus {
 }
 [data-testid="stHorizontalBlock"] { background: transparent !important; }
 [data-testid="stColumn"] { background: transparent !important; }
-[data-testid="element-container"] { background: transparent !important; }
+[data-testid="stElementContainer"] { background: transparent !important; }
 
 [data-testid="stButtonGroup"] { margin-top: 8px !important; }
 div[data-testid="stButtonGroup"] > div > label > div,
@@ -322,7 +322,6 @@ button[kind="secondary"][data-testid*="wb_add"] {
 @media (max-width: 768px) {
     /* 隐藏 Streamlit 原生侧边栏折叠按钮 */
     [data-testid="stSidebarCollapseButton"],
-    [data-testid="collapsedControl"],
     button[kind="header"] { display: none !important; }
 
     [data-testid="stSidebar"] {
@@ -398,7 +397,7 @@ _DARK_CSS = """
 
 html, body { background: var(--dm-bg) !important; }
 .stApp, [data-testid="stAppViewContainer"],
-[data-testid="stMain"], [data-testid="block-container"],
+[data-testid="stMain"], [data-testid="stMainBlockContainer"],
 section.main, .main, .block-container, footer,
 [data-testid="stBottom"], .stBottom,
 [data-testid="stBottomBlockContainer"],
@@ -415,7 +414,7 @@ header[data-testid="stHeader"] { background: var(--dm-surface) !important; borde
 .course-banner { background: var(--dm-card) !important; color: var(--dm-muted) !important; border-color: var(--dm-border) !important; }
 [data-testid="stHorizontalBlock"] { background: transparent !important; }
 [data-testid="stColumn"] { background: transparent !important; }
-[data-testid="element-container"] { background: transparent !important; }
+[data-testid="stElementContainer"] { background: transparent !important; }
 
 .bubble-user { background: var(--dm-user-bg) !important; color: var(--dm-user-text) !important; border-radius: 18px 4px 18px 18px !important; }
 
