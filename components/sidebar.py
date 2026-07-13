@@ -30,7 +30,7 @@ def render_sidebar() -> None:
         f'<p class="sb-email" style="font-size:0.75rem;color:#888;margin:10px 0 10px">{_uemail_safe}</p>',
         unsafe_allow_html=True,
     )
-    _sb_top_left, _sb_top_right = st.columns([3, 1])
+    _sb_top_left, _sb_top_right = st.columns([2, 1])
     with _sb_top_left:
         if st.button("退出登录", key="logout_btn", use_container_width=True):
             _tok = st.session_state.pop("_token", None)
