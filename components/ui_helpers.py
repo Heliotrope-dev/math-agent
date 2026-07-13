@@ -15,7 +15,7 @@ _BASE_CSS = """
     --text:      #1A1A2E;
     --text-muted:#6E6E82;
     --accent:    #2563EB;
-    --user-bg:   #2563EB;
+    --user-bg:   #7B5CFA;
     --user-text: #FFFFFF;
     --radius:    12px;
     --radius-sm: 8px;
@@ -181,12 +181,21 @@ a[data-testid="stPageLink-NavLink"]:focus {
     border-color: var(--accent) !important;
     box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important;
 }
-/* 输入框外面的"白色圆环"：stChatInput 自己是白色圆角外壳，里面还套了一层
-   stChatInputInstructions 当内容容器，这层自己也带了浅灰背景/圆角，两层叠
-   在一起才会看出"双层圈"。把内层背景清透明，只留外层这一圈。 */
-[data-testid="stChatInputInstructions"] {
+/* 输入框外面的"白色圆环"：stChatInput 自己是白色圆角外壳，里面第一层
+   子div（新版Streamlit不再给这层分配data-testid，只有一个随机哈希
+   类名，不能拿来当选择器用）自己带了浅灰背景(#F2F3F5)+8px圆角，比
+   外层小一圈，两层叠在一起才会看出"双层圈"。用DOM结构选它（直接子
+   元素），不依赖那个不稳定的哈希类名，背景清透明只留外层这一圈。 */
+[data-testid="stChatInput"] > div:first-child {
     background: transparent !important; border: none !important;
     box-shadow: none !important; border-radius: 0 !important;
+}
+/* 文字输入框自己外面还套了两层无testid的wrapper div，同样带着那个浅灰
+   背景，不清掉的话文字区域会单独露出一小块灰底（另一种"圈"）。用
+   :has() 顺着 textarea 反向选它的直接父级和祖父级，同样不依赖哈希类名。 */
+[data-testid="stChatInput"] div:has(> [data-testid="stChatInputTextArea"]),
+[data-testid="stChatInput"] div:has(> div > [data-testid="stChatInputTextArea"]) {
+    background: transparent !important; border: none !important; box-shadow: none !important;
 }
 [data-testid="stChatInputTextArea"] {
     background: transparent !important; border: none !important;
@@ -389,8 +398,8 @@ _DARK_CSS = """
     --dm-text:     #DEE1F5;
     --dm-muted:    #6B6B95;
     --dm-accent:   #5B8CFF;
-    --dm-user-bg:  #1A2F60;
-    --dm-user-text:#C0D5FF;
+    --dm-user-bg:  #3B2A66;
+    --dm-user-text:#D9CCFF;
     --dm-card:     #1E1E38;
     --dm-card2:    #242448;
 }
@@ -450,7 +459,11 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 }
 [data-testid="stChatInput"] { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-radius: 24px !important; padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important; }
 [data-testid="stChatInput"]:focus-within { border-color: var(--dm-accent) !important; box-shadow: 0 0 0 3px rgba(91,140,255,0.15) !important; }
-[data-testid="stChatInputInstructions"] { background: transparent !important; border: none !important; box-shadow: none !important; }
+[data-testid="stChatInput"] > div:first-child { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; }
+[data-testid="stChatInput"] div:has(> [data-testid="stChatInputTextArea"]),
+[data-testid="stChatInput"] div:has(> div > [data-testid="stChatInputTextArea"]) {
+    background: transparent !important; border: none !important; box-shadow: none !important;
+}
 [data-testid="stChatInputTextArea"] { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--dm-text) !important; padding: 2px 0 !important; }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; }
 [data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }
