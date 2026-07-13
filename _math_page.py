@@ -1360,11 +1360,24 @@ if user_input:
                 ph = st.empty()
                 collected: list[str] = []
                 try:
+                    # 真流式之后单个chunk的颗粒度比之前的假流式(chunk_size=2)细得多，
+                    # 逐字都重渲染一次会让浏览器的渲染/websocket更新跟不上，画面容易
+                    # 卡在某个公式定界符还没配对完整的中间状态上（数据本身是对的，
+                    # 是刷新太勤把画面冲坏了）。改成限流：按时间间隔攒够一批再刷新，
+                    # 最后一定要用完整文本再刷一次，不会漏内容。
+                    _last_render = 0.0
+                    _RENDER_INTERVAL = 0.08  # 秒，人眼看不出跟逐字刷新的观感差异
                     for chunk in stream:
                         delta = chunk.choices[0].delta.content
                         if delta:
                             collected.append(delta)
-                            ph.markdown(fix_latex("".join(collected)) + "▌")
+                            _now = time.time()
+                            if _now - _last_render >= _RENDER_INTERVAL:
+                                # 光标符号跟在大标题文字后面时会被标题的大字号一起放大，
+                                # 用又粗又满的"▌"（半宽实心块）看起来像个突兀的黑方块；
+                                # 换成"▏"（八分之一宽的细线），同样放大也不会显得那么丑。
+                                ph.markdown(fix_latex("".join(collected)) + "▏")
+                                _last_render = _now
                     raw = "".join(collected)
                     raw, practice = extract_practice(raw)
                     clean_answer, tags = extract_tags(raw)
