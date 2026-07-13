@@ -215,7 +215,10 @@ def _register_user(email: str, pw_hash: str):
 
 def _create_token(email: str) -> str:
     token = _secrets.token_urlsafe(32)
-    now = datetime.now()
+    # 显式用带时区的UTC——跟_check_user的锁定时间比较是同一个坑：裸datetime.now()
+    # 会用宿主机本地时区，VPS改成Asia/Shanghai后会跟Postgres按UTC存的timestamptz
+    # 对不上，导致token有效期产生系统性偏差。
+    now = datetime.now(timezone.utc)
     exp = (now + timedelta(days=_TOKEN_DAYS)).isoformat()
     _sb_delete("sessions", {"email": f"eq.{email}", "expires_at": f"lt.{now.isoformat()}"})
     _sb_post("sessions", {"token": token, "email": email, "expires_at": exp})
@@ -224,7 +227,7 @@ def _create_token(email: str) -> str:
 
 def _validate_token(token: str):
     rows = _sb_get("sessions", {
-        "token": f"eq.{token}", "expires_at": f"gt.{datetime.now().isoformat()}", "select": "email"
+        "token": f"eq.{token}", "expires_at": f"gt.{datetime.now(timezone.utc).isoformat()}", "select": "email"
     })
     return rows[0]["email"] if rows else None
 
