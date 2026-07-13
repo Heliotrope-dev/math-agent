@@ -440,7 +440,10 @@ class MathAgent:
                             # 不再无限重试，但必须如实标记，不能当成正常结果悄悄放行
                             self.last_verification = "unresolved"
                             _log.warning("答案自纠错未能收敛：重试后仍与 calculator 结果不一致")
-                    elif parsed:
+                    elif parsed and not _verify_attempted:
+                        # 只有从没触发过纠错时才标记 verified；如果这是纠错重试后的
+                        # 结果，上一轮已经标成了 corrected，这里不能覆盖回去，否则
+                        # UI 会显示"直接验证通过"，丢失"其实修正过一次"这个事实。
                         self.last_verification = "verified"
 
                 return final
@@ -515,15 +518,205 @@ class MathAgent:
         on_tool_call: Optional[Callable] = None,
         image_bytes: Optional[bytes] = None,
     ) -> Iterator:
-        """Run the full agentic loop, returning an iterable stream object."""
+        """真流式版本，独立于 solve()（后者被测试/评测脚本依赖，不能动它的行为）。
+
+        vision/guide 模式本来就是直接 stream=True 返回 API 的原生流，这里原样转发。
+        解题模式（带工具调用+答案自纠错）之前是"等 solve() 跑完整个循环拿到完整
+        字符串，再伪装成流式吐出来"——现在改成真正边生成边吐字：推导过程和最终
+        答案都是模型一写出来就直接展示给用户，不再有"整个答案生成完才看到第一个字"
+        的等待。
+
+        验证环节的处理方式：不是"先扣住最终答案不给看、验证完才放出来"（那样
+        又变回要等待），而是"先把模型第一次写的完整过程正常流式展示完，如果
+        事后发现最终答案跟 calculator 结果对不上，紧接着再流式追加一段可见的
+        修正说明"。用户全程都能实时看到文字，如果需要修正，修正过程本身也是
+        公开可见的（不是背地里悄悄换掉），这跟"不确定就说不知道、不能瞒着用户"
+        是同一个精神。
+        """
         try:
-            result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
+            if image_bytes or self.guide_mode:
+                # 这两个模式的 solve() 本来就是 stream=True 直接返回原生流
+                result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
+                if isinstance(result, str):
+                    return _fake_stream(result)
+                return result
+            return self._solve_stream_with_tools(problem, history=history, on_tool_call=on_tool_call)
         except Exception as exc:
-            _log.exception("solve failed")
+            _log.exception("solve_stream failed")
             return _fake_stream(f"⚠️ 解题出错：{exc}")
-        if isinstance(result, str):
-            return _fake_stream(result)
-        return result
+
+    def _solve_stream_with_tools(
+        self,
+        problem: str,
+        history: Optional[list] = None,
+        on_tool_call: Optional[Callable] = None,
+    ) -> Iterator:
+        """解题模式的真流式实现，跟 solve() 的循环结构对应，但每轮用 stream=True。"""
+        self.last_verification = None
+        self.pre_correction_answer = None
+        system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
+        messages = [{"role": "system", "content": system}]
+        if history:
+            messages.extend(self._compress_history(history))
+
+        is_explain = problem.lstrip().startswith("【知识点讲解】")
+        is_followup = bool(history)
+        messages.append({"role": "user", "content": problem if (is_explain or is_followup) else f"请解题：{problem}"})
+        extra = {}
+
+        _EXPLAIN_TOOLS = [t for t in TOOL_DEFINITIONS if t["function"]["name"] == "calculator"]
+        _tools_supported = True
+        _calc_results: list[str] = []
+        _verify_attempted = False
+        _final_text = ""
+
+        for iteration in range(self.max_iterations):
+            if sum(map(self._msg_len, messages)) > _CTX_BUDGET_CHARS:
+                for m in messages:
+                    if isinstance(m, dict) and m.get("role") == "tool" and len(m.get("content", "")) > 500:
+                        m["content"] = m["content"][:500] + "… (已截断) "
+
+            _active_tools = (_EXPLAIN_TOOLS if is_explain else TOOL_DEFINITIONS) if _tools_supported else None
+            try:
+                stream = self.client.chat.completions.create(
+                    model=self.model, messages=messages, max_tokens=8192,
+                    tools=_active_tools, stream=True, extra_body=extra,
+                )
+            except BadRequestError as e:
+                msg_l = str(e).lower()
+                if _tools_supported and ("tool" in msg_l or "function" in msg_l):
+                    _tools_supported = False
+                    stream = self.client.chat.completions.create(
+                        model=self.model, messages=messages, max_tokens=8192, stream=True, extra_body=extra,
+                    )
+                else:
+                    raise
+
+            content_acc = ""
+            tool_calls_acc: dict[int, dict] = {}
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if getattr(delta, "content", None):
+                    content_acc += delta.content
+                    _final_text += delta.content
+                    yield chunk
+                if getattr(delta, "tool_calls", None):
+                    for tcd in delta.tool_calls:
+                        slot = tool_calls_acc.setdefault(tcd.index, {"id": None, "name": "", "arguments": ""})
+                        if tcd.id:
+                            slot["id"] = tcd.id
+                        if tcd.function and tcd.function.name:
+                            slot["name"] += tcd.function.name
+                        if tcd.function and tcd.function.arguments:
+                            slot["arguments"] += tcd.function.arguments
+
+            if not tool_calls_acc:
+                # 这一轮没有工具调用，说明模型写完了最终回答——全程已经实时流式吐给用户了
+                final = content_acc or "（无输出）"
+
+                if _calc_results:
+                    parsed = _extract_final_answer(final)
+                    if parsed and not answer_supported_by_calcs(parsed, _calc_results):
+                        if not _verify_attempted:
+                            _verify_attempted = True
+                            self.last_verification = "corrected"
+                            self.pre_correction_answer = final
+                            _log.info("答案自纠错触发（流式）：最终答案 %r 跟 calculator 结果对不上", parsed)
+                            _notice = "\n\n---\n⚠️ **重新核对计算过程中，发现上面的最终答案有偏差，修正如下：**\n\n"
+                            _final_text += _notice
+                            for c in _fake_stream(_notice, chunk_size=4, max_total_delay=1.5):
+                                yield c
+                            messages.append({"role": "assistant", "content": final})
+                            messages.append({
+                                "role": "user",
+                                "content": (
+                                    f"检查一下：你最终写的答案是「{parsed}」，但这跟你用 calculator "
+                                    "算出的结果对不上。请重新核对计算过程，如果确认之前的最终答案有误，"
+                                    "给出修正后的完整解答；如果确认最终答案是对的（比如经过了合理的"
+                                    "化简/取舍），说明理由后维持原答案。"
+                                ),
+                            })
+                            continue
+                        else:
+                            self.last_verification = "unresolved"
+                            _log.warning("答案自纠错未能收敛（流式）：重试后仍与 calculator 结果不一致")
+                            _notice = "\n\n---\n⚠️ **这道题的最终答案没能通过自动核实，建议自己再验算一遍。**"
+                            _final_text += _notice
+                            for c in _fake_stream(_notice, chunk_size=4, max_total_delay=1.0):
+                                yield c
+                    elif parsed and not _verify_attempted:
+                        self.last_verification = "verified"
+                return
+
+            # 这一轮有工具调用：静默重建调用参数，实际执行，回填结果，继续循环
+            _tc_msg = {
+                "role": "assistant",
+                "content": content_acc or None,
+                "tool_calls": [
+                    {
+                        "id": slot["id"],
+                        "type": "function",
+                        "function": {"name": slot["name"], "arguments": slot["arguments"]},
+                    }
+                    for slot in tool_calls_acc.values()
+                ],
+            }
+            messages.append(_tc_msg)
+
+            for slot in tool_calls_acc.values():
+                name = slot["name"]
+                try:
+                    args = json.loads(slot["arguments"])
+                except json.JSONDecodeError:
+                    try:
+                        args, _ = json.JSONDecoder().raw_decode(slot["arguments"].strip())
+                    except Exception:
+                        args = {}
+
+                _log.debug("tool call (stream): %s args=%s", name, args)
+                try:
+                    if on_tool_call:
+                        on_tool_call(name, args, None)
+                except Exception:
+                    pass
+
+                try:
+                    result = execute_tool(name, args)
+                    if name == "calculator":
+                        _calc_results.append(result)
+                except Exception as exc:
+                    _log.warning("tool %s failed (stream): %s (args=%s)", name, exc, args)
+                    result = f"[工具执行出错: {type(exc).__name__}: {exc}。请检查参数格式后重试，或改用其他方法]"
+
+                try:
+                    if on_tool_call:
+                        on_tool_call(name, args, result)
+                except Exception:
+                    pass
+
+                if len(result) > _MAX_TOOL_RESULT_CHARS:
+                    result = (result[:_MAX_TOOL_RESULT_CHARS]
+                              + f"\n… (结果过长，已截断，原始长度 {len(result)} 字符。"
+                              "如需完整结果请缩小计算范围) ")
+
+                messages.append({
+                    "role":         "tool",
+                    "tool_call_id": slot["id"],
+                    "content":      result,
+                })
+
+        # 达到最大轮数：让模型直接总结，仍然流式吐出来
+        messages.append({"role": "user", "content": "请根据上面的计算结果，直接给出最终答案，不要再调用工具。"})
+        try:
+            stream = self.client.chat.completions.create(
+                model=self.model, messages=messages, max_tokens=2048, stream=True,
+            )
+            for chunk in stream:
+                yield chunk
+        except Exception:
+            _log.exception("iteration limit fallback failed (stream)")
+            for c in _fake_stream("⚠️ 解题超时，请尝试把题目拆分成更小的步骤发送。"):
+                yield c
 
 
 def _fake_stream(text: str, chunk_size: int = 2, max_total_delay: float = 30.0) -> Iterator:

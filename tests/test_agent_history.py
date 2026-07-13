@@ -143,3 +143,115 @@ def test_route_model_with_image_no_vision_key(monkeypatch):
 def test_route_model_with_image_and_vision_key(monkeypatch):
     monkeypatch.setenv("SILICONFLOW_API_KEY", "fake-key")
     assert route_model("拍题", image_bytes=b"fake") != "deepseek-v4-flash"
+
+
+# ── solve_stream 纠错分支（mock API 流式响应，不联网）───────────────────────────
+# 真实API调用测试过主路径（真流式+多轮工具调用+verified状态都正常），但三次
+# 真实调用模型都答对了，没能实测到"纠错"这条分支——用mock强制触发一次，
+# 覆盖这个当时没能现场验证的盲区。
+
+def _stream_chunk(content=None, tool_calls=None):
+    from unittest.mock import MagicMock
+    delta = MagicMock()
+    delta.content = content
+    delta.tool_calls = tool_calls
+    choice = MagicMock()
+    choice.delta = delta
+    chunk = MagicMock()
+    chunk.choices = [choice]
+    return chunk
+
+
+def _stream_tool_call_delta(index, id_=None, name=None, arguments=None):
+    from unittest.mock import MagicMock
+    tcd = MagicMock()
+    tcd.index = index
+    tcd.id = id_
+    fn = MagicMock()
+    fn.name = name
+    fn.arguments = arguments
+    tcd.function = fn
+    return tcd
+
+
+def test_solve_stream_triggers_visible_correction_on_calc_mismatch(monkeypatch):
+    """模拟：第一轮模型调用calculator算出3+4=7，第二轮却写出跟计算结果对不上
+    的答案8——应该触发纠错、把修正说明可见地追加进流式输出、状态标为
+    corrected；第三轮（重试）给出跟calculator结果一致的修正答案。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake-key-for-mock-test")
+    agent = MathAgent(model="deepseek-v4-flash")
+
+    calls = {"n": 0}
+
+    def fake_create(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return iter([
+                _stream_chunk(tool_calls=[_stream_tool_call_delta(0, id_="call_1", name="calculator", arguments="")]),
+                _stream_chunk(tool_calls=[_stream_tool_call_delta(
+                    0, arguments='{"expression": "3+4", "operation": "evaluate"}')]),
+            ])
+        elif calls["n"] == 2:
+            return iter([
+                _stream_chunk(content="计算结果是"),
+                _stream_chunk(content="$$8$$"),
+            ])
+        else:
+            return iter([
+                _stream_chunk(content="重新检查后，正确答案是"),
+                _stream_chunk(content="$$7$$"),
+            ])
+
+    monkeypatch.setattr(agent.client.chat.completions, "create", fake_create)
+
+    collected = []
+    for chunk in agent.solve_stream("3加4等于几"):
+        d = chunk.choices[0].delta.content
+        if d:
+            collected.append(d)
+    full_text = "".join(collected)
+
+    assert calls["n"] == 3
+    assert agent.last_verification == "corrected"
+    assert agent.pre_correction_answer is not None
+    assert "8" in agent.pre_correction_answer
+    # 修正说明必须是可见流出来的，不能悄悄换掉
+    assert "重新核对" in full_text
+    assert "8" in full_text
+    assert "7" in full_text
+
+
+def test_solve_stream_marks_unresolved_when_correction_still_mismatches(monkeypatch):
+    """模拟纠错重试后依然跟calculator结果对不上——不应该无限重试，第二次
+    就要标记 unresolved，并在输出里可见地警告用户。"""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake-key-for-mock-test")
+    agent = MathAgent(model="deepseek-v4-flash")
+
+    calls = {"n": 0}
+
+    def fake_create(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return iter([
+                _stream_chunk(tool_calls=[_stream_tool_call_delta(0, id_="call_1", name="calculator", arguments="")]),
+                _stream_chunk(tool_calls=[_stream_tool_call_delta(
+                    0, arguments='{"expression": "3+4", "operation": "evaluate"}')]),
+            ])
+        elif calls["n"] == 2:
+            return iter([_stream_chunk(content="答案是$$8$$")])
+        else:
+            # 重试后依然写错（跟calculator算出的7对不上）
+            return iter([_stream_chunk(content="确认后答案是$$9$$")])
+
+    monkeypatch.setattr(agent.client.chat.completions, "create", fake_create)
+
+    collected = []
+    for chunk in agent.solve_stream("3加4等于几"):
+        d = chunk.choices[0].delta.content
+        if d:
+            collected.append(d)
+    full_text = "".join(collected)
+
+    assert calls["n"] == 3  # 只重试一次，不会无限循环
+    assert agent.last_verification == "unresolved"
+    assert "没能通过自动核实" in full_text
