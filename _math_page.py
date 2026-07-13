@@ -109,27 +109,35 @@ _cv1.html("""
 (function() {
 try {
     // ── 0. 加载中遮罩 ─────────────────────────────────────────────
+    // 页面跳转（比如从"知识库问答"点回"数学解题"）会让这个组件iframe整个
+    // 重新挂载执行一遍。之前"元素已存在就不再设置移除定时器"的写法，在
+    // 遮罩来自上一个（已经连同它的setInterval一起被销毁的）iframe实例时，
+    // 没人再负责把它摘掉——遮罩本体留在DOM里，但监视它的计时器已经随着
+    // 旧iframe一起死了，永远卡在"加载中"。改成：不管遮罩是这次新建的还是
+    // 上一个实例留下的，只要这次脚本执行到了（证明当前iframe是活的），
+    // 就重新起一个新的计时器接管它的移除逻辑，不依赖旧计时器活到最后。
     var doc = window.parent.document;
-    if (!doc.getElementById('_ma_loader')) {
-        var ov = doc.createElement('div');
+    var ov = doc.getElementById('_ma_loader');
+    if (!ov) {
+        ov = doc.createElement('div');
         ov.id = '_ma_loader';
-        var isDark = window.parent.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = !!doc.getElementById('_dm_override_css');
         ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.35s;background:' + (isDark ? '#0D0D14' : '#F8F8FA');
         ov.innerHTML = '<div style="width:36px;height:36px;border:3px solid #e0e0e8;border-top-color:#5B8CFF;border-radius:50%;animation:_ma_spin 0.8s linear infinite"></div><div style="font-size:0.9rem;color:#aaa;font-family:Inter,sans-serif;letter-spacing:.03em;margin-top:4px">加载中…</div><style>@keyframes _ma_spin{to{transform:rotate(360deg)}}</style>';
         doc.body.appendChild(ov);
-        var tries = 0;
-        var iv = setInterval(function() {
-            tries++;
-            if (tries > 40) { clearInterval(iv); ov.style.opacity='0'; setTimeout(function(){ov.remove();},350); return; }
-            var status = doc.querySelector('[data-testid="stStatusWidget"]');
-            var running = status && (status.textContent || '').indexOf('Running') !== -1;
-            var app = doc.querySelector('[data-testid="stAppViewContainer"]');
-            if (app && !running) {
-                clearInterval(iv);
-                setTimeout(function(){ ov.style.opacity='0'; setTimeout(function(){ov.remove();},350); }, 250);
-            }
-        }, 150);
     }
+    var _ovTries = 0;
+    var _ovIv = setInterval(function() {
+        _ovTries++;
+        if (_ovTries > 40) { clearInterval(_ovIv); if (ov) { ov.style.opacity='0'; setTimeout(function(){ if (ov) ov.remove(); },350); } return; }
+        var status = doc.querySelector('[data-testid="stStatusWidget"]');
+        var running = status && (status.textContent || '').indexOf('Running') !== -1;
+        var app = doc.querySelector('[data-testid="stAppViewContainer"]');
+        if (app && !running) {
+            clearInterval(_ovIv);
+            setTimeout(function(){ if (ov) { ov.style.opacity='0'; setTimeout(function(){ if (ov) ov.remove(); },350); } }, 250);
+        }
+    }, 150);
 } catch(e2) {}
 
 try {
