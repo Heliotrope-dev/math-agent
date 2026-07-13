@@ -29,7 +29,7 @@ for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
             pass
 
 from agent import MathAgent, route_model
-from tools import get_and_clear_pending_images, compress_image
+from tools import get_and_clear_pending_images, get_and_clear_pending_mindmaps, compress_image
 from components.auth import (
     _track_topic,
     _hash_pw, _check_pw, _user_exists, _check_user,
@@ -1004,6 +1004,8 @@ for i, msg in enumerate(st.session_state.messages):
             if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
                 st.session_state["_direct_input"] = msg["practice"]
                 st.rerun()
+        for _mm in msg.get("mindmaps", []):
+            st.markdown(_mm["html"], unsafe_allow_html=True)
         for _img in msg.get("images", []):
             _cap = _img.get("caption", "")
             st.markdown(
@@ -1416,6 +1418,10 @@ if user_input:
                 st.markdown(answer)
 
             trace = "\n".join(trace_lines) or buf.getvalue().strip()
+            # 取走工具生成的思维导图（HTML）并展示
+            _new_mindmaps = get_and_clear_pending_mindmaps()
+            for _mm in _new_mindmaps:
+                st.markdown(_mm["html"], unsafe_allow_html=True)
             # 取走工具生成的图像并展示
             _new_images = get_and_clear_pending_images()
             for _img in _new_images:
@@ -1432,6 +1438,7 @@ if user_input:
     st.session_state.messages.append({
         "role": "assistant", "content": answer, "tags": tags, "trace": trace,
         "practice": practice, "images": _new_images if stream is not None else [],
+        "mindmaps": _new_mindmaps if stream is not None else [],
     })
     _save_message(st.session_state.get("user_email", ""), "assistant", answer)
     st.rerun()  # 刷新让欢迎页消失、聊天历史正确显示

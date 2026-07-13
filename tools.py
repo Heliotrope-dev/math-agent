@@ -31,6 +31,19 @@ def get_and_clear_pending_images() -> list[dict]:
     return imgs
 
 
+# ── 思维导图HTML队列（独立于图片队列，不影响 plot_function 那条已经在正常
+#    工作的图片管线）──────────────────────────────────────────────────────────
+def _pending_mindmaps() -> list:
+    if not hasattr(_tls, "mindmaps"):
+        _tls.mindmaps = []
+    return _tls.mindmaps
+
+def get_and_clear_pending_mindmaps() -> list[dict]:
+    mms = list(_pending_mindmaps())
+    _pending_mindmaps().clear()
+    return mms
+
+
 def compress_image(image_bytes: bytes, max_size: int = 800, quality: int = 85) -> bytes:
     """压缩图片以减少 token 与带宽；失败时降级返回原图而不中断流程。"""
     try:
@@ -811,129 +824,57 @@ def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
         return f"[plot_function 错误：{e}]"
 
 
+_MINDMAP_PALETTE = ["#4a6fa5", "#5a9367", "#b3763f", "#8859a3", "#c14b5f", "#3f8f97"]
+
+
 def _run_draw_mindmap(title: str, branches: list) -> str:
-    """课本风格层级树状思维导图：白底黑线，矩形框，从左到右层级展开。"""
+    """课本风格层级知识框架，改用 HTML/CSS 渲染（不再用 matplotlib 生成图片）。
+
+    之前用 matplotlib 画图再转 PNG，先后踩过两次中文字体坑（方块字、日文
+    字形变形），还有数学符号（∮ ζ ∑ 这类）不在中文字体的字形覆盖范围内的
+    问题——本质上是"matplotlib 自己管理字体，容易跟系统装了什么字体脱节"。
+    改成生成 HTML，交给浏览器自己的字体渲染（这条路径本来就在稳定处理
+    全站的中英文+数学符号，不会再挑字体）；副作用是内容变成纯文本/HTML，
+    比二进制图片更容易做持久化存储（后续如果要让思维导图刷新后还在，
+    直接存这段 HTML 字符串就行，不用另外处理图片二进制数据）。
+    """
     try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        import matplotlib.patches as patches
+        import html as _html
 
-        plt.rcParams.update({
-            # 第一版用"Noto Sans CJK JP"（matplotlib扫描Noto那个多语言合集
-            # .ttc文件时只认出这一个名字，SC/TC/KR的字形虽然在同一个文件里
-            # 但matplotlib的字体扫描器不认）修好了"中文全变方块"，但被反馈
-            # "字有点变形，一眼就能看出来不对"——根源是Han unification：
-            # 中日双方汉字共享同一个Unicode码位，但很多字的具体笔画/字形在
-            # 中文和日文印刷传统里长得不完全一样（比如"骨""令""直"这些字的
-            # 部首写法），用日文字形集渲染中文，对母语读者来说"看得懂但不对劲"。
-            # 换成 WenQuanYi Micro Hei（专门的简体中文字体，装在VPS上，
-            # apt install fonts-wqy-microhei）——它是单一语言的字体，
-            # 没有多语言合集内字形选错的问题。
-            "font.family": ["WenQuanYi Micro Hei", "Noto Sans CJK JP", "DejaVu Sans", "sans-serif"],
-            "axes.unicode_minus": False,
-        })
+        def esc(s) -> str:
+            return _html.escape(str(s), quote=True)
 
-        # ── 布局计算（从左到右：根 → 分支 → 子节点）────────────────────────
-        # 统计总行数（每个子节点占一行，分支至少占一行）
-        rows_per_branch = [max(1, len(b.get("children", []))) for b in branches]
-        total_rows = max(sum(rows_per_branch), 1)
-
-        ROW_H  = 0.7   # 每行高度
-        COL_W  = 3.2   # 每列宽度
-        BOX_W  = 2.8   # 文字框宽
-        BOX_H  = 0.45  # 文字框高
-        FIG_H  = max(5.0, total_rows * ROW_H + 1.5)
-        FIG_W  = 12.0
-
-        fig, ax = plt.subplots(figsize=(FIG_W, FIG_H))
-        fig.patch.set_facecolor("white")
-        ax.set_facecolor("white")
-        ax.axis("off")
-
-        # 坐标系：x = 列，y 从上到下
-        ax.set_xlim(-0.5, FIG_W)
-        ax.set_ylim(-FIG_H, 0.5)
-
-        def draw_box(ax, cx, cy, text, is_root=False, is_branch=False):
-            """画矩形框 + 文字，返回框的左右中心坐标。"""
-            fc = "#1a1a2e" if is_root else ("#e8eef7" if is_branch else "white")
-            ec = "#1a1a2e" if is_root else "#555577"
-            tc = "white" if is_root else "#111111"
-            lw = 1.8 if is_branch else 1.0
-            rect = patches.FancyBboxPatch(
-                (cx - BOX_W / 2, cy - BOX_H / 2), BOX_W, BOX_H,
-                boxstyle="square,pad=0.05",
-                facecolor=fc, edgecolor=ec, linewidth=lw, zorder=4,
-            )
-            ax.add_patch(rect)
-            ax.text(cx, cy, text, ha="center", va="center",
-                    fontsize=9.5 if is_root else (9.0 if is_branch else 8.5),
-                    color=tc, fontweight="bold" if (is_root or is_branch) else "normal",
-                    zorder=5, clip_on=True)
-            return (cx - BOX_W / 2, cy), (cx + BOX_W / 2, cy)  # left, right mid-points
-
-        def hline(ax, x0, x1, y):
-            ax.plot([x0, x1], [y, y], color="#777788", lw=0.9, zorder=3)
-
-        def vline(ax, x, y0, y1):
-            ax.plot([x, x], [y0, y1], color="#777788", lw=0.9, zorder=3)
-
-        # ── 根节点（居中纵向）────────────────────────────────────────────────
-        root_x = 1.8
-        root_cy = -FIG_H / 2
-        draw_box(ax, root_x, root_cy, title, is_root=True)
-        root_right_x = root_x + BOX_W / 2
-
-        # ── 分支 + 子节点 ────────────────────────────────────────────────────
-        branch_x   = root_x + COL_W
-        child_x    = branch_x + COL_W
-
-        # 计算每个分支的纵向中心 y
-        cursor = -1.0  # 从顶部开始
-        branch_centers = []
-        for rb in rows_per_branch:
-            span = rb * ROW_H
-            branch_centers.append(cursor - span / 2)
-            cursor -= span
-
-        # 根节点垂直线连到所有分支
-        if branch_centers:
-            y_top    = branch_centers[0]
-            y_bottom = branch_centers[-1]
-            vline(ax, root_right_x + 0.3, y_top, y_bottom)
-
-        for bi, (branch, bcy) in enumerate(zip(branches, branch_centers)):
-            # 根 → 分支 水平连线
-            hline(ax, root_right_x + 0.3, branch_x - BOX_W / 2, bcy)
-
-            draw_box(ax, branch_x, bcy, branch.get("label", ""), is_branch=True)
-            branch_right_x = branch_x + BOX_W / 2
-
+        branch_cards = []
+        for i, branch in enumerate(branches):
+            color = _MINDMAP_PALETTE[i % len(_MINDMAP_PALETTE)]
             children = branch.get("children", [])
-            if not children:
-                continue
+            child_items = "".join(
+                f'<div style="background:#ffffff;border:1px solid #e3e7ee;'
+                f'border-radius:6px;padding:6px 12px;margin-top:6px;'
+                f'font-size:13px;line-height:1.5;color:#2c2c2c;">'
+                f'{esc(child)}</div>'
+                for child in children
+            )
+            branch_cards.append(
+                f'<div style="border-left:4px solid {color};background:{color}14;'
+                f'border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:10px;">'
+                f'<div style="font-weight:700;font-size:14.5px;color:#1a1a2e;">'
+                f'{esc(branch.get("label", ""))}</div>'
+                f'{child_items}</div>'
+            )
 
-            # 子节点纵向排列
-            rb = rows_per_branch[bi]
-            top_cy = bcy + (rb - 1) / 2 * ROW_H
-            child_ys = [top_cy - j * ROW_H for j in range(len(children))]
-
-            # 分支 → 子节点 垂直线
-            if len(children) > 1:
-                vline(ax, branch_right_x + 0.3, child_ys[0], child_ys[-1])
-
-            for child_text, ccy in zip(children, child_ys):
-                hline(ax, branch_right_x + 0.3, child_x - BOX_W / 2, ccy)
-                draw_box(ax, child_x, ccy, child_text)
-
-        # 标题
-        ax.text(FIG_W / 2, -0.1, title + "  知识框架",
-                ha="center", va="bottom", fontsize=11,
-                fontweight="bold", color="#1a1a2e")
-
-        fig.tight_layout(pad=0.5)
-        return _save_figure(fig, f"{title} 知识框架")
+        html_block = (
+            '<div style="font-family:-apple-system,BlinkMacSystemFont,\'PingFang SC\','
+            '\'Microsoft YaHei\',sans-serif;background:#fafbfc;border:1px solid #e3e7ee;'
+            'border-radius:12px;padding:16px;margin:8px 0;">'
+            '<div style="background:linear-gradient(135deg,#1a1a2e,#2d2d4d);color:#fff;'
+            'padding:10px 16px;border-radius:8px;font-weight:700;font-size:15px;'
+            'margin-bottom:12px;">🧠 ' + esc(title) + ' 知识框架</div>'
+            + "".join(branch_cards) +
+            '</div>'
+        )
+        _pending_mindmaps().append({"html": html_block, "caption": f"{title} 知识框架"})
+        return f"[思维导图已生成：{title} 知识框架]"
     except Exception as e:
         return f"[draw_mindmap 错误：{e}]"
 
