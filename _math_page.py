@@ -680,7 +680,15 @@ try{{
     var el   = doc.getElementById(SID);
     if (!dark) {{
         if (el) el.remove();
-        if (doc._dmObs) {{ doc._dmObs.disconnect(); doc._dmObs = null; }}
+        // disconnect() 只挡未来的通知，挡不住"切换前一瞬间"那次mutation
+        // 已经排进去的 setTimeout(applyInline, 30) ——那个定时器跟observer
+        // 断没断连没关系，照样会在30ms后独立触发，把#16162A重新描回来，
+        // 覆盖掉下面cleanup()刚清完的白色。必须在置空引用前先显式取消它。
+        if (doc._dmObs) {{
+            if (doc._dmObs._t) clearTimeout(doc._dmObs._t);
+            doc._dmObs.disconnect();
+            doc._dmObs = null;
+        }}
         function cleanup() {{
             var inp = doc.querySelector('[data-testid="stChatInput"]');
             if (inp) {{
