@@ -203,22 +203,35 @@ a[data-testid="stPageLink-NavLink"]:focus {
     color: var(--text) !important; font-size: 0.95rem !important; padding: 2px 0 !important;
 }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; outline: none !important; }
+/* stChatInputSubmitButton/MicButton/ApproveButton/CancelButton 这几个
+   testid 新版Streamlit直接标在<button>本身上，不是套在外层div上（跟
+   FileUploadButton不一样，那个testid在外层div，button在更里面一层）。
+   写成"testid button"（找子孙button）永远选不到——用逗号并列自身+
+   子孙两种写法，不管以后是哪种结构都兜得住。 */
+[data-testid="stChatInputSubmitButton"],
 [data-testid="stChatInputSubmitButton"] button { background: var(--accent) !important; border-radius: 50% !important; }
+[data-testid="stChatInputSubmitButton"]:disabled,
 [data-testid="stChatInputSubmitButton"] button:disabled {
     background: var(--sidebar) !important; border: 1px solid var(--border) !important; opacity: 1 !important;
 }
+[data-testid="stChatInputSubmitButton"]:disabled svg,
 [data-testid="stChatInputSubmitButton"] button:disabled svg { fill: var(--text-muted) !important; }
 [data-testid="stChatInputFileUploadButton"] button,
+[data-testid="stChatInputMicButton"],
 [data-testid="stChatInputMicButton"] button {
     color: var(--text-muted) !important; background: transparent !important;
 }
 [data-testid="stChatInputFileUploadButton"] svg,
 [data-testid="stChatInputMicButton"] svg { fill: var(--text-muted) !important; }
 [data-testid="stChatInputFileUploadButton"] button:hover,
+[data-testid="stChatInputMicButton"]:hover,
 [data-testid="stChatInputMicButton"] button:hover { color: var(--accent) !important; }
 [data-testid="stChatInputFileUploadButton"] button:hover svg,
+[data-testid="stChatInputMicButton"]:hover svg,
 [data-testid="stChatInputMicButton"] button:hover svg { fill: var(--accent) !important; }
+[data-testid="stChatInputApproveButton"],
 [data-testid="stChatInputApproveButton"] button { background: var(--accent) !important; }
+[data-testid="stChatInputCancelButton"],
 [data-testid="stChatInputCancelButton"] button { color: var(--text-muted) !important; }
 
 .course-banner-row [data-testid="stHorizontalBlock"],
@@ -420,6 +433,13 @@ header[data-testid="stHeader"] { background: var(--dm-surface) !important; borde
 [data-testid="stSidebar"] .stButton button { background: var(--dm-card) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }
 [data-testid="stSidebar"] .stButton button:hover { background: var(--dm-card2) !important; color: #fff !important; border-color: var(--dm-accent) !important; }
 
+/* 手机端汉堡按钮（#ma-hamburger 在 _math_page.py 里用JS创建，浅色默认
+   样式见上面 @media(max-width:768px) 那段）。深色规则源码顺序排在浅色
+   规则后面，两条选择器特异度相同时源码靠后天然赢，不用跟其他脚本抢
+   DOM插入顺序或依赖JS探测主题再拿!important内联样式硬盖——之前那套
+   JS方案在每次rerun后就失效，按钮永远停在浅色样式。 */
+#ma-hamburger { background: rgba(24,24,42,0.95) !important; border-color: #32325a !important; color: #dde1f5 !important; }
+
 .course-banner { background: var(--dm-card) !important; color: var(--dm-muted) !important; border-color: var(--dm-border) !important; }
 [data-testid="stHorizontalBlock"] { background: transparent !important; }
 [data-testid="stColumn"] { background: transparent !important; }
@@ -466,22 +486,30 @@ pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important;
 }
 [data-testid="stChatInputTextArea"] { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--dm-text) !important; padding: 2px 0 !important; }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; }
+[data-testid="stChatInputSubmitButton"],
 [data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }
+[data-testid="stChatInputSubmitButton"]:disabled,
 [data-testid="stChatInputSubmitButton"] button:disabled {
     background: var(--dm-card) !important; border: 1px solid var(--dm-border) !important; opacity: 1 !important;
 }
+[data-testid="stChatInputSubmitButton"]:disabled svg,
 [data-testid="stChatInputSubmitButton"] button:disabled svg { fill: var(--dm-text) !important; }
 [data-testid="stChatInputFileUploadButton"] button,
+[data-testid="stChatInputMicButton"],
 [data-testid="stChatInputMicButton"] button {
     color: var(--dm-text) !important; background: transparent !important;
 }
 [data-testid="stChatInputFileUploadButton"] svg,
 [data-testid="stChatInputMicButton"] svg { fill: var(--dm-text) !important; }
 [data-testid="stChatInputFileUploadButton"] button:hover,
+[data-testid="stChatInputMicButton"]:hover,
 [data-testid="stChatInputMicButton"] button:hover { color: var(--dm-accent) !important; }
 [data-testid="stChatInputFileUploadButton"] button:hover svg,
+[data-testid="stChatInputMicButton"]:hover svg,
 [data-testid="stChatInputMicButton"] button:hover svg { fill: var(--dm-accent) !important; }
+[data-testid="stChatInputApproveButton"],
 [data-testid="stChatInputApproveButton"] button { background: var(--dm-accent) !important; }
+[data-testid="stChatInputCancelButton"],
 [data-testid="stChatInputCancelButton"] button { color: var(--dm-muted) !important; }
 
 [data-testid="stFileUploaderDropzone"] button,

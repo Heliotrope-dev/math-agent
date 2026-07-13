@@ -293,25 +293,16 @@ try {
         }
     });
 
-    // 暗色模式下汉堡按钮样式
-    function applyDarkHamburger() {
-        var isDark = doc.documentElement.getAttribute('data-theme') === 'dark'
-            || doc.body.style.background === 'rgb(15, 15, 23)'
-            || doc.querySelector('.stApp') &&
-               getComputedStyle(doc.querySelector('.stApp')).backgroundColor === 'rgb(15, 15, 23)';
-        if (isDark) {
-            btn.style.background = 'rgba(24,24,42,0.95)';
-            btn.style.borderColor = '#32325a';
-            btn.style.color = '#dde0f5';
-        } else {
-            btn.style.background = 'rgba(255,255,255,0.93)';
-            btn.style.borderColor = '#D4CEC8';
-            btn.style.color = '#333';
-        }
-    }
-    applyDarkHamburger();
-    // 切换主题时更新按钮颜色
-    new MutationObserver(applyDarkHamburger).observe(doc.body, {attributes: true, subtree: false});
+    // 暗色模式下汉堡按钮样式：原来这里用JS给按钮设内联样式+MutationObserver
+    // 监听切换。两个问题：1) isDark判断条件（data-theme属性/固定颜色字符串）
+    // 从来没成立过；2) 就算判断对了，这个组件iframe在每次rerun时会被整个
+    // 重新挂载，"按钮已存在就return"的判重逻辑导致新iframe里的observer从来
+    //没重新建立起来，而且内联style一旦用!important设过一次，会永久盖住
+    // 后面任何CSS规则（哪怕CSS也是!important），后续没法再靠CSS纠正。
+    // 改成完全交给CSS控制：浅色默认样式和深色覆盖样式都放在 ui_helpers.py
+    // 的 _BASE_CSS/_DARK_CSS 里（同一个 style 标签内，深色规则源码顺序
+    // 排在浅色规则后面，源码靠后天然赢，不用跟其他脚本抢DOM插入顺序），
+    // 不依赖客户端探测，不会有陈旧内联样式卡住的问题。
 
 } catch(e) {}
 })();
@@ -722,7 +713,7 @@ try{{
         '[data-testid="stChatInput"]{{background:#16162A!important}}' +
         '[data-testid="stChatInputTextArea"]{{background:#16162A!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important;-webkit-text-fill-color:#DEE1F5!important;caret-color:#DEE1F5!important}}' +
         '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
-        '[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}' +
+        '[data-testid="stChatInputSubmitButton"],[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}' +
         /* 下拉框弹出层（Streamlit 渲染在 document 根部的 portal） */
         '[data-baseweb="popover"],[data-baseweb="menu"],[data-baseweb="list"]{{background:#1E1E35!important;border:1px solid #2E2E50!important}}' +
         '[data-baseweb="option"]{{background:#1E1E35!important;color:#DEE1F5!important}}' +
