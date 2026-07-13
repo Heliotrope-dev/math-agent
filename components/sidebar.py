@@ -10,7 +10,7 @@ from components.auth import (
     _load_user_profile,
     _save_wrong_book,
 )
-from tools import fix_latex
+from tools import fix_latex, strip_decorative_emoji
 
 _ALL_COURSES = [
     ("大一", ["数学分析", "高等代数", "解析几何"]),
@@ -107,7 +107,7 @@ def render_sidebar() -> None:
                 for wi in _idxs:
                     wp = wrong_book[wi]
                     q_preview = wp["question"][:48] + ("…" if len(wp["question"]) > 48 else "")
-                    st.markdown(f"**{wi+1}.** {fix_latex(q_preview)}")
+                    st.markdown(f"**{wi+1}.** {fix_latex(strip_decorative_emoji(q_preview))}")
                     st.caption(wp.get("saved_at", ""))
                     c1, c2 = st.columns(2)
                     with c1:

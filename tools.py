@@ -16,6 +16,23 @@ from concurrent.futures import ProcessPoolExecutor, TimeoutError as _FutTimeout
 
 _log = logging.getLogger(__name__)
 
+# 装饰性 emoji 的 Unicode 区间（跟当初扫全项目代码用的是同一套区间）。
+# 特意不包含数学符号区（U+2200-U+22FF：√ ∞ ≤ ≥ ∮ ∑ 这些），不会误删公式。
+_DECORATIVE_EMOJI_RE = _re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F000-\U0001F02F\U00002B00-\U00002BFF]+"
+)
+
+
+def strip_decorative_emoji(text: str) -> str:
+    """把模型自己在回复文字里加的装饰性 emoji 强制过滤掉。
+
+    之前只在系统提示词里说"不要加emoji"，属于软性要求，模型不一定每次
+    都听——用户反馈过好几次同一个问题（标题前加🧭之类）。跟"答案自纠错"
+    是同一个思路：不能光靠嘴上要求，靠得住的是代码层面兜底。这里在显示
+    前统一过滤，不管模型这次听不听话，用户看到的都不会有装饰性emoji。
+    """
+    return _DECORATIVE_EMOJI_RE.sub("", text)
+
 
 def fix_latex(text):
     """把模型输出里常见的 LaTeX 写法归一化成前端能正确渲染的格式。
@@ -880,7 +897,7 @@ def _run_draw_mindmap(title: str, branches: list) -> str:
         import html as _html
 
         def esc(s) -> str:
-            return _html.escape(str(s), quote=True)
+            return _html.escape(strip_decorative_emoji(str(s)), quote=True)
 
         # 页面本身有深色/浅色模式，全局CSS对 div 的文字颜色用了
         # "color: var(--text) !important"（跟着页面主题走）——如果卡片

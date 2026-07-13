@@ -29,7 +29,7 @@ for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
             pass
 
 from agent import MathAgent, route_model
-from tools import get_and_clear_pending_images, get_and_clear_pending_mindmaps, compress_image, fix_latex
+from tools import get_and_clear_pending_images, get_and_clear_pending_mindmaps, compress_image, fix_latex, strip_decorative_emoji
 from components.auth import (
     _track_topic,
     _hash_pw, _check_pw, _user_exists, _check_user,
@@ -961,7 +961,7 @@ for i, msg in enumerate(st.session_state.messages):
         _asst_turn += 1
         st.markdown(f'<div class="asst-bubble-marker" id="abm-{i}"></div>',
                     unsafe_allow_html=True)
-        st.markdown(fix_latex(msg["content"]))
+        st.markdown(fix_latex(strip_decorative_emoji(msg["content"])))
         if msg.get("tags"):
             _sel_tag = st.pills(
                 label="",
@@ -1355,12 +1355,12 @@ if user_input:
                                 # 光标符号跟在大标题文字后面时会被标题的大字号一起放大，
                                 # 用又粗又满的"▌"（半宽实心块）看起来像个突兀的黑方块；
                                 # 换成"▏"（八分之一宽的细线），同样放大也不会显得那么丑。
-                                ph.markdown(fix_latex("".join(collected)) + "▏")
+                                ph.markdown(fix_latex(strip_decorative_emoji("".join(collected))) + "▏")
                                 _last_render = _now
                     raw = "".join(collected)
                     raw, practice = extract_practice(raw)
                     clean_answer, tags = extract_tags(raw)
-                    answer = fix_latex(clean_answer)
+                    answer = fix_latex(strip_decorative_emoji(clean_answer))
                     ph.markdown(answer)
                     # 验证徽标：直接读 agent.solve() 内部自纠错逻辑跑完之后的真实状态
                     # （之前是拿 stdout 重定向的buf去正则扒trace文本算的，但 solve()
