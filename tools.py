@@ -219,14 +219,18 @@ TOOL_DEFINITIONS = [
             "description": (
                 "生成知识点思维导图。讲解一个知识点的体系结构、概念关系、重要定理分类时调用。"
                 "适用：知识框架梳理、知识点总结、概念对比分类。"
+                "⚠️重要：title/label/children 里的公式必须写成纯文字/Unicode数学符号"
+                "（例如 π ≤ √ ∞ ² ₀ 直接用字符，如 c_n、a^2+b^2、√(ab)），"
+                "禁止使用 LaTeX 命令语法（比如 \\frac{}{}、\\leq、\\sqrt{}、$...$ 这类）——"
+                "思维导图卡片按纯文字渲染，LaTeX命令不会被解析成公式，会原样显示成一堆反斜杠代码。"
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "title": {"type": "string", "description": "思维导图中心主题，如「泰勒展开」"},
+                    "title": {"type": "string", "description": "思维导图中心主题，如「泰勒展开」，纯文字不要LaTeX"},
                     "branches": {
                         "type": "array",
-                        "description": "主要分支，每个分支包含 label（名称）和 children（子节点列表）",
+                        "description": "主要分支，每个分支包含 label（名称）和 children（子节点列表），内容必须是纯文字/Unicode符号，不能是LaTeX命令",
                         "items": {
                             "type": "object",
                             "properties": {
@@ -878,32 +882,40 @@ def _run_draw_mindmap(title: str, branches: list) -> str:
         def esc(s) -> str:
             return _html.escape(str(s), quote=True)
 
+        # 页面本身有深色/浅色模式，全局CSS对 div 的文字颜色用了
+        # "color: var(--text) !important"（跟着页面主题走）——如果卡片
+        # 自己的颜色不也用 !important，切换深浅色模式时会被页面样式抢过去，
+        # 深色标题条配上（切到浅色模式后变深色的）文字，会看不清。这里所有
+        # color/background 都显式加 !important，让卡片自己的配色不受页面
+        # 主题影响，深浅色模式下显示效果一致。
         branch_cards = []
         for i, branch in enumerate(branches):
             color = _MINDMAP_PALETTE[i % len(_MINDMAP_PALETTE)]
             children = branch.get("children", [])
             child_items = "".join(
-                f'<div style="background:#ffffff;border:1px solid #e3e7ee;'
+                f'<div style="background:#ffffff !important;border:1px solid #e3e7ee;'
                 f'border-radius:6px;padding:6px 12px;margin-top:6px;'
-                f'font-size:13px;line-height:1.5;color:#2c2c2c;">'
+                f'font-size:13px;line-height:1.5;color:#2c2c2c !important;">'
                 f'{esc(child)}</div>'
                 for child in children
             )
             branch_cards.append(
-                f'<div style="border-left:4px solid {color};background:{color}14;'
+                f'<div style="border-left:4px solid {color};background:{color}14 !important;'
                 f'border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:10px;">'
-                f'<div style="font-weight:700;font-size:14.5px;color:#1a1a2e;">'
+                f'<div style="font-weight:700;font-size:14.5px;color:#1a1a2e !important;">'
                 f'{esc(branch.get("label", ""))}</div>'
                 f'{child_items}</div>'
             )
 
         html_block = (
             '<div style="font-family:-apple-system,BlinkMacSystemFont,\'PingFang SC\','
-            '\'Microsoft YaHei\',sans-serif;background:#fafbfc;border:1px solid #e3e7ee;'
+            '\'Microsoft YaHei\',sans-serif;background:#fafbfc !important;border:1px solid #e3e7ee;'
             'border-radius:12px;padding:16px;margin:8px 0;">'
-            '<div style="background:linear-gradient(135deg,#1a1a2e,#2d2d4d);color:#fff;'
+            '<div style="background:linear-gradient(135deg,#1a1a2e,#2d2d4d) !important;color:#fff !important;'
             'padding:10px 16px;border-radius:8px;font-weight:700;font-size:15px;'
-            'margin-bottom:12px;">' + esc(title) + ' 知识框架</div>'
+            'margin-bottom:12px;">' + esc(title)
+            + ('' if title.rstrip().endswith(('知识框架', '知识体系', '框架'))
+               else ' 知识框架') + '</div>'
             + "".join(branch_cards) +
             '</div>'
         )
