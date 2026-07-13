@@ -11,13 +11,13 @@ from agent import MathAgent
 
 _BANNER = """
 ╔══════════════════════════════════════════════════╗
-║           🧮  Math Solver Agent                  ║
+║              Math Solver Agent                   ║
 ╚══════════════════════════════════════════════════╝
 支持：代数 · 几何 · 微积分 · 三角 · 概率统计 · 复变函数 · 数值分析
 """
 
 _EXAMPLES = """
-📝 示例题目：
+示例题目：
   1. 解方程：2x² + 5x - 3 = 0
   2. 求导：f(x) = x³·sin(x)
   3. 求不定积分：x² + 2x
@@ -42,7 +42,7 @@ def main() -> None:
 
     while True:
         try:
-            problem = input("📌 输入数学题（或 help / quit / clear）：").strip()
+            problem = input("输入数学题（或 help / quit / clear）：").strip()
 
             if not problem:
                 continue
@@ -54,12 +54,12 @@ def main() -> None:
                 continue
             if problem.lower() == "clear":
                 history.clear()
-                print("✅ 对话历史已清空\n")
+                print("对话历史已清空\n")
                 continue
 
             print("\n" + "─" * 52)
             solution = agent.solve(problem, history=history)
-            print("\n📊 解题结果：\n")
+            print("\n解题结果：\n")
             print(solution)
             print("─" * 52 + "\n")
 
@@ -71,7 +71,7 @@ def main() -> None:
             print("\n\n已中断，再见！")
             sys.exit(0)
         except Exception as exc:
-            print(f"\n❌ 出错：{exc}\n")
+            print(f"\n出错：{exc}\n")
 
 
 if __name__ == "__main__":

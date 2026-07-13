@@ -16,6 +16,40 @@ from concurrent.futures import ProcessPoolExecutor, TimeoutError as _FutTimeout
 
 _log = logging.getLogger(__name__)
 
+
+def fix_latex(text):
+    """把模型输出里常见的 LaTeX 写法归一化成前端能正确渲染的格式。
+
+    放在 tools.py（而不是 _math_page.py）是因为 components/sidebar.py 也需要
+    用它处理错题本条目里的公式——sidebar.py 不能直接 import _math_page.py
+    （会循环依赖），但两边都已经在 import tools.py，放这里是两边都能安全
+    引用的公共位置。
+    """
+    # 去除模型可能输出的多余 HTML 标签（Gemini 有时会在末尾加 </div> 等）
+    text = _re.sub(r'</?(div|span|p|br|html|body)[^>]*>', '', text, flags=_re.IGNORECASE)
+
+    # \[ ... \] → $$ ... $$（块公式）
+    text = _re.sub(r'\\\[\s*(.*?)\s*\\\]', r'\n$$\1$$\n', text, flags=_re.DOTALL)
+    # \( ... \) → $ ... $（行内公式）
+    text = _re.sub(r'\\\(\s*(.*?)\s*\\\)', r'$\1$', text, flags=_re.DOTALL)
+
+    # 行内 $ ... $ 里含矩阵/多行环境时，升级为块级 $$ ... $$
+    # 防止 & 和 \\ 被 markdown 解析破坏
+    # 注：不用 re.DOTALL，限制匹配在单行内，避免跨段落回溯（ReDoS）
+    def _upgrade_matrix(m):
+        inner = m.group(1)
+        if r'\begin{' in inner:
+            return f'\n$$\n{inner}\n$$\n'
+        return m.group(0)
+    text = _re.sub(r'(?<!\$)\$(?!\$)([^\$]{1,2000}?)(?<!\$)\$(?!\$)', _upgrade_matrix, text)
+
+    # 修复奇数个 $$（未关闭的块公式）
+    if text.count('$$') % 2 != 0:
+        text += '\n$$'
+
+    return text
+
+
 # ── 图像队列（per-thread，防止多用户共享进程时串用）─────────────────────────────
 import threading as _threading
 _tls = _threading.local()
@@ -687,7 +721,7 @@ def _run_formula_lookup(query: str) -> str:
         try:
             from rag_formula_lookup import retrieve
             hits = retrieve(query, index, top_k=5)
-            lines = [f"📐 公式检索：{query}", "=" * 44]
+            lines = [f"公式检索：{query}", "=" * 44]
             for d in hits:
                 lines.append(f"\n• {d['name']}  [{d['topic']}]")
                 formula_part = d["text"].split(": ", 1)[-1]
@@ -707,7 +741,7 @@ def _run_formula_lookup(query: str) -> str:
         # 最后兜底：返回 algebra + calculus 基础公式
         matched_topics = ["algebra", "calculus"]
 
-    lines = [f"📐 公式检索：{query}", "=" * 44]
+    lines = [f"公式检索：{query}", "=" * 44]
     for topic in matched_topics:
         formulas = _FORMULAS.get(topic, {})
         lines.append(f"\n【{topic.upper()}】")
@@ -739,10 +773,10 @@ def _run_step_decomposer(problem_type: str, problem: str) -> str:
 
     steps = "\n".join(_STEP_TEMPLATES[key])
     return (
-        f"🔍 题型分析\n"
+        f"题型分析\n"
         f"类型：{problem_type}\n"
         f"题目：{problem}\n\n"
-        f"📋 解题路线：\n{steps}"
+        f"解题路线：\n{steps}"
     )
 
 
@@ -869,7 +903,7 @@ def _run_draw_mindmap(title: str, branches: list) -> str:
             'border-radius:12px;padding:16px;margin:8px 0;">'
             '<div style="background:linear-gradient(135deg,#1a1a2e,#2d2d4d);color:#fff;'
             'padding:10px 16px;border-radius:8px;font-weight:700;font-size:15px;'
-            'margin-bottom:12px;">🧠 ' + esc(title) + ' 知识框架</div>'
+            'margin-bottom:12px;">' + esc(title) + ' 知识框架</div>'
             + "".join(branch_cards) +
             '</div>'
         )

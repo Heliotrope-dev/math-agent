@@ -29,7 +29,7 @@ for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
             pass
 
 from agent import MathAgent, route_model
-from tools import get_and_clear_pending_images, get_and_clear_pending_mindmaps, compress_image
+from tools import get_and_clear_pending_images, get_and_clear_pending_mindmaps, compress_image, fix_latex
 from components.auth import (
     _track_topic,
     _hash_pw, _check_pw, _user_exists, _check_user,
@@ -95,7 +95,7 @@ def _show_login_page():
 # ── 启动环境校验：至少配置一个云端 API Key，否则友好提示而非运行时崩溃 ────────
 if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("SILICONFLOW_API_KEY")):
     st.error(
-        "⚠️ 未检测到可用的模型 API Key。\n\n"
+        "未检测到可用的模型 API Key。\n\n"
         "请配置环境变量（或 Streamlit Secrets）中的 **DEEPSEEK_API_KEY** "
         "或 **SILICONFLOW_API_KEY** 至少一个，然后刷新页面。"
     )
@@ -513,30 +513,7 @@ def get_agent(use_local, model, guide_mode=False):
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
-def fix_latex(text):
-    # 去除模型可能输出的多余 HTML 标签（Gemini 有时会在末尾加 </div> 等）
-    text = re.sub(r'</?(div|span|p|br|html|body)[^>]*>', '', text, flags=re.IGNORECASE)
-
-    # \[ ... \] → $$ ... $$（块公式）
-    text = re.sub(r'\\\[\s*(.*?)\s*\\\]', r'\n$$\1$$\n', text, flags=re.DOTALL)
-    # \( ... \) → $ ... $（行内公式）
-    text = re.sub(r'\\\(\s*(.*?)\s*\\\)', r'$\1$', text, flags=re.DOTALL)
-
-    # 行内 $ ... $ 里含矩阵/多行环境时，升级为块级 $$ ... $$
-    # 防止 & 和 \\ 被 markdown 解析破坏
-    # 注：不用 re.DOTALL，限制匹配在单行内，避免跨段落回溯（ReDoS）
-    def _upgrade_matrix(m):
-        inner = m.group(1)
-        if r'\begin{' in inner:
-            return f'\n$$\n{inner}\n$$\n'
-        return m.group(0)
-    text = re.sub(r'(?<!\$)\$(?!\$)([^\$]{1,2000}?)(?<!\$)\$(?!\$)', _upgrade_matrix, text)
-
-    # 修复奇数个 $$（未关闭的块公式）
-    if text.count('$$') % 2 != 0:
-        text += '\n$$'
-
-    return text
+# fix_latex 挪到 tools.py 了（sidebar.py 的错题本也要用，两边都能安全 import 那里）
 
 def _clean_tag(t: str) -> str:
     """去掉 LaTeX/markdown，保留纯文字知识点名，截断至 20 字。"""
@@ -549,7 +526,7 @@ def _clean_tag(t: str) -> str:
     return t[:20]
 
 def extract_tags(text):
-    match = re.search(r'📚\s*\*{0,2}知识点\*{0,2}\s*[：:](.*?)$', text, re.MULTILINE)
+    match = re.search(r'\*{0,2}知识点\*{0,2}\s*[：:](.*?)$', text, re.MULTILINE)
     if not match:
         return text, []
     raw = [t.strip() for t in re.split(r'[·・,，、]+', match.group(1).strip()) if t.strip()]
@@ -557,7 +534,7 @@ def extract_tags(text):
     return text[:match.start()].rstrip(), tags
 
 def extract_practice(text):
-    match = re.search(r'🧪\s*\*{0,2}例题\*{0,2}\s*[：:](.*?)$', text, re.MULTILINE)
+    match = re.search(r'\*{0,2}例题\*{0,2}\s*[：:](.*?)$', text, re.MULTILINE)
     if not match:
         return text, ""
     practice = match.group(1).strip()
@@ -935,7 +912,7 @@ if not st.session_state.messages:
 
             _, mid, _ = st.columns([3, 2, 3])
             with mid:
-                if st.button("↻ 换一批", key="refresh_ex", use_container_width=True):
+                if st.button("换一批", key="refresh_ex", use_container_width=True):
                     st.session_state.example_set = _get_examples()
                     st.rerun()
 
@@ -1073,7 +1050,7 @@ with _btn1:
             st.rerun()
 with _btn2:
     _gm_active = st.session_state.guide_mode
-    if st.button("引导✓" if _gm_active else "引导", key="gp_guide", use_container_width=True,
+    if st.button("引导中" if _gm_active else "引导", key="gp_guide", use_container_width=True,
                  type="primary" if _gm_active else "secondary"):
         st.session_state.guide_mode = not _gm_active
         st.rerun()
@@ -1303,7 +1280,7 @@ if user_input:
                         trace_lines.append(f"[{ts}] {label}\n   参数: {args}")
                     else:
                         elapsed = time.time() - _tool_start.get(name, time.time())
-                        status.update(label=f"✓ {label} 完成（{elapsed:.1f}s）")
+                        status.update(label=f"{label} 完成（{elapsed:.1f}s）")
                         preview = str(result)[:120] + ("…" if len(str(result)) > 120 else "")
                         trace_lines.append(f"   → {preview}  ({elapsed:.1f}s)\n")
 
@@ -1315,7 +1292,7 @@ if user_input:
                     # 这个key不存在时它注定识别失败——之前这里会先摆出"识别图片内容…"
                     # 的假动作，识别必然失败后又静默把图片丢掉，模型拿着空气瞎猜，
                     # 用户完全不知道发生了什么。改成直接告诉模型如实说明情况。
-                    status.update(label="⚠️ 未配置图片识别能力")
+                    status.update(label="未配置图片识别能力")
                     solve_input = (
                         "（用户上传了一张图片，但当前环境未配置图片识别所需的 API Key，"
                         "无法查看图片内容。请告知用户图片识别功能暂未配置，建议改用文字描述题目。）"
@@ -1391,11 +1368,11 @@ if user_input:
                     # 没真正显示过——现在改成直接读 agent 实例上记录的状态，不用猜）。
                     _vstatus = getattr(_agent, "last_verification", None)
                     if _vstatus == "verified":
-                        st.caption("✓ 已自动核对计算结果")
+                        st.caption("已自动核对计算结果")
                     elif _vstatus == "corrected":
-                        st.caption("🔧 已自动发现并修正一处计算偏差")
+                        st.caption("已自动发现并修正一处计算偏差")
                     elif _vstatus == "unresolved":
-                        st.warning("⚠️ 这道题的最终答案没能通过自动核实（AI的计算过程跟最终结论对不上），建议自己再验算一遍，不要直接当作确定答案使用。", icon="⚠️")
+                        st.warning("这道题的最终答案没能通过自动核实（AI的计算过程跟最终结论对不上），建议自己再验算一遍，不要直接当作确定答案使用。")
                     if tags:
                         _ntcols = st.columns(len(tags))
                         for _nti, _ntag in enumerate(tags):

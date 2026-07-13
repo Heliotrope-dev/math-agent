@@ -10,6 +10,7 @@ from components.auth import (
     _load_user_profile,
     _save_wrong_book,
 )
+from tools import fix_latex
 
 _ALL_COURSES = [
     ("大一", ["数学分析", "高等代数", "解析几何"]),
@@ -54,7 +55,7 @@ def render_sidebar() -> None:
             st.rerun()
 
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
-    st.page_link("pages/2_📚_知识库问答.py", label="知识库问答", use_container_width=True)
+    st.page_link("pages/2_知识库问答.py", label="知识库问答", use_container_width=True)
     st.divider()
 
     # ── 最近问题（最多显示20条）─────────────────────────────────────────────
@@ -102,11 +103,11 @@ def render_sidebar() -> None:
                 _groups.setdefault(_subject, []).append(wi)
 
             for _subject, _idxs in _groups.items():
-                st.caption(f"📂 {_subject}（{len(_idxs)}）")
+                st.caption(f"{_subject}（{len(_idxs)}）")
                 for wi in _idxs:
                     wp = wrong_book[wi]
                     q_preview = wp["question"][:48] + ("…" if len(wp["question"]) > 48 else "")
-                    st.markdown(f"**{wi+1}.** {q_preview}")
+                    st.markdown(f"**{wi+1}.** {fix_latex(q_preview)}")
                     st.caption(wp.get("saved_at", ""))
                     c1, c2 = st.columns(2)
                     with c1:
