@@ -379,11 +379,13 @@ try {
             '[data-testid="stMain"] [data-testid="stVerticalBlock"]{gap:0.6rem!important}' +
         '}';
     doc.head.appendChild(s);
-    /* 清除侧边栏工具栏残留：Streamlit 列宽调节控件的 +/− 碎片文字，
-       之前只匹配"完全等于 + 或 − 或 -"，漏掉了带包裹span/其他减号变体的情况
-       （用户反馈："课程入口"列表里有些字看不全，就是这些没清干净的碎片）。
-       放宽成：允许套一层子节点，匹配全部由 +/-/−/–/—/× 组成的1~2个字符短文本
-       （后来手机截图里"课程入口"旁边又出现了一个没清掉的×，一并加进白名单）。 */
+    /* 清除侧边栏工具栏残留：Streamlit 列宽调节控件（缩窄画面时才会触发）
+       会在"课程入口"这类列表旁边留下 +/−/× 之类的碎片文字，之前用的是
+       "精确列举已知符号"的白名单（+ - − – — × ✕ ✖），每次用户截图里
+       冒出个新变体就得再加一个，属于打地鼠。改成通用判断：不管具体是
+       什么符号，只要这个孤立碎片"一两个字符、里面没有任何文字/数字/中文"，
+       就判定是残留控件，直接隐藏——不用再枚举具体符号，以后再出现别的
+       符号变体也能兜住。 */
     function _hideSbPlus(){
         try{
             var sb=doc.querySelector('[data-testid="stSidebar"]');
@@ -391,7 +393,7 @@ try {
             sb.querySelectorAll('*').forEach(function(el){
                 if(el.childElementCount<=1){
                     var t=el.textContent.trim();
-                    if(t.length>0 && t.length<=2 && /^[+\-−–—×✕✖]+$/.test(t))
+                    if(t.length>0 && t.length<=2 && !/[a-zA-Z0-9一-鿿]/.test(t))
                         el.style.setProperty('display','none','important');
                 }
             });
