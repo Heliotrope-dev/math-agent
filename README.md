@@ -36,6 +36,9 @@ app.py                      # 入口：st.navigation 路由，只做这一件事
 _math_page.py                # 数学解题页：会话状态、主布局、Agent调用、UI渲染
 agent.py                    # ReAct 循环 + 多模型路由 + 答案自纠错
 tools.py                    # 三个工具（计算器 / 公式检索 / 步骤分解）+ 答案校验逻辑
+rag_formula_lookup.py        # formula_lookup 工具的语义检索实现（Ollama embedding）
+demo_rag_comparison.py       # 复现"公式notation混入embedding导致中文检索失效"bug
+                             #   的前后对比脚本（见下文"踩过的坑"）
 pages/
   2_知识库问答.py             # RAG 问答页（Streamlit 多页面）
 components/
@@ -140,7 +143,7 @@ python3 eval/run_verification_eval.py
 | 工具 | 实现 | 作用 |
 |---|---|---|
 | `calculator` | SymPy | 精确符号计算：求导、积分、极限、解方程、行列式 |
-| `formula_lookup` | 字符串匹配 + 相似度 | 从 60+ 公式库中检索相关定理 |
+| `formula_lookup` | 本地 Ollama embedding + 余弦相似度 | 从 60+ 公式库中语义检索相关定理（`rag_formula_lookup.py`） |
 | `step_decomposer` | LLM 推理 | 题型识别，生成解题路线图 |
 
 `calculator` 调用 SymPy 而非让模型心算，避免数值错误。表达式先过一层白名单正则 + 危险关键字黑名单（阻断 `sympify` 内部 `eval` 的注入路径），再丢进独立的 `ProcessPoolExecutor` 子进程执行，15 秒超时强制杀死——sympy 某些输入会导致计算挂死，只有整个进程被杀才能真正回收。
@@ -275,6 +278,40 @@ Streamlit 每次交互都用 React virtual-DOM diff 替换容器内容，KaTeX �
 **nginx 反代端口配错**
 
 部署后语音识别一直 pending，以为是 SiliconFlow API 问题，排查了半天。最后发现 nginx 配的是 8501，Streamlit 实际跑在 8502，请求根本没到应用层。
+
+**中文查询在公式检索里一分都搜不到，英文查询却能命中**
+
+`formula_lookup` 工具（`rag_formula_lookup.py`）用本地 Ollama 的 `nomic-embed-text`
+做语义检索，早期把"公式名 + 中文释义 + LaTeX notation"整段拼在一起做 embedding。
+中文自然语言提问（比如"两个函数相乘之后再求导，应该怎么算？"）检索不到"乘积法则"，
+但换成带公式符号的英文查询反而能命中。根因：`nomic-embed-text` 对中英混合、且被
+大量反斜杠/花括号这类 LaTeX 符号"稀释"过的文本，中文语义信号权重被拉得很低。
+
+**修复**：embedding 文本只保留纯中文语义描述（`{name}：{desc}`），LaTeX notation
+完全不参与向量化，只在检索命中后展示阶段才拼回结果里。`demo_rag_comparison.py`
+复现了这个对比——同一批公式分别用"混合版"和"分离版"两套文本建索引，跑同样的
+中文查询，打印两边 Top-5 排名和相似度分数的差异，能直接跑出来看效果而不用只
+读代码猜：
+
+```
+python3 demo_rag_comparison.py
+```
+
+**暗色模式下 KaTeX 公式变成看不见的黑色**
+
+切换到暗色主题后，数学公式渲染是渲染了，但颜色跟暗色背景一样是黑色系，等于
+看不见。KaTeX 渲染出的是 `<svg>`/`.katex` 节点，样式在 `path`/`svg` 层级，
+普通的文字颜色 CSS 规则盖不到这些矢量图形元素。修复：单独对 `.katex`、
+`.katex svg path`、`mjx-container svg` 这几层都显式覆盖 `color`/`fill`/`stroke`
+颜色（`components/ui_helpers.py` 暗色 CSS 部分），不能只改外层容器颜色。
+
+**移动端 Streamlit 原生侧边栏体验差，改成汉堡按钮+遮罩层覆盖**
+
+Streamlit 原生侧边栏在手机屏幕上收起时会在左边留一条挤占内容的窄栏，不是
+真正的"滑出覆盖"效果。改成自己实现：侧边栏 `position: fixed` + `translateX(-100%)`
+默认隐藏在屏幕外，注入一个悬浮的汉堡按钮和半透明遮罩层，点击后侧边栏平移
+滑入、遮罩淡入，点遮罩或侧边栏内按钮延迟关闭。这是手机端后续那两个具体
+渲染 bug（文字截断、关闭后顶部卡住不重绘，见前面条目）的原始设计基础。
 
 **Fable 5 子 Agent 在 VPS 上直接改文件**
 
