@@ -74,28 +74,28 @@ class RAGEngine:
             vectors.extend(d["embedding"] for d in data)
         return vectors
 
-    def add_documents(self, chunks: list[dict], source_name: str) -> int:
+    def add_documents(self, chunks: list[dict], source_name: str, user: str) -> int:
         if not chunks:
             return 0
-        self.delete_document(source_name)
+        self.delete_document(source_name, user)
         embeddings = self.embed_texts([c["text"] for c in chunks])
         self.collection.add(
             ids=[c["chunk_id"] for c in chunks],
             embeddings=embeddings,
             documents=[c["text"] for c in chunks],
-            metadatas=[{"source": c["source"], "page": c["page"]} for c in chunks],
+            metadatas=[{"source": c["source"], "page": c["page"], "user": user} for c in chunks],
         )
         return len(chunks)
 
-    def delete_document(self, source_name: str) -> None:
+    def delete_document(self, source_name: str, user: str) -> None:
         try:
-            self.collection.delete(where={"source": source_name})
+            self.collection.delete(where={"$and": [{"source": source_name}, {"user": user}]})
         except Exception as e:
-            _log.warning("删除文档 %s 失败: %s", source_name, e)
+            _log.warning("删除文档 %s（用户 %s）失败: %s", source_name, user, e)
 
-    def list_documents(self) -> dict[str, int]:
+    def list_documents(self, user: str) -> dict[str, int]:
         try:
-            records = self.collection.get(include=["metadatas"])
+            records = self.collection.get(where={"user": user}, include=["metadatas"])
         except Exception as e:
             _log.warning("读取文档列表失败: %s", e)
             return {}
@@ -105,13 +105,23 @@ class RAGEngine:
             counts[src] = counts.get(src, 0) + 1
         return counts
 
-    def query(self, question: str, top_k: int = _TOP_K) -> list[dict]:
-        if self.collection.count() == 0:
+    def user_chunk_count(self, user: str) -> int:
+        try:
+            records = self.collection.get(where={"user": user}, include=[])
+        except Exception as e:
+            _log.warning("统计用户文档数失败: %s", e)
+            return 0
+        return len(records.get("ids") or [])
+
+    def query(self, question: str, user: str, top_k: int = _TOP_K) -> list[dict]:
+        n_available = self.user_chunk_count(user)
+        if n_available == 0:
             return []
         vector = self.embed_texts([question])[0]
         result = self.collection.query(
             query_embeddings=[vector],
-            n_results=min(top_k, self.collection.count()),
+            n_results=min(top_k, n_available),
+            where={"user": user},
             include=["documents", "metadatas", "distances"],
         )
         chunks = []

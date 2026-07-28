@@ -79,24 +79,31 @@ if not st.session_state.get("logged_in", False):
     st.page_link("_math_page.py", label="← 返回登录", use_container_width=False)
     st.stop()
 
+# 知识库按用户隔离，user_email 为空说明登录态异常，不能退化成共享桶
+_user = st.session_state.get("user_email", "")
+if not _user:
+    st.error("登录状态异常，请重新登录后再使用知识库。")
+    st.page_link("_math_page.py", label="← 返回登录", use_container_width=False)
+    st.stop()
+
 
 @st.cache_resource
 def get_engine() -> RAGEngine:
     return RAGEngine()
 
 
-def _ingest_file(engine: RAGEngine, uploaded) -> int:
+def _ingest_file(engine: RAGEngine, uploaded, user: str) -> int:
     file_bytes = uploaded.getvalue()
     name = uploaded.name
     if name.lower().endswith(".pdf"):
         docs = parse_pdf(file_bytes, name)
     else:
         docs = parse_txt(file_bytes, name)
-    chunks = chunk_documents(docs)
-    return engine.add_documents(chunks, name)
+    chunks = chunk_documents(docs, user)
+    return engine.add_documents(chunks, name, user)
 
 
-def render_sidebar(engine: RAGEngine) -> None:
+def render_sidebar(engine: RAGEngine, user: str) -> None:
     with st.sidebar:
         st.page_link("_math_page.py", label="← 数学解题", use_container_width=True)
         st.divider()
@@ -127,7 +134,7 @@ def render_sidebar(engine: RAGEngine) -> None:
             for i, f in enumerate(uploaded_files):
                 progress.progress(i / len(uploaded_files), text=f"正在处理 {f.name}…")
                 try:
-                    total_chunks += _ingest_file(engine, f)
+                    total_chunks += _ingest_file(engine, f, user)
                 except Exception as e:
                     errors.append(f"{f.name}：{e}")
             progress.progress(1.0, text="处理完成")
@@ -139,18 +146,18 @@ def render_sidebar(engine: RAGEngine) -> None:
 
         st.divider()
         st.caption("已上传文档")
-        doc_counts = engine.list_documents()
+        doc_counts = engine.list_documents(user)
         if not doc_counts:
             st.caption("（暂无文档）")
         for source, count in sorted(doc_counts.items()):
             col_name, col_del = st.columns([4, 1])
             col_name.markdown(f"**{source}**  \n{count} 段落")
             if col_del.button("删除", key=f"del::{source}", help=f"删除 {source}"):
-                engine.delete_document(source)
+                engine.delete_document(source, user)
                 st.rerun()
 
 
-def render_chat(engine: RAGEngine) -> None:
+def render_chat(engine: RAGEngine, user: str) -> None:
     st.markdown("""
     <div style="padding:16px 0 8px">
         <div style="font-size:1.6rem;font-weight:600;letter-spacing:-0.01em;margin-bottom:4px">知识库问答</div>
@@ -158,7 +165,7 @@ def render_chat(engine: RAGEngine) -> None:
     </div>
     """, unsafe_allow_html=True)
 
-    if engine.collection.count() == 0:
+    if engine.user_chunk_count(user) == 0:
         st.info("请先在左侧上传文档")
 
     if "rag_messages" not in st.session_state:
@@ -196,7 +203,7 @@ def render_chat(engine: RAGEngine) -> None:
     st.markdown('<div class="asst-bubble-marker"></div>', unsafe_allow_html=True)
     with st.spinner("检索知识库并生成回答…"):
         try:
-            chunks = engine.query(question)
+            chunks = engine.query(question, user)
             answer = engine.generate_answer(question, chunks, st.session_state.rag_messages[:-1])
         except Exception as e:
             answer = f"出错：{e}"
@@ -216,5 +223,5 @@ def render_chat(engine: RAGEngine) -> None:
 
 
 engine = get_engine()
-render_sidebar(engine)
-render_chat(engine)
+render_sidebar(engine, _user)
+render_chat(engine, _user)

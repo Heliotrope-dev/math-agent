@@ -124,7 +124,7 @@ def _split_long_text(text: str, chunk_size: int, overlap: int) -> list[str]:
     return [p.strip() for p in pieces if p.strip()]
 
 
-def chunk_documents(docs: list[dict], chunk_size: int = 500, overlap: int = 50) -> list[dict]:
+def chunk_documents(docs: list[dict], user: str, chunk_size: int = 500, overlap: int = 50) -> list[dict]:
     chunks = []
     for doc in docs:
         for piece in _split_long_text(doc["text"], chunk_size, overlap):
@@ -132,6 +132,8 @@ def chunk_documents(docs: list[dict], chunk_size: int = 500, overlap: int = 50) 
                 "text":     piece,
                 "source":   doc["source"],
                 "page":     doc["page"],
-                "chunk_id": f"{doc['source']}::p{doc['page']}::c{len(chunks)}",
+                "user":     user,
+                # user 前缀避免不同用户上传同名文件时 chunk_id 在 Chroma 里撞车
+                "chunk_id": f"{user}::{doc['source']}::p{doc['page']}::c{len(chunks)}",
             })
     return chunks
