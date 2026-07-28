@@ -805,6 +805,21 @@ def _run_step_decomposer(problem_type: str, problem: str) -> str:
 # 4. 可视化工具实现
 # ─────────────────────────────────────────
 
+def _plot_eval_impl(expr_str: str, xmin: float, xmax: float) -> tuple:
+    """在子进程中解析并求值单条曲线——跟 calculator 走同一个安全沙箱/进程池/超时，
+    避免 plot_function 成为绕开 _check_expr_safe 的另一个攻击面。"""
+    import numpy as np
+    import sympy as sp
+    x_sym = sp.Symbol("x")
+    sym_expr = sp.sympify(expr_str.replace("^", "**"))
+    fn = sp.lambdify(x_sym, sym_expr, "numpy")
+    x_arr = np.linspace(xmin, xmax, 2000)
+    y_arr = np.array(fn(x_arr), dtype=complex)
+    y_arr = np.real(y_arr)
+    y_arr[np.abs(y_arr) > 1e5] = np.nan
+    return x_arr.tolist(), y_arr.tolist(), sp.latex(sym_expr)
+
+
 def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
                        title="", labels=None) -> str:
     try:
@@ -839,22 +854,27 @@ def _run_plot_function(expressions, xmin=-10, xmax=10, ymin=None, ymax=None,
         # 多条曲线用实线/虚线/点划线区分，颜色只用深色系
         line_styles = ["-", "--", "-.", ":"]
         colors = ["#1a1a1a", "#2255aa", "#cc2200", "#228833", "#aa44bb"]
-        x_sym = sp.Symbol("x")
-        x_arr = np.linspace(float(xmin), float(xmax), 2000)
+        _xmin, _xmax = float(xmin), float(xmax)
 
         for i, expr_str in enumerate(expressions):
+            err = _check_expr_safe(expr_str)
+            if err:
+                ax.text(0.05, 0.95 - i * 0.07, f"表达式被拒绝: {expr_str}（{err}）",
+                        transform=ax.transAxes, fontsize=9, color="red")
+                continue
             try:
-                sym_expr = sp.sympify(expr_str.replace("^", "**"))
-                fn = sp.lambdify(x_sym, sym_expr, "numpy")
-                y_arr = np.array(fn(x_arr), dtype=complex)
-                y_arr = np.real(y_arr)
-                y_arr[np.abs(y_arr) > 1e5] = np.nan
+                fut = _CALC_POOL.submit(_plot_eval_impl, expr_str, _xmin, _xmax)
+                x_list, y_list, latex_expr = fut.result(timeout=_CALC_TIMEOUT)
+                x_arr, y_arr = np.array(x_list), np.array(y_list)
                 lbl = (labels[i] if labels and i < len(labels)
-                       else f"$y = {sp.latex(sym_expr)}$")
+                       else f"$y = {latex_expr}$")
                 ax.plot(x_arr, y_arr,
                         color=colors[i % len(colors)],
                         linestyle=line_styles[i % len(line_styles)],
                         lw=1.8, label=lbl)
+            except _FutTimeout:
+                ax.text(0.05, 0.95 - i * 0.07, f"计算超时: {expr_str}",
+                        transform=ax.transAxes, fontsize=9, color="red")
             except Exception as e:
                 ax.text(0.05, 0.95 - i * 0.07, f"解析失败: {expr_str}",
                         transform=ax.transAxes, fontsize=9, color="red")
