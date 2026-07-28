@@ -60,7 +60,10 @@ def _show_login_page():
                 _ok, _msg = _check_user(_em, _pw)
                 if _ok:
                     _tok = _create_token(_em)
-                    st.query_params["_auth"] = _tok
+                    # token 不写进 st.query_params——7天免登录凭证常驻在可见地址栏里，
+                    # 会被 Nginx access log、浏览器历史、分享链接截图之类的场景明文留存。
+                    # 当前会话靠 session_state 维持登录态就够了；下次重新打开浏览器时
+                    # 由下面"URL 参数持久化"那段从 localStorage 桥接回来、验证完立刻清除。
                     st.session_state["logged_in"] = True
                     st.session_state["user_email"] = _em
                     st.session_state["_token"] = _tok
@@ -425,6 +428,8 @@ try {
 """, height=1)
 
 # ── URL 参数持久化（7 天免登录）──────────────────────────────────────────────
+# _auth 只是"把 localStorage 里的 token 桥接进这次全新的 Streamlit 会话"用的
+# 一次性载体——校验通过立刻从可见地址栏删掉，不常驻 URL（原理见登录按钮那段注释）。
 _stored_token = st.query_params.get("_auth", "") or ""
 if _stored_token and not st.session_state.get("logged_in"):
     _auto_email = _validate_token(_stored_token)
@@ -432,6 +437,10 @@ if _stored_token and not st.session_state.get("logged_in"):
         st.session_state["logged_in"] = True
         st.session_state["user_email"] = _auto_email
         st.session_state["_token"] = _stored_token
+        try:
+            del st.query_params["_auth"]
+        except Exception:
+            pass
     else:
         try:
             del st.query_params["_auth"]
