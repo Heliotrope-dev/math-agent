@@ -15,9 +15,6 @@ OCR_MODEL             = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 # 额外处理 reasoning_content 传递）是后续单独评估的事，不在这次改动里。
 DEFAULT_MODEL = "deepseek-v4-flash"
 
-# ── 管理员 ────────────────────────────────────────────────────────────────────
-ADMIN_EMAIL = "a13989358483@gmail.com"
-
 
 def get_secret(key: str) -> str:
     try:
