@@ -216,6 +216,34 @@ def _register_user(email: str, pw_hash: str):
     _sb_post("users", {"email": email, "password_hash": pw_hash})
 
 
+# ── 按用户每日调用配额 ───────────────────────────────────────────────────────
+# 防止 token 泄露（或者单纯有人手滑无限重试）后无限制调用 DeepSeek/SiliconFlow
+# 这类按量计费的 API。存在读了再写的极小并发竞态（同一账号同一瞬间发起多个
+# 请求可能都读到旧计数，多算漏算个别次数）——对当前个人使用量级可以接受，
+# 不为这个引入额外的 Postgres RPC 函数。
+
+_DAILY_QUOTA = 50
+
+
+def check_and_bump_usage(email: str) -> tuple[bool, str]:
+    """返回 (是否允许本次调用, 超限时的提示文案)。"""
+    if not email:
+        return True, ""  # 未登录状态调不到这里，保守放行不做拦截
+    today = datetime.now(timezone.utc).date().isoformat()
+    rows = _sb_get("usage_daily", {
+        "email": f"eq.{email}", "day": f"eq.{today}", "select": "call_count",
+    })
+    count = rows[0]["call_count"] if rows else 0
+    if count >= _DAILY_QUOTA:
+        return False, f"今天的调用次数已经用完（每天限 {_DAILY_QUOTA} 次，UTC 0点重置），明天再来试试～"
+    if rows:
+        _sb_patch("usage_daily", {"call_count": count + 1},
+                  {"email": f"eq.{email}", "day": f"eq.{today}"})
+    else:
+        _sb_post("usage_daily", {"email": email, "day": today, "call_count": 1})
+    return True, ""
+
+
 def _create_token(email: str) -> str:
     token = _secrets.token_urlsafe(32)
     # 显式用带时区的UTC——跟_check_user的锁定时间比较是同一个坑：裸datetime.now()

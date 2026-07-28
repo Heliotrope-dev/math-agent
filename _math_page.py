@@ -36,6 +36,7 @@ from components.auth import (
     _register_user, _create_token, _validate_token,
     _load_wrong_book, _save_wrong_book,
     _save_message, _load_recent_messages,
+    check_and_bump_usage,
 )
 from components.ui_helpers import _BASE_CSS, _DARK_CSS
 from components.config import get_secret, DEFAULT_MODEL
@@ -1337,28 +1338,34 @@ if user_input:
                 _agent = get_agent(_solve_local, _solve_model, guide_mode=_use_guide)
 
                 buf = StringIO()
-                try:
-                    with contextlib.redirect_stdout(buf):
-                        stream = _agent.solve_stream(
-                            solve_input, history=solve_history,
-                            on_tool_call=on_tool_call, image_bytes=_img_bytes,
-                        )
-                    err = None
-                except Exception as exc:
-                    import traceback
-                    err_str = str(exc).lower()
-                    if "timeout" in err_str or "504" in err_str:
-                        friendly = "⏱️ 模型响应超时，请稍后重试或换一道题"
-                    elif "429" in err_str or "rate" in err_str:
-                        friendly = "⏳ 请求过于频繁，请等待几秒再试"
-                    elif "401" in err_str or "unauthorized" in err_str or "key" in err_str:
-                        friendly = "API Key 配置异常，请联系管理员"
-                    elif "502" in err_str or "503" in err_str:
-                        friendly = "模型服务暂时不可用，请稍后重试"
-                    else:
-                        friendly = f"解题出错：{str(exc)[:80]}"
-                    stream, err = None, friendly
-                    status.update(label="出错了", state="error", expanded=True)
+                # 每日调用配额：防止 token 泄露/无限重试后无限制烧付费API的钱
+                _quota_ok, _quota_msg = check_and_bump_usage(st.session_state.get("user_email", ""))
+                if not _quota_ok:
+                    stream, err = None, _quota_msg
+                    status.update(label="今日额度已用完", state="error", expanded=True)
+                else:
+                    try:
+                        with contextlib.redirect_stdout(buf):
+                            stream = _agent.solve_stream(
+                                solve_input, history=solve_history,
+                                on_tool_call=on_tool_call, image_bytes=_img_bytes,
+                            )
+                        err = None
+                    except Exception as exc:
+                        import traceback
+                        err_str = str(exc).lower()
+                        if "timeout" in err_str or "504" in err_str:
+                            friendly = "⏱️ 模型响应超时，请稍后重试或换一道题"
+                        elif "429" in err_str or "rate" in err_str:
+                            friendly = "⏳ 请求过于频繁，请等待几秒再试"
+                        elif "401" in err_str or "unauthorized" in err_str or "key" in err_str:
+                            friendly = "API Key 配置异常，请联系管理员"
+                        elif "502" in err_str or "503" in err_str:
+                            friendly = "模型服务暂时不可用，请稍后重试"
+                        else:
+                            friendly = f"解题出错：{str(exc)[:80]}"
+                        stream, err = None, friendly
+                        status.update(label="出错了", state="error", expanded=True)
                 if not err:
                     status.update(label="完成", state="complete", expanded=False)
 

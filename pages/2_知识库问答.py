@@ -19,6 +19,7 @@ from components.config import get_secret
 from components.ui_helpers import _BASE_CSS, _DARK_CSS
 from components.rag_engine import RAGEngine
 from components.rag_ingest import chunk_documents, parse_pdf, parse_txt
+from components.auth import check_and_bump_usage
 
 _dm = st.session_state.get("dark_mode", False)
 st.markdown(_BASE_CSS + (_DARK_CSS if _dm else ""), unsafe_allow_html=True)
@@ -201,13 +202,17 @@ def render_chat(engine: RAGEngine, user: str) -> None:
     st.session_state.rag_messages.append({"role": "user", "content": question})
 
     st.markdown('<div class="asst-bubble-marker"></div>', unsafe_allow_html=True)
-    with st.spinner("检索知识库并生成回答…"):
-        try:
-            chunks = engine.query(question, user)
-            answer = engine.generate_answer(question, chunks, st.session_state.rag_messages[:-1])
-        except Exception as e:
-            answer = f"出错：{e}"
-            chunks = []
+    _quota_ok, _quota_msg = check_and_bump_usage(user)
+    if not _quota_ok:
+        answer, chunks = _quota_msg, []
+    else:
+        with st.spinner("检索知识库并生成回答…"):
+            try:
+                chunks = engine.query(question, user)
+                answer = engine.generate_answer(question, chunks, st.session_state.rag_messages[:-1])
+            except Exception as e:
+                answer = f"出错：{e}"
+                chunks = []
 
     st.markdown(answer)
     if chunks:
