@@ -241,12 +241,19 @@ def _invalidate_token(token: str):
 # 一百多KB），个人使用量级不会让表明显膨胀，用户明确要求上传的图片以后
 # 还能点开看，所以存。
 
-def _save_message(email: str, role: str, content: str, image_b64: str = "") -> bool:
+def _save_message(
+    email: str, role: str, content: str, image_b64: str = "",
+    mindmaps: list | None = None, images: list | None = None,
+) -> bool:
     if not email or not content:
         return False
     payload = {"email": email, "role": role, "content": content}
     if image_b64:
         payload["image_b64"] = image_b64
+    if mindmaps:
+        payload["mindmaps"] = mindmaps
+    if images:
+        payload["images"] = images
     return _sb_post("chat_messages", payload)
 
 
@@ -254,9 +261,12 @@ def _load_recent_messages(email: str, limit: int = 20) -> list:
     if not email:
         return []
     rows = _sb_get("chat_messages", {
-        "email": f"eq.{email}", "select": "role,content,image_b64",
+        "email": f"eq.{email}", "select": "role,content,image_b64,mindmaps,images",
         "order": "created_at.desc", "limit": str(limit),
     })
+    for row in rows:
+        row["mindmaps"] = row.get("mindmaps") or []
+        row["images"] = row.get("images") or []
     return list(reversed(rows))
 
 

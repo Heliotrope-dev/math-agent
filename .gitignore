@@ -9,3 +9,7 @@ sessions.json
 user_data/
 *.webloc
 eval/results_*.json
+venv/
+data/chroma_db/
+*.bak
+*.bak[0-9]

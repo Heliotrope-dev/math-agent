@@ -1435,5 +1435,9 @@ if user_input:
         "practice": practice, "images": _new_images if stream is not None else [],
         "mindmaps": _new_mindmaps if stream is not None else [],
     })
-    _save_message(st.session_state.get("user_email", ""), "assistant", answer)
+    _save_message(
+        st.session_state.get("user_email", ""), "assistant", answer,
+        mindmaps=_new_mindmaps if stream is not None else [],
+        images=_new_images if stream is not None else [],
+    )
     st.rerun()  # 刷新让欢迎页消失、聊天历史正确显示
