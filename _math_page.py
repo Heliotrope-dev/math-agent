@@ -107,6 +107,30 @@ if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("SILICONFLOW_API_KE
 
 # ── localStorage 读取（关闭浏览器后用桌面快捷打开也能恢复登录）─────────────
 # 总是渲染，让 Streamlit 组件树稳定；JS 内部判断是否需要注入
+#
+# 桥接段（第1段）只在本次 session 还没登录时才拼进去——之前不管有没有登录都
+# 无条件塞进这段脚本，而 session_state["logged_in"] 置位后 localStorage 里的
+# token 从来没清过，导致往后每一次 rerun（发消息、点按钮……）这段代码都会
+# 重新把 token 塞回 URL、800ms 后又强制 location.replace() 硬刷新一次页面——
+# 表现出来就是登录后网页反复自己刷新。session_state 里已经 logged_in 时，
+# 直接把桥接逻辑跳过，只保留跟登录状态无关的加载遮罩/睡眠唤醒重连两段。
+_BRIDGE_JS = """
+    // ── 1. localStorage 自动登录 ──────────────────────────────────
+    var url = new URL(window.parent.location.href);
+    if (!url.searchParams.get('_auth')) {
+        var t = window.parent.localStorage.getItem('ma_auth_tok');
+        if (t) {
+            url.searchParams.set('_auth', t);
+            window.parent.history.replaceState(null, '', url.toString());
+            setTimeout(function() {
+                if (!new URL(window.parent.location.href).searchParams.get('_auth')) return;
+                window.parent.sessionStorage.setItem("ma_reloaded", "1");
+                window.parent.location.replace(url.toString());
+            }, 800);
+        }
+    }
+""" if not st.session_state.get("logged_in") else ""
+
 import streamlit.components.v1 as _cv1
 _cv1.html("""
 <script>
@@ -145,20 +169,7 @@ try {
 } catch(e2) {}
 
 try {
-    // ── 1. localStorage 自动登录 ──────────────────────────────────
-    var url = new URL(window.parent.location.href);
-    if (!url.searchParams.get('_auth')) {
-        var t = window.parent.localStorage.getItem('ma_auth_tok');
-        if (t) {
-            url.searchParams.set('_auth', t);
-            window.parent.history.replaceState(null, '', url.toString());
-            setTimeout(function() {
-                if (!new URL(window.parent.location.href).searchParams.get('_auth')) return;
-                window.parent.sessionStorage.setItem("ma_reloaded", "1");
-                window.parent.location.replace(url.toString());
-            }, 800);
-        }
-    }
+    __BRIDGE_JS_PLACEHOLDER__
 
     // ── 2. 睡眠唤醒后自动重连 ────────────────────────────────────
     // 记录最后一次页面可见时间
@@ -180,7 +191,7 @@ try {
 } catch(e) {}
 })();
 </script>
-""", height=1)
+""".replace("__BRIDGE_JS_PLACEHOLDER__", _BRIDGE_JS), height=1)
 
 # ── KaTeX 数学公式渲染（比 Streamlit 内置 MathJax 更稳定）────────────────────
 _cv1.html("""
