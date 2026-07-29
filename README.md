@@ -4,8 +4,6 @@
 
 线上地址：**[math.heliotrope.online](https://math.heliotrope.online)**
 
-同一套账号体系下还有一个姊妹项目 [Invest Agent](https://invest.heliotrope.online)（多市场行情 + AI 交叉验证分析），两个项目共用同一个 Supabase 账号系统。
-
 ---
 
 ## 功能
