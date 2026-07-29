@@ -146,8 +146,12 @@ def render_sidebar() -> None:
                     _wc1, _wc2 = st.columns(2)
                     with _wc1:
                         if st.button("讲解", key=f"weak_explain_{_w['topic']}", use_container_width=True):
+                            # 之前这里有 st.session_state.messages = []——点"讲解/练习"会把
+                            # 当前聊天记录整个清空再开始新一轮，用户反馈"一点讲解历史聊天
+                            # 全没了"。欢迎页那边等价的"薄弱知识点"按钮（_math_page.py里）
+                            # 从来没有清空过，是直接把新问题追加到现有对话里——这里改成
+                            # 跟那边一致，只切课程上下文、不清空对话历史。
                             st.session_state["current_course"] = _w.get("course", "")
-                            st.session_state.messages = []
                             st.session_state["_direct_input"] = (
                                 f"【知识点讲解】{_w.get('course','')} · {_w['topic']}"
                             )
@@ -160,7 +164,6 @@ def render_sidebar() -> None:
                         if st.button("练习", key=f"weak_practice_{_w['topic']}", use_container_width=True,
                                      type="primary"):
                             st.session_state["current_course"] = _w.get("course", "")
-                            st.session_state.messages = []
                             st.session_state["_direct_input"] = (
                                 f"请针对『{_w.get('course','')} · {_w['topic']}』这个薄弱知识点，"
                                 "出一道练习题给我做（只出题，不要解答），标注题型和难度。"
