@@ -28,7 +28,7 @@ def render_sidebar() -> None:
 
     # ── 用户信息 + 退出 ──────────────────────────────────────────────────────
     st.markdown(
-        f'<p class="sb-email" style="font-size:0.75rem;color:#888;margin:10px 0 10px">{_uemail_safe}</p>',
+        f'<p class="sb-email" style="font-size:0.75rem;color:var(--text-muted);margin:10px 0 10px">{_uemail_safe}</p>',
         unsafe_allow_html=True,
     )
     _sb_top_left, _sb_top_right = st.columns([2, 1])
@@ -55,13 +55,13 @@ def render_sidebar() -> None:
             st.rerun()
 
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
-    st.page_link("pages/2_知识库问答.py", label="知识库问答", use_container_width=True)
+    st.page_link("pages/2_知识库问答.py", label="知识库问答 →", use_container_width=True)
     st.divider()
 
     # ── 最近问题（最多显示20条）─────────────────────────────────────────────
     _user_msgs = [m.get("display", m["content"]) for m in st.session_state.messages if m["role"] == "user"]
     if _user_msgs:
-        st.markdown('<p class="sb-label" style="font-size:0.75rem;color:#888;margin:0 0 6px">最近问题</p>',
+        st.markdown('<p class="sb-label" style="font-size:0.75rem;color:var(--text-muted);margin:0 0 6px">最近问题</p>',
                     unsafe_allow_html=True)
         for _qi, _q in enumerate(_user_msgs[-20:]):
             _q_short = _q[:28] + "…" if len(_q) > 28 else _q

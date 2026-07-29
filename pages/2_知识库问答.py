@@ -219,7 +219,7 @@ def render_chat(engine: RAGEngine, user: str) -> None:
         with st.expander(f"参考来源（{len(chunks)} 条）"):
             for i, c in enumerate(chunks, 1):
                 st.markdown(f"**{i}. {c['source']} · 第{c['page']}页** （相关度 {1 - c['distance']:.0%}）")
-                st.text(c["text"][:400] + ("…" if len(c["text"]) > 400 else ""))
+                st.markdown(f'<p style="font-size:0.8rem;color:var(--text-muted);line-height:1.6;margin:4px 0 0">{c["text"][:400]}{"…" if len(c["text"]) > 400 else ""}</p>', unsafe_allow_html=True)
 
     st.session_state.rag_messages.append(
         {"role": "assistant", "content": answer, "chunks": chunks}

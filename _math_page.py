@@ -928,7 +928,7 @@ if not st.session_state.messages:
                     st.session_state["_direct_input"] = st.session_state.wrong_book[-1]["question"]
                     st.rerun()
             if _weak:
-                st.markdown('<p style="font-size:0.8rem;color:#888;margin:10px 0 4px">薄弱知识点</p>', unsafe_allow_html=True)
+                st.markdown('<p style="font-size:0.8rem;color:var(--text-muted);margin:10px 0 4px">薄弱知识点</p>', unsafe_allow_html=True)
                 _wcols = st.columns(2, gap="small")
                 for _wi, _w in enumerate(_weak[:4]):
                     with _wcols[_wi % 2]:
@@ -1020,7 +1020,7 @@ for i, msg in enumerate(st.session_state.messages):
                 st.rerun()
         if msg.get("practice"):
             st.markdown(
-                '<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">同类练习题</p>',
+                '<p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 2px">同类练习题</p>',
                 unsafe_allow_html=True,
             )
             if st.button(msg["practice"], key=f"practice_{i}", use_container_width=True):
@@ -1033,8 +1033,8 @@ for i, msg in enumerate(st.session_state.messages):
             st.markdown(
                 f'<div style="margin:8px 0">'
                 f'<img src="data:image/png;base64,{_img["b64"]}" '
-                f'style="width:100%;border-radius:6px;border:1px solid #DDD;" />'
-                + (f'<p style="text-align:center;font-size:0.78rem;color:#888;margin:4px 0">{_cap}</p>' if _cap else '')
+                f'style="width:100%;border-radius:6px;border:1px solid var(--border);" />'
+                + (f'<p style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin:4px 0">{_cap}</p>' if _cap else '')
                 + '</div>',
                 unsafe_allow_html=True,
             )
@@ -1432,7 +1432,7 @@ if user_input:
                                     st.session_state["_direct_input"] = f"请详细讲解「{_ntag}」：定义、推导过程和典型例题"
                     if practice:
                         st.markdown(
-                            f'<p style="font-size:0.8rem;color:#888;margin:6px 0 2px">同类练习题</p>',
+                            f'<p style="font-size:0.8rem;color:var(--text-muted);margin:6px 0 2px">同类练习题</p>',
                             unsafe_allow_html=True,
                         )
                         if st.button(practice, key="practice_new", use_container_width=True):
@@ -1457,8 +1457,8 @@ if user_input:
                 st.markdown(
                     f'<div style="margin:8px 0">'
                     f'<img src="data:image/png;base64,{_img["b64"]}" '
-                    f'style="width:100%;border-radius:6px;border:1px solid #DDD;" />'
-                    + (f'<p style="text-align:center;font-size:0.78rem;color:#888;margin:4px 0">{_cap}</p>' if _cap else '')
+                    f'style="width:100%;border-radius:6px;border:1px solid var(--border);" />'
+                    + (f'<p style="text-align:center;font-size:0.78rem;color:var(--text-muted);margin:4px 0">{_cap}</p>' if _cap else '')
                     + '</div>',
                     unsafe_allow_html=True,
                 )
