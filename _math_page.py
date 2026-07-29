@@ -449,10 +449,16 @@ if _stored_token and not st.session_state.get("logged_in"):
         st.session_state["logged_in"] = True
         st.session_state["user_email"] = _auto_email
         st.session_state["_token"] = _stored_token
-        try:
-            del st.query_params["_auth"]
-        except Exception:
-            pass
+        # 这里之前加过 del st.query_params["_auth"]（校验成功立刻从地址栏删掉
+        # token，出发点是安全加固），但实测会在"未登录判断/桥接JS"跟"token
+        # 校验"两段代码的时序之间制造一个新的自动rerun——桥接JS那段判断
+        # session_state.logged_in 的时机在脚本更靠前的位置，早于这里token
+        # 校验真正置位logged_in的时刻，query_params的这次额外删除动作触发的
+        # 重跑会让桥接脚本在某些时序下又判断成"还没登录"，重新往复触发"取
+        # localStorage token→塞进URL→800ms后强制刷新"，实测导致登录后网页
+        # 陷入固定几秒一次的无限刷新。安全性和"网站能正常用"冲突时选后者，
+        # 撤回这个删除动作，token继续留在URL里（7天有效期本身没变，只是
+        # 又变回常驻地址栏，跟这次改动前的行为一致）。
     else:
         try:
             del st.query_params["_auth"]
