@@ -56,9 +56,12 @@ def _show_login_page():
             _em = st.text_input("邮箱", key="li_email", placeholder="your@email.com")
             _pw = st.text_input("密码", type="password", key="li_pw")
             if st.button("登录", type="primary", use_container_width=True, key="do_login"):
-                # 失败次数/锁定时间存在 users 表里（跨会话/跨设备生效，不是
-                # 存在 session_state 里换个隐身窗口就能绕开的锁定）
-                _ok, _msg = _check_user(_em, _pw)
+                # 实测：Supabase REST 往返（校验+锁定判断）大约要 2~3 秒，按钮点下去
+                # 之前完全没有任何视觉反馈，用户会怀疑"是不是没点上"。加个 spinner。
+                with st.spinner("登录中…"):
+                    # 失败次数/锁定时间存在 users 表里（跨会话/跨设备生效，不是
+                    # 存在 session_state 里换个隐身窗口就能绕开的锁定）
+                    _ok, _msg = _check_user(_em, _pw)
                 if _ok:
                     _tok = _create_token(_em)
                     # token 不写进 st.query_params——7天免登录凭证常驻在可见地址栏里，
@@ -87,14 +90,18 @@ def _show_login_page():
                     st.error("密码至少6位")
                 elif _rpw != _rpw2:
                     st.error("两次密码不一致")
-                elif _user_exists(_rem):
-                    st.error("该邮箱已注册")
                 else:
-                    try:
-                        _register_user(_rem, _hash_pw(_rpw))
-                        st.success("注册成功，请切换到登录标签页")
-                    except Exception as _e:
-                        st.error(f"注册失败：{_e}")
+                    with st.spinner("注册中…"):
+                        # PBKDF2(100000轮) + 两次 Supabase 往返（查重+插入）实测
+                        # 加起来要几秒，同样加个 spinner，不然按钮点下去像没反应。
+                        if _user_exists(_rem):
+                            st.error("该邮箱已注册")
+                        else:
+                            try:
+                                _register_user(_rem, _hash_pw(_rpw))
+                                st.success("注册成功，请切换到登录标签页")
+                            except Exception as _e:
+                                st.error(f"注册失败：{_e}")
 
 # ── 启动环境校验：至少配置一个云端 API Key，否则友好提示而非运行时崩溃 ────────
 if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("SILICONFLOW_API_KEY")):
@@ -552,6 +559,12 @@ def get_agent(use_local, model, guide_mode=False):
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 # fix_latex 挪到 tools.py 了（sidebar.py 的错题本也要用，两边都能安全 import 那里）
 
+def _esc_html(s: str) -> str:
+    """塞进 unsafe_allow_html 前的转义。之前各处气泡是 .replace("<","&lt;").replace(">","&gt;")，
+    唯独漏了 & ——跟 sidebar.py 邮箱转义（&先转）不一致，统一成一个helper。"""
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _clean_tag(t: str) -> str:
     """去掉 LaTeX/markdown，保留纯文字知识点名，截断至 20 字。"""
     t = re.sub(r'\$\$[\s\S]*?\$\$', '', t)
@@ -577,7 +590,7 @@ def extract_practice(text):
     practice = match.group(1).strip()
     return text[:match.start()].rstrip(), practice
 
-def _summarize_wrongbook_entry(question: str, answer: str) -> str:
+def _summarize_wrongbook_entry(question: str, answer: str, email: str = "") -> str:
     """把"存入错题本"的条目总结成独立可读的格式：[学科] 知识点：完整题目。
 
     question 有时只是用户当时的简短指代（拍图配的"第六题"这种），题目的
@@ -591,6 +604,13 @@ def _summarize_wrongbook_entry(question: str, answer: str) -> str:
     """
     key = get_secret("DEEPSEEK_API_KEY")
     if not key:
+        return question
+    # 之前这里完全绕开了每日调用配额——check_and_bump_usage 存在的目的就是
+    # 防止无限制调用按量计费的 API，这里没接等于配额形同虚设：反复点"存入
+    # 错题本"可以无限次触发付费调用。超额时直接退化成用原始 question（跟
+    # 没配置 DEEPSEEK_API_KEY 时的降级行为一致），不阻断"存错题本"这个操作本身。
+    _quota_ok, _ = check_and_bump_usage(email)
+    if not _quota_ok:
         return question
     try:
         import httpx
@@ -995,7 +1015,7 @@ for i, msg in enumerate(st.session_state.messages):
                 f'style="max-width:180px;border-radius:8px;margin-bottom:6px;display:block">'
             )
         _disp_txt = msg.get("display", msg["content"])
-        _safe_txt = _disp_txt.replace("<", "&lt;").replace(">", "&gt;")
+        _safe_txt = _esc_html(_disp_txt)
         st.markdown(
             f'<div class="msg-row-user">'
             f'<div class="bubble-user">{_img_html}{_safe_txt}</div>'
@@ -1038,6 +1058,13 @@ for i, msg in enumerate(st.session_state.messages):
                 + '</div>',
                 unsafe_allow_html=True,
             )
+        # 使用手册（sidebar.py）明确写了"展开「工具调用详情」可查看完整推导过程"，
+        # 但这里以前从没渲染过 msg["trace"]——on_tool_call 收集的内容存进了消息
+        # 却没有任何 UI 读它，manual 里说的功能实际上并不存在。用已经收集好的
+        # trace_lines 数据补上这个 expander。
+        if msg.get("trace"):
+            with st.expander("工具调用详情"):
+                st.code(msg["trace"], language=None)
         # ── 存入错题本按钮 ──
         _prev_msg = next((m for m in reversed(st.session_state.messages[:i])
                           if m["role"] == "user"), None)
@@ -1046,7 +1073,8 @@ for i, msg in enumerate(st.session_state.messages):
         if _prev_q and _prev_q not in _wb_saved_raw:
             if st.button("存入错题本", key=f"wb_add_{i}", use_container_width=False):
                 with st.spinner("整理错题内容…"):
-                    _summary = _summarize_wrongbook_entry(_prev_q, msg["content"])
+                    _summary = _summarize_wrongbook_entry(
+                        _prev_q, msg["content"], st.session_state.get("user_email", ""))
                 st.session_state.wrong_book.append({
                     "question": _summary,
                     "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -1118,7 +1146,6 @@ if st.session_state.get("_similar_pending"):
 prefill = st.session_state.pop("prefill", "")
 _direct_input = st.session_state.pop("_direct_input", None)
 _direct_image = st.session_state.pop("_direct_image", None)
-_panel_just_toggled = st.session_state.pop("_panel_just_toggled", False)
 
 typed = st.chat_input(
     "输入数学题，支持 LaTeX 符号…",
@@ -1191,8 +1218,8 @@ if _typed_audio is not None:
 
 _native_submitted = typed is not None and (_typed_text or _typed_images or _typed_textfiles or _typed_audio is not None)
 
-# 确定是否"提交"：面板刚切换时强制跳过，避免误触发
-_submitted = (not _panel_just_toggled) and (
+# 确定是否"提交"
+_submitted = (
     _native_submitted or (_direct_input is not None) or (_direct_image is not None)
     or bool(_similar_ctx) or bool(prefill)
 )
@@ -1249,7 +1276,7 @@ if user_input:
 
     with _new_turn:
         # 用户气泡
-        _safe_disp = (display_text or user_input).replace("<", "&lt;").replace(">", "&gt;")
+        _safe_disp = _esc_html(display_text or user_input)
         _new_img_html = ""
         if _img_bytes and "_img_b64_bubble" in locals():
             _new_img_html = (
@@ -1366,6 +1393,7 @@ if user_input:
                             stream = _agent.solve_stream(
                                 solve_input, history=solve_history,
                                 on_tool_call=on_tool_call, image_bytes=_img_bytes,
+                                skip_prefix=bool(_sim_data),
                             )
                         err = None
                     except Exception as exc:
@@ -1462,6 +1490,9 @@ if user_input:
                     + '</div>',
                     unsafe_allow_html=True,
                 )
+            if trace:
+                with st.expander("工具调用详情"):
+                    st.code(trace, language=None)
 
     st.session_state.messages.append({
         "role": "assistant", "content": answer, "tags": tags, "trace": trace,

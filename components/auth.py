@@ -91,18 +91,22 @@ def _sb_patch(table: str, data: dict, params: dict) -> bool:
 def _track_topic(email: str, course: str, topic: str):
     if not email:
         return
+    # 显式用带时区的UTC——跟 _check_user 锁定时间 / _create_token 是同一个坑：
+    # 裸 datetime.now() 用宿主机本地时区，VPS 不是 UTC 时写进 Postgres 的
+    # timestamptz 会系统性偏移，"最近学过"排序和显示的时间会跟着错。
+    now_iso = datetime.now(timezone.utc).isoformat()
     existing = _sb_get("user_topics", {
         "user_email": f"eq.{email}", "topic": f"eq.{topic}", "select": "id,visit_count"
     })
     if existing:
         _sb_patch("user_topics",
                   {"visit_count": existing[0]["visit_count"] + 1,
-                   "last_visited": datetime.now().isoformat()},
+                   "last_visited": now_iso},
                   {"user_email": f"eq.{email}", "topic": f"eq.{topic}"})
     else:
         _sb_post("user_topics", {
             "user_email": email, "course": course, "topic": topic,
-            "visit_count": 1, "last_visited": datetime.now().isoformat(),
+            "visit_count": 1, "last_visited": now_iso,
         })
 
 

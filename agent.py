@@ -332,11 +332,16 @@ class MathAgent:
         history: Optional[list] = None,
         on_tool_call: Optional[Callable] = None,
         image_bytes: Optional[bytes] = None,
+        skip_prefix: bool = False,
     ) -> Union[str, Iterator]:
         """运行完整的 agentic loop，支持多轮对话历史。
 
         on_tool_call(name, args, result): 每次工具调用后回调，result=None 表示调用前。
         返回值：普通模式返回 str；vision/guide 模式返回流式响应对象。
+        skip_prefix: 调用方已经把完整指令写好了（比如"举一反三"那种"只出题不解答"的
+        请求），不要再叠加"请解题："前缀——不然会出现"请解题：……只出题不解答"这种
+        自相矛盾的拼接（is_followup 只看 history 是否非空，但举一反三特意传 history=[]，
+        原来会被误判成"首次提问"而加上这个前缀）。
 
         self.last_verification 记录这一次调用里"答案自纠错"实际发生了什么，
         供调用方（比如UI）判断要不要展示"已验证/已纠正"提示：
@@ -348,6 +353,10 @@ class MathAgent:
         """
         self.last_verification = None
         self.pre_correction_answer = None
+        # 之前只有历史消息经 _truncate_msg 截断，这一轮刚提交的 problem 本身没有上限——
+        # 粘贴一整个大文件当题目时可能一次性喂进大量 token，直接顶到上下文/账单。
+        if len(problem) > _MAX_MSG_CHARS:
+            problem = problem[:_MAX_MSG_CHARS] + "\n… (内容过长已截断) "
         system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
         messages = [{"role": "system", "content": system}]
         if history:
@@ -393,7 +402,7 @@ class MathAgent:
         is_explain = problem.lstrip().startswith("【知识点讲解】")
         # 有对话历史时是续对话，直接发原文；首次提问时加"请解题："引导模型进入解题模式
         is_followup = bool(history)
-        messages.append({"role": "user", "content": problem if (is_explain or is_followup) else f"请解题：{problem}"})
+        messages.append({"role": "user", "content": problem if (is_explain or is_followup or skip_prefix) else f"请解题：{problem}"})
         extra = {}
 
         # explain mode: only calculator tool, no draw_mindmap/plot_function
@@ -534,6 +543,7 @@ class MathAgent:
         history: Optional[list] = None,
         on_tool_call: Optional[Callable] = None,
         image_bytes: Optional[bytes] = None,
+        skip_prefix: bool = False,
     ) -> Iterator:
         """真流式版本，独立于 solve()（后者被测试/评测脚本依赖，不能动它的行为）。
 
@@ -553,11 +563,13 @@ class MathAgent:
         try:
             if image_bytes or self.guide_mode:
                 # 这两个模式的 solve() 本来就是 stream=True 直接返回原生流
-                result = self.solve(problem, history=history, on_tool_call=on_tool_call, image_bytes=image_bytes)
+                result = self.solve(problem, history=history, on_tool_call=on_tool_call,
+                                     image_bytes=image_bytes, skip_prefix=skip_prefix)
                 if isinstance(result, str):
                     return _fake_stream(result)
                 return result
-            return self._solve_stream_with_tools(problem, history=history, on_tool_call=on_tool_call)
+            return self._solve_stream_with_tools(problem, history=history, on_tool_call=on_tool_call,
+                                                  skip_prefix=skip_prefix)
         except Exception as exc:
             _log.exception("solve_stream failed")
             return _fake_stream(f"解题出错：{exc}")
@@ -567,10 +579,13 @@ class MathAgent:
         problem: str,
         history: Optional[list] = None,
         on_tool_call: Optional[Callable] = None,
+        skip_prefix: bool = False,
     ) -> Iterator:
         """解题模式的真流式实现，跟 solve() 的循环结构对应，但每轮用 stream=True。"""
         self.last_verification = None
         self.pre_correction_answer = None
+        if len(problem) > _MAX_MSG_CHARS:
+            problem = problem[:_MAX_MSG_CHARS] + "\n… (内容过长已截断) "
         system = _GUIDE_SYSTEM if self.guide_mode else _SYSTEM
         messages = [{"role": "system", "content": system}]
         if history:
@@ -578,7 +593,7 @@ class MathAgent:
 
         is_explain = problem.lstrip().startswith("【知识点讲解】")
         is_followup = bool(history)
-        messages.append({"role": "user", "content": problem if (is_explain or is_followup) else f"请解题：{problem}"})
+        messages.append({"role": "user", "content": problem if (is_explain or is_followup or skip_prefix) else f"请解题：{problem}"})
         extra = {}
 
         _EXPLAIN_TOOLS = [t for t in TOOL_DEFINITIONS if t["function"]["name"] == "calculator"]

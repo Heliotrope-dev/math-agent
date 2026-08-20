@@ -113,6 +113,7 @@ def compress_image(image_bytes: bytes, max_size: int = 800, quality: int = 85) -
 
 def _save_figure(fig, caption: str = "") -> str:
     try:
+        import html as _html
         import matplotlib.pyplot as plt
         buf = io.BytesIO()
         fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
@@ -120,7 +121,13 @@ def _save_figure(fig, caption: str = "") -> str:
         plt.close(fig)
         buf.seek(0)
         b64 = base64.b64encode(buf.read()).decode()
-        _pending_images().append({"b64": b64, "caption": caption})
+        # caption 来自模型工具调用传入的 title 参数（plot_function），最终会被
+        # _math_page.py 用 unsafe_allow_html=True 直接渲染成 <p>——跟 draw_mindmap
+        # 里的 esc() 是同一个道理，不转义的话，只要能通过提示注入让模型把一段
+        # HTML/JS 原样塞进 title，就会在用户浏览器里执行。这里统一在生成时转义，
+        # 存进 pending queue 的 caption 已经是安全可直接渲染的版本。
+        safe_caption = _html.escape(strip_decorative_emoji(caption), quote=True)
+        _pending_images().append({"b64": b64, "caption": safe_caption})
         return f"[图像已生成：{caption}]"
     except Exception as e:
         return f"[图像生成失败：{e}]"
@@ -441,7 +448,12 @@ def _check_expr_safe(expr: str) -> "str | None":
         return "表达式包含不允许的字符或关键字，只支持纯数学表达式"
     return None
 
-_CALC_POOL = ProcessPoolExecutor(max_workers=2)
+# 之前是 max_workers=2——这是全进程唯一一个池，Streamlit 一个进程内所有并发
+# session 共用，calculator 和 plot_function 都从这里取；2 个worker在只有
+# 一两个用户时够用，并发稍微上来就会排队等最多15秒的计算超时。调到 6，
+# 权衡过：SymPy 单次计算通常是纯CPU瞬时返回，多开几个worker常驻的内存/
+# 启动开销可以接受，明显好过用户端排队卡住。
+_CALC_POOL = ProcessPoolExecutor(max_workers=6)
 _CALC_TIMEOUT = 15  # 秒
 
 
