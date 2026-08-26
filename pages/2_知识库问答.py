@@ -1,4 +1,4 @@
-"""知识库问答页 — RAG 语义检索 + DeepSeek 生成。"""
+"""知识库问答页 — RAG 语义检索 + 千问生成。"""
 
 import logging
 import os
@@ -8,7 +8,7 @@ import streamlit.components.v1 as _cv1
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY"):
+for _k in ("QWEN_API_KEY", "SILICONFLOW_API_KEY"):
     if _k not in os.environ:
         try:
             os.environ[_k] = st.secrets[_k]
@@ -125,7 +125,7 @@ def render_sidebar(engine: RAGEngine, user: str) -> None:
         st.divider()
         st.subheader("知识库管理")
 
-        missing = [k for k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY") if not get_secret(k)]
+        missing = [k for k in ("QWEN_API_KEY", "SILICONFLOW_API_KEY") if not get_secret(k)]
         if missing:
             st.error("缺少配置：" + "、".join(missing))
 

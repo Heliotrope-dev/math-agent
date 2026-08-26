@@ -220,7 +220,7 @@ def render_sidebar() -> None:
 侧边栏顶部可跳转「知识库问答」页面：
 
 - 上传 PDF / TXT / Markdown 文档建立个人知识库
-- 提问后自动检索相关段落，结合 DeepSeek 生成回答
+- 提问后自动检索相关段落，结合千问生成回答
 - 每条回答附带引用来源和相关度，可展开查看原文
 - 适合复习讲义、教材，精确定位知识点
 
@@ -229,7 +229,7 @@ def render_sidebar() -> None:
 **模型选择**
 
 系统自动路由，无需手动切换：
-- 文字解题固定用 `deepseek-v4-flash`
+- 文字解题固定用 `qwen3.7-flash`
 - 拍题时自动切到 `Qwen3-VL-*` 视觉模型（SiliconFlow）
 
 ---

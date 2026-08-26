@@ -2,7 +2,7 @@
 main.py — CLI entry point
 
 Usage:
-  DeepSeek mode: export DEEPSEEK_API_KEY="sk-..."  &&  python main.py
+  Qwen mode:     export QWEN_API_KEY="sk-..."  &&  python main.py
   Local Ollama:  python main.py --local             (no API Key needed)
 """
 

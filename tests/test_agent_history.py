@@ -132,17 +132,17 @@ def test_compress_history_summary_capped_at_2000_chars():
 # ── route_model ───────────────────────────────────────────────────────────────
 
 def test_route_model_no_image_returns_default():
-    assert route_model("求导数", image_bytes=None) == "deepseek-v4-flash"
+    assert route_model("求导数", image_bytes=None) == "qwen3.7-flash"
 
 
 def test_route_model_with_image_no_vision_key(monkeypatch):
     monkeypatch.delenv("SILICONFLOW_API_KEY", raising=False)
-    assert route_model("拍题", image_bytes=b"fake") == "deepseek-v4-flash"
+    assert route_model("拍题", image_bytes=b"fake") == "qwen3.7-flash"
 
 
 def test_route_model_with_image_and_vision_key(monkeypatch):
     monkeypatch.setenv("SILICONFLOW_API_KEY", "fake-key")
-    assert route_model("拍题", image_bytes=b"fake") != "deepseek-v4-flash"
+    assert route_model("拍题", image_bytes=b"fake") != "qwen3.7-flash"
 
 
 # ── solve_stream 纠错分支（mock API 流式响应，不联网）───────────────────────────
@@ -178,8 +178,8 @@ def test_solve_stream_triggers_visible_correction_on_calc_mismatch(monkeypatch):
     """模拟：第一轮模型调用calculator算出3+4=7，第二轮却写出跟计算结果对不上
     的答案8——应该触发纠错、把修正说明可见地追加进流式输出、状态标为
     corrected；第三轮（重试）给出跟calculator结果一致的修正答案。"""
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake-key-for-mock-test")
-    agent = MathAgent(model="deepseek-v4-flash")
+    monkeypatch.setenv("QWEN_API_KEY", "fake-key-for-mock-test")
+    agent = MathAgent(model="qwen3.7-flash")
 
     calls = {"n": 0}
 
@@ -224,8 +224,8 @@ def test_solve_stream_triggers_visible_correction_on_calc_mismatch(monkeypatch):
 def test_solve_stream_marks_unresolved_when_correction_still_mismatches(monkeypatch):
     """模拟纠错重试后依然跟calculator结果对不上——不应该无限重试，第二次
     就要标记 unresolved，并在输出里可见地警告用户。"""
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake-key-for-mock-test")
-    agent = MathAgent(model="deepseek-v4-flash")
+    monkeypatch.setenv("QWEN_API_KEY", "fake-key-for-mock-test")
+    agent = MathAgent(model="qwen3.7-flash")
 
     calls = {"n": 0}
 

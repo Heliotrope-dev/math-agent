@@ -20,7 +20,7 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-for _k in ("DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY",
+for _k in ("QWEN_API_KEY", "SILICONFLOW_API_KEY",
            "OLLAMA_BASE_URL", "SUPABASE_URL", "SUPABASE_KEY"):
     if _k not in os.environ:
         try:
@@ -104,10 +104,10 @@ def _show_login_page():
                                 st.error(f"注册失败：{_e}")
 
 # ── 启动环境校验：至少配置一个云端 API Key，否则友好提示而非运行时崩溃 ────────
-if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("SILICONFLOW_API_KEY")):
+if not (os.environ.get("QWEN_API_KEY") or os.environ.get("SILICONFLOW_API_KEY")):
     st.error(
         "未检测到可用的模型 API Key。\n\n"
-        "请配置环境变量（或 Streamlit Secrets）中的 **DEEPSEEK_API_KEY** "
+        "请配置环境变量（或 Streamlit Secrets）中的 **QWEN_API_KEY** "
         "或 **SILICONFLOW_API_KEY** 至少一个，然后刷新页面。"
     )
     st.stop()
@@ -602,13 +602,13 @@ def _summarize_wrongbook_entry(question: str, answer: str, email: str = "") -> s
     $$ 包裹最终答案），跟这里要的"只输出一行摘要"完全对不上（实测输出会
     带解题格式和多余换行）。这里直接调 API，不带那层系统提示词。
     """
-    key = get_secret("DEEPSEEK_API_KEY")
+    key = get_secret("QWEN_API_KEY")
     if not key:
         return question
     # 之前这里完全绕开了每日调用配额——check_and_bump_usage 存在的目的就是
     # 防止无限制调用按量计费的 API，这里没接等于配额形同虚设：反复点"存入
     # 错题本"可以无限次触发付费调用。超额时直接退化成用原始 question（跟
-    # 没配置 DEEPSEEK_API_KEY 时的降级行为一致），不阻断"存错题本"这个操作本身。
+    # 没配置 QWEN_API_KEY 时的降级行为一致），不阻断"存错题本"这个操作本身。
     _quota_ok, _ = check_and_bump_usage(email)
     if not _quota_ok:
         return question
@@ -617,7 +617,7 @@ def _summarize_wrongbook_entry(question: str, answer: str, email: str = "") -> s
         from openai import OpenAI
         client = OpenAI(
             api_key=key,
-            base_url="https://api.deepseek.com",
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             http_client=httpx.Client(trust_env=False, verify=True,
                                       timeout=httpx.Timeout(30.0, connect=10.0)),
         )

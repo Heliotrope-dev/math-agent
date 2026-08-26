@@ -2,7 +2,7 @@
 agent.py — Core Agent Loop
 
 Two modes:
-  DeepSeek (default): requires DEEPSEEK_API_KEY env var
+  Qwen (default): requires QWEN_API_KEY env var
   Ollama local: set USE_LOCAL=1 or pass use_local=True, uses local qwen3.5:9b
 """
 
@@ -175,15 +175,21 @@ CLOUD_PROVIDERS = {
     "Qwen/Qwen3-VL-32B-Instruct":     ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
     "Qwen/Qwen3-VL-32B-Thinking":     ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
     "Qwen/Qwen3-VL-8B-Instruct":      ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
-    # DeepSeek（文字解题）——deepseek-chat 2026-07-24 停用，迁移到 v4-flash
-    "deepseek-v4-flash":              ("deepseek", "https://api.deepseek.com", "DEEPSEEK_API_KEY"),
+    # 千问（文字解题）——2026-08-26从DeepSeek切过来：finance-agent那边
+    # 2026-08-22已经做过五维度真实同题对比（金融判断/数学推理/代码/严格
+    # 指令遵循/中文表达），千问全面不输、数学推理这一项还更强（DeepSeek
+    # 当时在预算内被截断算不完），价格只有DeepSeek的一半不到，详细记录见
+    # finance-agent仓库advisor.py同一处改动的注释。这次切换的直接导火索
+    # 是DeepSeek账号（math-agent/finance-agent共用同一个key）被math-agent
+    # 的日常调用耗光余额，finance-agent那边新加的功能想用都用不了。
+    "qwen3.7-flash":                  ("qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", "QWEN_API_KEY"),
 }
 
 # ── 智能模型路由 ──────────────────────────────────────────────────────────────
 _DEFAULT_VISION_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 def route_model(problem: str, image_bytes: Optional[bytes] = None,
-                default: str = "deepseek-v4-flash") -> str:
-    """有图 → 视觉模型；纯文字 → deepseek-v4-flash。"""
+                default: str = "qwen3.7-flash") -> str:
+    """有图 → 视觉模型；纯文字 → qwen3.7-flash。"""
     has_sf = bool(os.environ.get("SILICONFLOW_API_KEY"))
     if image_bytes:
         return _DEFAULT_VISION_MODEL if has_sf else default
@@ -218,8 +224,10 @@ class MathAgent:
             )
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
-            self.model = model or "deepseek-v4-flash"
-            _, base_url, env_key = CLOUD_PROVIDERS.get(self.model, ("", "https://api.deepseek.com", "DEEPSEEK_API_KEY"))
+            self.model = model or "qwen3.7-flash"
+            _, base_url, env_key = CLOUD_PROVIDERS.get(
+                self.model, ("", "https://dashscope.aliyuncs.com/compatible-mode/v1", "QWEN_API_KEY")
+            )
             api_key = os.environ.get(env_key, "")
             if not api_key:
                 raise RuntimeError(f"环境变量 {env_key} 未设置，无法初始化模型 {self.model}")
