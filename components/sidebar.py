@@ -42,7 +42,7 @@ def render_sidebar() -> None:
             except Exception:
                 pass
             _cv1.html(
-                '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");}catch(e){}</script>',
+                '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");window.parent.document.cookie="ma_auth_tok=; max-age=0; path=/";}catch(e){}</script>',
                 height=1,
             )
             st.session_state["logged_in"] = False

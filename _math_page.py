@@ -71,9 +71,16 @@ def _show_login_page():
                     st.session_state["logged_in"] = True
                     st.session_state["user_email"] = _em
                     st.session_state["_token"] = _tok
-                    # 同时写 localStorage，关闭浏览器后也能恢复
+                    # localStorage继续写一份留作兜底/legacy；Cookie才是"下次
+                    # 打开自动登录"真正依赖的那条路径——下面"记住登录"那段有
+                    # 详细说明，st.context.cookies能在服务端直接读到它，不用
+                    # 再靠iframe强制刷新页面（那条路已经被浏览器拦掉了）。
                     _cv1.html(
-                        f'<script>try{{window.parent.localStorage.setItem("ma_auth_tok","{_tok}");}}catch(e){{}}</script>',
+                        f"""<script>try{{
+                        window.parent.localStorage.setItem("ma_auth_tok","{_tok}");
+                        var d = new Date(); d.setTime(d.getTime() + 7*24*60*60*1000);
+                        window.parent.document.cookie = "ma_auth_tok={_tok}; expires=" + d.toUTCString() + "; path=/; SameSite=Lax; Secure";
+                        }}catch(e){{}}</script>""",
                         height=1,
                     )
                     st.rerun()
@@ -112,31 +119,22 @@ if not (os.environ.get("QWEN_API_KEY") or os.environ.get("SILICONFLOW_API_KEY"))
     )
     st.stop()
 
-# ── localStorage 读取（关闭浏览器后用桌面快捷打开也能恢复登录）─────────────
-# 总是渲染，让 Streamlit 组件树稳定；JS 内部判断是否需要注入
+# ── localStorage 桥接段：已废弃，留空 ─────────────────────────────────────
+# 之前这里靠"读localStorage→塞进URL→800ms后iframe强制location.replace()硬
+# 刷新页面"来实现免登录。2026-08-28实测在当前Chrome版本下这条路彻底失效：
+# iframe（components.v1.html创建的沙盒iframe）读写window.parent.localStorage
+# 没问题，但window.parent.location.replace(...)会被浏览器当成"沙盒iframe
+# 试图导航顶层页面"直接拦截，控制台报SecurityError——token其实一直是有效
+# 的，只是浏览器根本没机会把它带着发一次新请求给服务器，页面永远卡在登录
+# 页（症状之一正是本文件之前反复踩坑的"侧边栏消失"那类问题的近亲：都是
+# 这套localStorage+强制刷新机制不可靠导致的）。
 #
-# 桥接段（第1段）只在本次 session 还没登录时才拼进去——之前不管有没有登录都
-# 无条件塞进这段脚本，而 session_state["logged_in"] 置位后 localStorage 里的
-# token 从来没清过，导致往后每一次 rerun（发消息、点按钮……）这段代码都会
-# 重新把 token 塞回 URL、800ms 后又强制 location.replace() 硬刷新一次页面——
-# 表现出来就是登录后网页反复自己刷新。session_state 里已经 logged_in 时，
-# 直接把桥接逻辑跳过，只保留跟登录状态无关的加载遮罩/睡眠唤醒重连两段。
-_BRIDGE_JS = """
-    // ── 1. localStorage 自动登录 ──────────────────────────────────
-    var url = new URL(window.parent.location.href);
-    if (!url.searchParams.get('_auth')) {
-        var t = window.parent.localStorage.getItem('ma_auth_tok');
-        if (t) {
-            url.searchParams.set('_auth', t);
-            window.parent.history.replaceState(null, '', url.toString());
-            setTimeout(function() {
-                if (!new URL(window.parent.location.href).searchParams.get('_auth')) return;
-                window.parent.sessionStorage.setItem("ma_reloaded", "1");
-                window.parent.location.replace(url.toString());
-            }, 800);
-        }
-    }
-""" if not st.session_state.get("logged_in") else ""
+# 现在改用Cookie（见下面"记住登录"那段）：写入不需要导航权限，Cookie会
+# 由浏览器自动带在每一次请求里，服务端用Streamlit自带的st.context.cookies
+# 直接读，完全不需要JS参与、也不需要强制刷新。这个变量留空是为了不用改
+# 下面拼接_BRIDGE_JS的地方（加载遮罩/睡眠唤醒重连那两段还在用同一个拼接
+# 点），只是这段"自动登录"的内容本身不再需要了。
+_BRIDGE_JS = ""
 
 import streamlit.components.v1 as _cv1
 _cv1.html("""
@@ -446,9 +444,20 @@ try {
 </script>
 """, height=1)
 
-# ── URL 参数持久化（7 天免登录）──────────────────────────────────────────────
-# _auth 只是"把 localStorage 里的 token 桥接进这次全新的 Streamlit 会话"用的
-# 一次性载体——校验通过立刻从可见地址栏删掉，不常驻 URL（原理见登录按钮那段注释）。
+# ── 记住登录（Cookie，7 天）──────────────────────────────────────────────
+# 主路径：Cookie会跟每一次HTTP请求自动一起发过来，服务端直接用
+# st.context.cookies读，不需要任何JS参与，第一次渲染就能拿到——不再需要
+# 上面那套localStorage+强制刷新的坏掉的机制。
+if not st.session_state.get("logged_in"):
+    _cookie_token = st.context.cookies.get("ma_auth_tok")
+    if _cookie_token:
+        _auto_email = _validate_token(_cookie_token)
+        if _auto_email:
+            st.session_state["logged_in"] = True
+            st.session_state["user_email"] = _auto_email
+            st.session_state["_token"] = _cookie_token
+
+# 兜底路径：分享链接/Cookie被禁用等场景，_auth query参数仍然可用。
 _stored_token = st.query_params.get("_auth", "") or ""
 if _stored_token and not st.session_state.get("logged_in"):
     _auto_email = _validate_token(_stored_token)
@@ -456,24 +465,33 @@ if _stored_token and not st.session_state.get("logged_in"):
         st.session_state["logged_in"] = True
         st.session_state["user_email"] = _auto_email
         st.session_state["_token"] = _stored_token
-        # 这里之前加过 del st.query_params["_auth"]（校验成功立刻从地址栏删掉
-        # token，出发点是安全加固），但实测会在"未登录判断/桥接JS"跟"token
-        # 校验"两段代码的时序之间制造一个新的自动rerun——桥接JS那段判断
-        # session_state.logged_in 的时机在脚本更靠前的位置，早于这里token
-        # 校验真正置位logged_in的时刻，query_params的这次额外删除动作触发的
-        # 重跑会让桥接脚本在某些时序下又判断成"还没登录"，重新往复触发"取
-        # localStorage token→塞进URL→800ms后强制刷新"，实测导致登录后网页
-        # 陷入固定几秒一次的无限刷新。安全性和"网站能正常用"冲突时选后者，
-        # 撤回这个删除动作，token继续留在URL里（7天有效期本身没变，只是
-        # 又变回常驻地址栏，跟这次改动前的行为一致）。
+        # 校验通过后顺手把token也写成Cookie（下次直接走上面的主路径），
+        # 再用纯JS的history.replaceState把地址栏里的_auth摘掉——这是浏览器
+        # 端操作，不经过Streamlit的状态管理/websocket，不会触发脚本重跑，
+        # 不会重蹈上面注释里提到的"无限刷新"覆辙。
+        _cv1.html(
+            f"""<script>
+            try {{
+                var tok = {_stored_token!r};
+                var d = new Date(); d.setTime(d.getTime() + 7*24*60*60*1000);
+                window.parent.document.cookie = "ma_auth_tok=" + encodeURIComponent(tok) + "; expires=" + d.toUTCString() + "; path=/; SameSite=Lax; Secure";
+                var url = new URL(window.parent.location.href);
+                if (url.searchParams.get('_auth')) {{
+                    url.searchParams.delete('_auth');
+                    window.parent.history.replaceState(null, '', url.toString());
+                }}
+            }} catch(e) {{}}
+            </script>""",
+            height=1,
+        )
     else:
         try:
             del st.query_params["_auth"]
         except Exception:
             pass
-        # 同步清除 localStorage，防止过期 token 导致无限 reload
+        # 同步清除 localStorage 和 Cookie，防止过期 token 导致无限 reload
         _cv1.html(
-            '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");}catch(e){}</script>',
+            '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");window.parent.document.cookie="ma_auth_tok=; max-age=0; path=/";}catch(e){}</script>',
             height=1,
         )
 
