@@ -573,7 +573,12 @@ def _normalize_latex(s: str) -> str:
     s = _LATEX_TIMES.sub('*', s)  # \times/\cdot 是乘号，不能直接删掉（会变成两个数字挨在一起）
     s = _BRACED_POW.sub(r'**(\1)', s)
     prev = None
-    while prev != s:  # \frac 可能嵌套（如分数里还有分数），反复替换到不再变化
+    # \frac 可能嵌套（如分数里还有分数），反复替换到不再变化；正常答案的嵌套
+    # 深度不会超过几层，这里封顶 50 次纯粹是防御性的——万一遇到构造出来的
+    # 病态输入（比如几百层嵌套），也不会把这个函数拖成一个无限/超长循环。
+    for _ in range(50):
+        if prev == s:
+            break
         prev = s
         s = _FRAC_RE.sub(r'(\1)/(\2)', s)
         s = _FRAC_SHORT_RE.sub(r'(\1)/(\2)', s)
