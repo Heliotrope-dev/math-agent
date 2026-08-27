@@ -487,6 +487,19 @@ if not st.session_state.get("logged_in"):
     )
     _show_login_page()
     st.stop()
+elif not st.session_state.get("_sidebar_unstick_done"):
+    # 排查过的真实bug：Streamlit把"侧边栏折叠/展开"这个偏好持久化在浏览器
+    # localStorage的`stSidebarCollapsed-`键里，一旦被设成true就会一直盖过
+    # `initial_sidebar_state="expanded"`，哪怕用户从没手动点过折叠——线上
+    # 环境实测就卡在了true，导致登录后侧边栏（菜单）整个消失，肉眼看不出
+    # 任何折叠按钮的痕迹。这里登录成功后只在本次session第一次渲染时清掉
+    # 这个键，把"卡死的旧偏好"纠正回默认展开；之后用户自己手动折叠/展开
+    # 产生的新偏好不受影响、照常持久化，不会被这段代码反复覆盖。
+    st.session_state["_sidebar_unstick_done"] = True
+    _cv1.html(
+        '<script>try{window.parent.localStorage.removeItem("stSidebarCollapsed-");}catch(e){}</script>',
+        height=1,
+    )
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 # ── 课程知识点索引 ────────────────────────────────────────────────────────────
