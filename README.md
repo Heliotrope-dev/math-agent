@@ -74,3 +74,9 @@ data/chroma_db/               # ChromaDB 本地持久化向量库
 ---
 
 MIT License
+
+## Creators
+
+- Heliotrope
+- Claude Code
+- Codex
