@@ -3,8 +3,11 @@ toolbarMode = "viewer"
 
 [theme]
 base = "light"
-primaryColor = "#2563EB"
-backgroundColor = "#F8F8FA"
-secondaryBackgroundColor = "#F2F3F5"
-textColor = "#1A1A2E"
+# 主色从蓝改成墨色，跟finance-agent那套"黑白灰为主，只有真正需要强调的
+# 地方才用彩色"的规矩对齐——这个值会影响st.tabs下划线这类原生组件的
+# 默认配色，光改CSS盖不到这些地方，必须在这里跟着改，两边才能真正一致。
+primaryColor = "#17181C"
+backgroundColor = "#FAFAFB"
+secondaryBackgroundColor = "#F3F4F6"
+textColor = "#17181C"
 font = "sans serif"

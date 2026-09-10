@@ -1,30 +1,57 @@
-"""CSS and JS strings for Math Agent UI."""
+"""CSS and JS strings for Math Agent UI.
+
+2026-09前端重做：跟finance-agent那套"灰白克制"的视觉系统对齐——同一份Inter
+字体、同一套墨色(ink)分级、同一套三档按钮（次要描边/主要实底/安静无边框）、
+同一套"不画框，用发丝线分隔"的列表处理。主色调统一黑白灰，不用蓝紫这类品牌
+色——math-agent原来的蓝色强调色(#2563EB)+紫色用户气泡(#7B5CFA)撤掉，聊天
+气泡也改成墨色深浅对比而不是彩色。全站唯一保留的饱和色是删除/取消这类破坏性
+操作的悬停提示（红色，跟finance-agent的删除图标同一个色号#D0342C），只在真正
+需要强调的地方才出现，不做成装饰。深色模式一并撤掉（finance-agent那边已经
+验证过"用户反馈按了跟没按一样，很烦"，不再维护两套主题）。
+"""
 
 _BASE_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css');
 
 [data-testid="stSidebarNav"] { display: none !important; }
 
 :root {
-    --bg:        #F8F8FA;
-    --surface:   #FFFFFF;
-    --sidebar:   #F2F3F5;
-    --border:    #E4E6EA;
-    --text:      #1A1A2E;
-    --text-muted:#6E6E82;
-    --accent:    #2563EB;
-    --user-bg:   #7B5CFA;
-    --user-text: #FFFFFF;
-    --radius:    12px;
-    --radius-sm: 8px;
+    /* 画布：只有三层——底、卡面、更浅的填充块。跟finance-agent同一套数值。 */
+    --ma-bg:        #FAFAFB;
+    --ma-surface:   #FFFFFF;
+    --ma-fill:      #F3F4F6;
+    --ma-border:    #EAEAEF;
+    --ma-border-2:  #DBDCE3;
+
+    /* 文字：四级 */
+    --ma-text:      #17181C;
+    --ma-text-2:    #494C55;
+    --ma-muted:     #82858E;
+    --ma-faint:     #A8ABB3;
+
+    /* 界面强调色用墨色，不用彩色——跟finance-agent同一条原则，主色调黑白灰。
+       全站唯一允许出现的饱和色是破坏性操作（删除/取消）悬停时的红色提示，
+       跟finance-agent的删除图标同一个色号，只用在真正需要强调的地方。 */
+    --ma-ink:       #17181C;
+    --ma-danger:    #D0342C;
+
+    --ma-radius:    10px;
+    --ma-radius-sm: 7px;
 }
 
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-.bubble-asst-inner { font-family: 'LXGW WenKai', 'KaiTi', 'STKaiti', serif; font-size: 1rem; line-height: 1.8; }
+/* ── 排版基线 ─────────────────────────────────────────────────────────── */
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+                 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif !important;
+    color: var(--ma-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+.stApp, .stApp * { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
 
-html, body { background: var(--bg) !important; }
+html, body { background: var(--ma-bg) !important; }
 .stApp, [data-testid="stAppViewContainer"],
 [data-testid="stMain"], [data-testid="stMainBlockContainer"],
 section.main, .main, .block-container,
@@ -32,167 +59,194 @@ section.main, .main, .block-container,
 [data-testid="stBottomBlockContainer"],
 [class*="bottom"], [class*="Bottom"],
 footer {
-    background: var(--bg) !important;
+    background: var(--ma-bg) !important;
     border: none !important; box-shadow: none !important; outline: none !important;
 }
-p, span, label, div, li, td, th, h1, h2, h3, h4 { color: var(--text) !important; }
+p, span, label, div, li, td, th, h1, h2, h3, h4 { color: var(--ma-text) !important; }
 #MainMenu, header { visibility: hidden; }
 [data-testid="stMainBlockContainer"] { padding-bottom: 180px !important; }
 
 header[data-testid="stHeader"] {
-    background: var(--surface) !important;
+    background: var(--ma-surface) !important;
     box-shadow: none !important;
-    border-bottom: 1px solid var(--border) !important;
+    border-bottom: 1px solid var(--ma-border) !important;
 }
 header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !important; }
 .main .block-container { padding-top: 0.5rem !important; }
 
-[data-testid="stSidebar"] {
-    background: var(--sidebar) !important;
-    border-right: 1px solid var(--border) !important;
-}
-[data-testid="stSidebar"] * { color: var(--text) !important; }
-[data-testid="stSidebar"] .stButton button {
-    background: var(--surface) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--text-muted) !important;
-    border-radius: var(--radius-sm) !important;
-    font-size: 0.82rem !important;
-    text-align: left !important;
-    padding: 6px 10px !important;
-    height: auto !important; min-height: 32px !important;
-    white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
-    display: block !important;
-}
-[data-testid="stSidebar"] .stButton button:hover {
-    color: var(--accent) !important; border-color: var(--accent) !important;
-}
-
 .course-banner {
     display: flex; align-items: center; gap: 10px;
     padding: 8px 14px; margin-bottom: 12px;
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
-    font-size: 0.9rem; font-weight: 600; color: var(--text-muted);
+    background: transparent; border: none; border-bottom: 1px solid var(--ma-border);
+    font-size: 0.9rem; font-weight: 600; color: var(--ma-text-2);
 }
 .app-header {
     display: flex; align-items: center; gap: 10px;
-    padding: 0.5rem 0 1rem; border-bottom: 1px solid var(--border);
+    padding: 0.5rem 0 1rem; border-bottom: 1px solid var(--ma-border);
 }
-.app-header-title { font-size: 1rem; font-weight: 600; color: var(--text-muted) !important; }
+.app-header-title { font-size: 1rem; font-weight: 600; color: var(--ma-text-2) !important; }
 
 .welcome-wrap { text-align: center; padding: 2.5rem 0 1.5rem; }
-.welcome-title { font-size: 1.8rem; font-weight: 600; color: var(--text) !important; margin-bottom: 0.5rem; }
-.welcome-sub { font-size: 0.88rem; color: var(--text-muted) !important; margin-bottom: 2rem; }
+.welcome-title { font-size: 1.8rem; font-weight: 650; letter-spacing: -0.018em; color: var(--ma-text) !important; margin-bottom: 0.5rem; }
+.welcome-sub { font-size: 0.88rem; color: var(--ma-muted) !important; margin-bottom: 2rem; }
 .greeting-wrap { text-align: center; padding: 4rem 0 2rem; }
-.greeting-main { font-size: 2rem; font-weight: 600; color: var(--text) !important; margin-bottom: 0.4rem; }
-.greeting-sub { font-size: 0.9rem; color: var(--text-muted) !important; }
+.greeting-main { font-size: 2rem; font-weight: 650; letter-spacing: -0.02em; color: var(--ma-text) !important; margin-bottom: 0.4rem; }
+.greeting-sub { font-size: 0.9rem; color: var(--ma-muted) !important; }
 
+/* 欢迎页大按钮（点开始学习之类）：跟finance-agent的次要按钮同一套描边，
+   不再用悬停上浮+蓝色阴影这种效果——那是网页模板常见的"AI产品味儿"，
+   finance-agent全站没有任何一处上浮/阴影动效，改成边框变深，跟发丝线
+   的克制程度一致。 */
 [data-testid="stVerticalBlock"] [data-testid="stButton"] button {
-    background: var(--surface) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important;
-    color: var(--text) !important;
+    background: transparent !important;
+    border: 1px solid var(--ma-border) !important;
+    border-radius: var(--ma-radius) !important;
+    color: var(--ma-text) !important;
     font-size: 0.85rem !important; padding: 12px 16px !important;
     text-align: left !important; line-height: 1.45 !important;
     min-height: 56px !important; height: auto !important; white-space: normal !important;
     box-shadow: none !important;
+    transition: border-color .15s ease, background .15s ease;
 }
 [data-testid="stVerticalBlock"] [data-testid="stButton"] button:hover {
-    border-color: var(--accent) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 2px 8px rgba(37,99,235,0.1) !important;
+    border-color: var(--ma-border-2) !important;
+    background: var(--ma-fill) !important;
+}
+
+/* ── 侧栏：功能保留（历史问题/错题本/学习档案是真实功能，不是finance-agent
+   删掉的那种导航冗余），但外观改成同一套发丝线分隔的扁平列表，不画白盒子。
+   这一段特意排在上面"通用按钮"规则之后——两条选择器特异度打平时源码
+   靠后的赢，排前面会被上面那条通用按钮规则盖掉（实测踩过，侧栏按钮全变成
+   了大号圆角描边盒子，不是发丝线扁平行）。 */
+[data-testid="stSidebar"] {
+    background: var(--ma-fill) !important;
+    border-right: 1px solid var(--ma-border) !important;
+}
+[data-testid="stSidebar"] * { color: var(--ma-text) !important; }
+[data-testid="stSidebar"] .stButton button {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid var(--ma-border) !important;
+    color: var(--ma-text-2) !important;
+    border-radius: 0 !important;
+    font-size: 0.82rem !important;
+    text-align: left !important;
+    padding: 7px 4px !important;
+    height: auto !important; min-height: 32px !important;
+    white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+    display: block !important;
+    box-shadow: none !important;
+}
+[data-testid="stSidebar"] .stButton button:hover {
+    background: rgba(23,24,28,0.03) !important; color: var(--ma-text) !important;
+}
+/* 退出登录是独立的单个动作，不是列表项，不套用上面的扁平行样式——改成
+   跟站内"安静"按钮一样的小号文字链接，不需要边框也不需要占满一行。 */
+[data-testid="stSidebar"] [class*="st-key-logout_btn"] button {
+    border: none !important; border-bottom: none !important;
+    color: var(--ma-muted) !important; font-size: 0.78rem !important;
+    padding: 4px 0 !important; width: auto !important; min-height: 0 !important;
+}
+[data-testid="stSidebar"] [class*="st-key-logout_btn"] button:hover {
+    background: transparent !important; color: var(--ma-text) !important;
 }
 
 .refresh-btn button {
-    background: transparent !important; border: 1px solid var(--border) !important;
-    border-radius: 20px !important; color: var(--text-muted) !important; font-size: 0.82rem !important;
+    background: transparent !important; border: 1px solid var(--ma-border) !important;
+    border-radius: var(--ma-radius-sm) !important; color: var(--ma-muted) !important; font-size: 0.82rem !important;
 }
-.refresh-btn button:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
+.refresh-btn button:hover { border-color: var(--ma-border-2) !important; color: var(--ma-text) !important; }
 
-/* page_link 外框样式，与 expander 完全一致 */
+/* page_link，跟 expander 一致的发丝线处理，不画卡片。 */
 a[data-testid="stPageLink-NavLink"] {
-    border: 1px solid var(--border) !important;
-    border-radius: 10px !important;
-    background: var(--surface) !important;
-    padding: 10px 14px !important;
+    border: none !important;
+    border-bottom: 1px solid var(--ma-border) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 10px 4px !important;
     font-size: 0.84rem !important;
-    color: var(--text) !important;
+    color: var(--ma-text) !important;
     text-decoration: none !important;
     display: flex !important;
     align-items: center !important;
     gap: 6px !important;
     outline: none !important;
     box-shadow: none !important;
-    transition: border-color 0.15s, background 0.15s;
+    transition: color 0.15s;
 }
 a[data-testid="stPageLink-NavLink"]:hover,
 a[data-testid="stPageLink-NavLink"]:focus {
-    border-color: var(--accent) !important;
-    color: var(--accent) !important;
+    color: var(--ma-text) !important;
+    background: rgba(23,24,28,0.03) !important;
     outline: none !important;
     box-shadow: none !important;
 }
 
-.msg-row-user { display: flex; justify-content: flex-end; margin: 6px 0; }
+/* ── 消息：用户提问是三言两语，靠右墨色实底白字气泡，符合"这是一条消息"
+   的直觉。AI的回答通常是好几段带公式的完整解题过程，不是三言两语——套用
+   同款灰底气泡只会变成一整块灰色调，长内容里反而不美观，也不是finance-
+   agent处理长内容的方式（它自己的报告类内容一律平铺，不装进气泡）。改成
+   让AI回答平铺流动，靠字号/行距/段落间距把内容读出来，轮次之间用一条
+   发丝线收尾，跟finance-agent的分区处理是同一套语言。不带头像图标，跟
+   "不许有emoji/装饰图标"的硬规则一致。 */
+.msg-row-user { display: flex; justify-content: flex-end; margin: 10px 0 6px; }
 .bubble-user {
-    background: var(--user-bg) !important;
-    color: var(--user-text) !important;
-    border-radius: 18px 4px 18px 18px !important;
+    background: var(--ma-ink) !important;
+    color: #fff !important;
+    border-radius: 16px !important;
     padding: 10px 14px; word-break: break-word; line-height: 1.6;
     font-size: 0.95rem; display: inline-block; max-width: 72%;
 }
 
-.bubble-asst-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px 18px 18px 18px;
-    padding: 10px 14px; word-break: break-word; line-height: 1.6; font-size: 0.95rem;
-}
-.bubble-asst-wrap p, .bubble-asst-wrap li { color: var(--text) !important; }
-.stMarkdown:has(.asst-bubble-marker) + .stMarkdown > div {
-    background: var(--surface) !important; border: 1px solid var(--border) !important;
-    border-radius: 4px 18px 18px 18px !important; padding: 10px 14px !important;
+/* asst-bubble-marker 是紧挨在AI正文前面插入的一个空div，用来定位"下一个
+   元素容器就是这条AI回答"——注意这里选的是 stElementContainer 这一层，
+   不是 .stMarkdown：marker 和正文实际上是两个各自独立的 stElementContainer
+   兄弟节点，.stMarkdown 本身互相并不相邻（各自套在自己的 stElementContainer
+   里），选错这一层选择器完全不会命中，一开始就是这么踩的坑。 */
+[data-testid="stElementContainer"]:has(.asst-bubble-marker) + [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] {
     font-family: 'LXGW WenKai', 'KaiTi', 'STKaiti', serif;
-    font-size: 1rem; line-height: 1.8; word-break: break-word;
+    font-size: 1rem; line-height: 1.85; padding: 6px 0 20px;
+    border-bottom: 1px solid var(--ma-border);
+    margin-bottom: 14px;
+}
+[data-testid="stElementContainer"]:has(.asst-bubble-marker) + [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] p {
+    margin: 0 0 12px;
+}
+[data-testid="stElementContainer"]:has(.asst-bubble-marker) + [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] p:last-child {
+    margin-bottom: 0;
 }
 
 .guide-bar { display: flex; align-items: center; gap: 8px; padding: 2px 0 4px; }
 .guide-chip {
     display: inline-flex; align-items: center; gap: 5px;
-    background: var(--sidebar); border: 1px solid var(--border); border-radius: 20px;
-    padding: 4px 12px; font-size: 0.82rem; color: var(--text-muted);
+    background: transparent; border: 1px solid var(--ma-border); border-radius: 20px;
+    padding: 4px 12px; font-size: 0.82rem; color: var(--ma-muted);
     cursor: pointer; user-select: none; transition: all 0.15s;
 }
-.guide-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* 选中态用墨色实底，跟主要按钮同一种"这是当前生效状态"的视觉语言，
+   不再用蓝色——蓝色现在只留给聊天气泡。 */
+.guide-chip.on { background: var(--ma-ink) !important; border-color: var(--ma-ink) !important; color: #fff !important; }
 
 [data-testid="stBottomBlockContainer"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div {
-    background: var(--bg) !important;
+    background: var(--ma-bg) !important;
     border: none !important; box-shadow: none !important;
 }
 [data-testid="stChatInput"] {
-    background: var(--surface) !important;
-    border: 1.5px solid var(--border) !important;
+    background: var(--ma-surface) !important;
+    border: 1.5px solid var(--ma-border-2) !important;
     border-radius: 24px !important;
     padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important;
 }
 [data-testid="stChatInput"]:focus-within {
-    border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important;
+    border-color: var(--ma-ink) !important;
+    box-shadow: none !important;
 }
-/* 输入框外面的"白色圆环"：stChatInput 自己是白色圆角外壳，里面第一层
-   子div（新版Streamlit不再给这层分配data-testid，只有一个随机哈希
-   类名，不能拿来当选择器用）自己带了浅灰背景(#F2F3F5)+8px圆角，比
-   外层小一圈，两层叠在一起才会看出"双层圈"。用DOM结构选它（直接子
-   元素），不依赖那个不稳定的哈希类名，背景清透明只留外层这一圈。 */
 [data-testid="stChatInput"] > div:first-child {
     background: transparent !important; border: none !important;
     box-shadow: none !important; border-radius: 0 !important;
 }
-/* 文字输入框自己外面还套了两层无testid的wrapper div，同样带着那个浅灰
-   背景，不清掉的话文字区域会单独露出一小块灰底（另一种"圈"）。用
-   :has() 顺着 textarea 反向选它的直接父级和祖父级，同样不依赖哈希类名。 */
 [data-testid="stChatInput"] div:has(> [data-testid="stChatInputTextArea"]),
 [data-testid="stChatInput"] div:has(> div > [data-testid="stChatInputTextArea"]) {
     background: transparent !important; border: none !important; box-shadow: none !important;
@@ -200,39 +254,38 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stChatInputTextArea"] {
     background: transparent !important; border: none !important;
     box-shadow: none !important; border-radius: 0 !important;
-    color: var(--text) !important; font-size: 0.95rem !important; padding: 2px 0 !important;
+    color: var(--ma-text) !important; font-size: 0.95rem !important; padding: 2px 0 !important;
 }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; outline: none !important; }
-/* stChatInputSubmitButton/MicButton/ApproveButton/CancelButton 这几个
-   testid 新版Streamlit直接标在<button>本身上，不是套在外层div上（跟
-   FileUploadButton不一样，那个testid在外层div，button在更里面一层）。
-   写成"testid button"（找子孙button）永远选不到——用逗号并列自身+
-   子孙两种写法，不管以后是哪种结构都兜得住。 */
 [data-testid="stChatInputSubmitButton"],
-[data-testid="stChatInputSubmitButton"] button { background: var(--accent) !important; border-radius: 50% !important; }
+[data-testid="stChatInputSubmitButton"] button { background: var(--ma-ink) !important; border-radius: 50% !important; }
+[data-testid="stChatInputSubmitButton"] svg { fill: #fff !important; }
 [data-testid="stChatInputSubmitButton"]:disabled,
 [data-testid="stChatInputSubmitButton"] button:disabled {
-    background: var(--sidebar) !important; border: 1px solid var(--border) !important; opacity: 1 !important;
+    background: var(--ma-fill) !important; border: 1px solid var(--ma-border) !important; opacity: 1 !important;
 }
 [data-testid="stChatInputSubmitButton"]:disabled svg,
-[data-testid="stChatInputSubmitButton"] button:disabled svg { fill: var(--text-muted) !important; }
+[data-testid="stChatInputSubmitButton"] button:disabled svg { fill: var(--ma-muted) !important; }
 [data-testid="stChatInputFileUploadButton"] button,
 [data-testid="stChatInputMicButton"],
 [data-testid="stChatInputMicButton"] button {
-    color: var(--text-muted) !important; background: transparent !important;
+    color: var(--ma-muted) !important; background: transparent !important;
 }
 [data-testid="stChatInputFileUploadButton"] svg,
-[data-testid="stChatInputMicButton"] svg { fill: var(--text-muted) !important; }
+[data-testid="stChatInputMicButton"] svg { fill: var(--ma-muted) !important; }
 [data-testid="stChatInputFileUploadButton"] button:hover,
 [data-testid="stChatInputMicButton"]:hover,
-[data-testid="stChatInputMicButton"] button:hover { color: var(--accent) !important; }
+[data-testid="stChatInputMicButton"] button:hover { color: var(--ma-text) !important; }
 [data-testid="stChatInputFileUploadButton"] button:hover svg,
 [data-testid="stChatInputMicButton"]:hover svg,
-[data-testid="stChatInputMicButton"] button:hover svg { fill: var(--accent) !important; }
+[data-testid="stChatInputMicButton"] button:hover svg { fill: var(--ma-text) !important; }
 [data-testid="stChatInputApproveButton"],
-[data-testid="stChatInputApproveButton"] button { background: var(--accent) !important; }
+[data-testid="stChatInputApproveButton"] button { background: var(--ma-ink) !important; }
+[data-testid="stChatInputApproveButton"] svg,
+[data-testid="stChatInputApproveButton"] p { fill: #fff !important; color: #fff !important; }
 [data-testid="stChatInputCancelButton"],
-[data-testid="stChatInputCancelButton"] button { color: var(--text-muted) !important; }
+[data-testid="stChatInputCancelButton"] button { color: var(--ma-muted) !important; }
+[data-testid="stChatInputCancelButton"] svg { fill: var(--ma-muted) !important; }
 
 .course-banner-row [data-testid="stHorizontalBlock"],
 [data-testid="stHorizontalBlock"]:has(.course-banner) { align-items: stretch !important; }
@@ -243,14 +296,16 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stColumn"] { background: transparent !important; }
 [data-testid="stElementContainer"] { background: transparent !important; }
 
+/* ── 分段控件（引导模式等pills）：跟finance-agent的stButtonGroup同一套——
+   未选中描边、选中墨色实底，不再用圆胶囊+蓝色。 */
 [data-testid="stButtonGroup"] { margin-top: 8px !important; }
 div[data-testid="stButtonGroup"] > div > label > div,
 div[data-testid="stButtonGroup"] button,
 div[data-testid="stButtonGroup"] [role="radio"],
 div[data-testid="stButtonGroup"] [role="button"] {
-    background-color: var(--surface) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 20px !important; color: var(--text-muted) !important;
+    background-color: var(--ma-surface) !important;
+    border: 1px solid var(--ma-border) !important;
+    border-radius: var(--ma-radius-sm) !important; color: var(--ma-muted) !important;
     font-size: 0.78rem !important; padding: 3px 12px !important;
 }
 div[data-testid="stButtonGroup"] button:hover,
@@ -258,47 +313,96 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
 div[data-testid="stButtonGroup"] button[aria-selected="true"],
 div[data-testid="stButtonGroup"] [aria-checked="true"],
 div[data-testid="stButtonGroup"] [aria-selected="true"] {
-    background-color: var(--accent) !important;
-    border-color: var(--accent) !important; color: #ffffff !important;
+    background-color: var(--ma-ink) !important;
+    border-color: var(--ma-ink) !important; color: #ffffff !important;
 }
 div[data-testid="stButtonGroup"] p,
 div[data-testid="stButtonGroup"] span { color: inherit !important; background: transparent !important; }
 
-.stButton button { border-radius: var(--radius-sm) !important; font-size: 0.84rem !important; }
-.stButton button[kind="primary"] { background: var(--accent) !important; border: none !important; color: #fff !important; }
-.stButton button[kind="primary"]:hover { background: #1d4ed8 !important; }
+/* ── 按钮：三档系统，跟finance-agent一字不差地照搬——次要(默认)=描边、
+   主要=墨色实底、安静(tertiary)=悬停才浮出底色。 */
+.stButton button,
+[data-testid="stFormSubmitButton"] button,
+[data-testid="stPopover"] button {
+    border-radius: var(--ma-radius-sm) !important; font-size: 0.84rem !important;
+    box-shadow: none !important;
+}
+/* 按钮内的文字标签Streamlit会套一层<p>，页面顶部那条全局"p统一用--ma-text"
+   规则(!important)直接挂在<p>上，子元素的直接样式天然盖过父级<button>上继承
+   下来的color，不管父级选择器特异度多高——只在<button>上设color不够，必须
+   连着内层<p>/div/span一起设，不然主要按钮会变成"黑底黑字"看不见文字
+   （实测踩过，登录/注册按钮当时就是这样，看着像一块空白黑条）。 */
+.stButton button[kind="primary"],
+[data-testid="stFormSubmitButton"] button[kind="primary"] {
+    background: var(--ma-ink) !important; border: 1px solid var(--ma-ink) !important; color: #fff !important;
+}
+.stButton button[kind="primary"] p,
+.stButton button[kind="primary"] div,
+.stButton button[kind="primary"] span,
+[data-testid="stFormSubmitButton"] button[kind="primary"] p,
+[data-testid="stFormSubmitButton"] button[kind="primary"] div,
+[data-testid="stFormSubmitButton"] button[kind="primary"] span { color: #fff !important; }
+.stButton button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { background: #000 !important; border-color: #000 !important; }
+.stButton button[kind="tertiary"], .stButton button[data-testid="stBaseButton-tertiary"] {
+    background: transparent !important; border: 1px solid transparent !important; color: var(--ma-muted) !important;
+}
+.stButton button[kind="tertiary"] p,
+.stButton button[kind="tertiary"] div,
+.stButton button[kind="tertiary"] span,
+.stButton button[data-testid="stBaseButton-tertiary"] p,
+.stButton button[data-testid="stBaseButton-tertiary"] div,
+.stButton button[data-testid="stBaseButton-tertiary"] span { color: var(--ma-muted) !important; }
+.stButton button[kind="tertiary"]:hover, .stButton button[data-testid="stBaseButton-tertiary"]:hover {
+    background: var(--ma-fill) !important; color: var(--ma-text) !important;
+}
+.stButton button[kind="tertiary"]:hover p,
+.stButton button[kind="tertiary"]:hover div,
+.stButton button[kind="tertiary"]:hover span,
+.stButton button[data-testid="stBaseButton-tertiary"]:hover p,
+.stButton button[data-testid="stBaseButton-tertiary"]:hover div,
+.stButton button[data-testid="stBaseButton-tertiary"]:hover span { color: var(--ma-text) !important; }
+/* 删除是破坏性操作，平时保持中性灰，悬停才透出红色警示——跟finance-agent
+   的删除图标同一个道理，全站仅有的彩色出现在这种"真正该被注意"的地方。 */
+[class*="st-key-wb_del_"] button:hover,
+[class*="st-key-wb_del_"] button:hover p,
+[class*="st-key-wb_del_"] button:hover div,
+[class*="st-key-wb_del_"] button:hover span { border-color: var(--ma-danger) !important; color: var(--ma-danger) !important; }
 
 .turn-badge {
-    display: inline-block; background: var(--sidebar); border: 1px solid var(--border);
-    color: var(--text-muted); padding: 1px 8px; border-radius: 6px; font-size: 0.7rem; margin-bottom: 4px;
+    display: inline-block; background: transparent; border: 1px solid var(--ma-border);
+    color: var(--ma-muted); padding: 1px 8px; border-radius: var(--ma-radius-sm); font-size: 0.7rem; margin-bottom: 4px;
 }
-[data-testid="stExpander"] { border: 1px solid var(--border) !important; border-radius: 10px !important; background: var(--surface) !important; }
-[data-testid="stStatusWidget"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; }
+/* Expander/状态框去掉整块底色和圆角边框，改成跟站内其它区块一样的发丝线。 */
+[data-testid="stExpander"] details { border: none !important; border-bottom: 1px solid var(--ma-border) !important; border-radius: 0 !important; background: transparent !important; }
+[data-testid="stExpander"] summary { padding: 10px 2px !important; }
+[data-testid="stExpander"] summary:hover { background: rgba(23,24,28,0.02) !important; }
+[data-testid="stStatusWidget"] { background: var(--ma-surface) !important; border: 1px solid var(--ma-border) !important; border-radius: var(--ma-radius) !important; }
 
-pre, code { background: #F0F1F3 !important; border: 1px solid var(--border) !important; border-radius: 8px !important; font-size: 0.82rem !important; color: #333 !important; }
-hr { border-color: var(--border) !important; }
+pre, code { background: var(--ma-fill) !important; border: 1px solid var(--ma-border) !important; border-radius: var(--ma-radius-sm) !important; font-size: 0.82rem !important; color: var(--ma-text-2) !important; }
+hr { border-color: var(--ma-border) !important; }
 [data-testid="stSidebar"] hr { margin: 8px 0 !important; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 6px !important; }
 
 .katex-display { margin: 0.8em 0 !important; overflow-x: auto !important; overflow-y: hidden !important; }
 .katex { font-size: 1.05em !important; }
 .katex-display > .katex { font-size: 1.1em !important; }
-.katex, .katex * { color: #1A1A2E !important; background: transparent !important; }
-.katex svg path, .katex .svg-align path, .katex .delimsizing path, .katex .stretchy path { fill: #1A1A2E !important; stroke: #1A1A2E !important; }
-mjx-container, mjx-container * { color: #1A1A2E !important; background: transparent !important; }
-mjx-container svg, mjx-container svg * { fill: #1A1A2E !important; }
+.katex, .katex * { color: var(--ma-text) !important; background: transparent !important; }
+.katex svg path, .katex .svg-align path, .katex .delimsizing path, .katex .stretchy path { fill: var(--ma-text) !important; stroke: var(--ma-text) !important; }
+mjx-container, mjx-container * { color: var(--ma-text) !important; background: transparent !important; }
+mjx-container svg, mjx-container svg * { fill: var(--ma-text) !important; }
 
 [data-testid="stAudioInput"],
-[data-testid="stAudioInput"] > div { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; }
-[data-testid="stAudioInput"] button { background: transparent !important; color: var(--text-muted) !important; width: 72px !important; height: 72px !important; min-width: 72px !important; border-radius: 50% !important; }
+[data-testid="stAudioInput"] > div { background: var(--ma-surface) !important; border: 1px solid var(--ma-border) !important; border-radius: var(--ma-radius) !important; }
+[data-testid="stAudioInput"] button { background: transparent !important; color: var(--ma-muted) !important; width: 72px !important; height: 72px !important; min-width: 72px !important; border-radius: 50% !important; }
 [data-testid="stAudioInput"] button svg { width: 36px !important; height: 36px !important; }
 
 [data-testid="stTextArea"] textarea {
-    background: var(--surface) !important; border: 1px solid var(--border) !important;
-    border-radius: 16px !important; color: var(--text) !important;
+    background: var(--ma-surface) !important; border: 1px solid var(--ma-border-2) !important;
+    border-radius: var(--ma-radius) !important; color: var(--ma-text) !important;
     font-size: 0.95rem !important; padding: 10px 16px !important; resize: none !important;
 }
-[data-testid="stTextArea"] textarea:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important; }
+[data-testid="stTextArea"] textarea:focus { border-color: var(--ma-ink) !important; box-shadow: none !important; }
 
 [data-testid="stFileUploaderDropzone"],
 [data-testid="stFileUploadDropzone"] { background: transparent !important; border: none !important; padding: 4px 0 !important; }
@@ -308,38 +412,40 @@ mjx-container svg, mjx-container svg * { fill: #1A1A2E !important; }
 [data-testid="stFileUploadDropzone"] > div > span { display: none !important; }
 [data-testid="stFileUploaderDropzone"] button,
 [data-testid="stFileUploadDropzone"] button {
-    background: var(--surface) !important; border: 1px solid var(--border) !important;
-    border-radius: 14px !important; color: var(--text) !important; width: 100% !important;
+    background: transparent !important; border: 1px solid var(--ma-border) !important;
+    border-radius: var(--ma-radius) !important; color: var(--ma-text) !important; width: 100% !important;
     padding: 14px 20px !important; font-size: 0.92rem !important; font-weight: 500 !important; justify-content: center !important;
 }
 [data-testid="stFileUploaderDropzone"] button:hover,
-[data-testid="stFileUploadDropzone"] button:hover { border-color: var(--accent) !important; }
+[data-testid="stFileUploadDropzone"] button:hover { border-color: var(--ma-border-2) !important; background: var(--ma-fill) !important; }
 
 [data-testid="stSelectbox"] > div > div,
-[data-baseweb="select"] > div { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; color: var(--text) !important; }
+[data-baseweb="select"] > div { background: var(--ma-surface) !important; border: 1px solid var(--ma-border-2) !important; border-radius: var(--ma-radius) !important; color: var(--ma-text) !important; }
 [data-baseweb="popover"], [data-baseweb="menu"],
-[data-baseweb="menu"] ul { background: var(--surface) !important; }
-[data-baseweb="menu"] li { color: var(--text) !important; }
-[data-baseweb="menu"] li:hover { background: var(--sidebar) !important; }
+[data-baseweb="menu"] ul { background: var(--ma-surface) !important; }
+[data-baseweb="menu"] li { color: var(--ma-text) !important; }
+[data-baseweb="menu"] li:hover { background: var(--ma-fill) !important; }
 
-[data-testid="stCheckbox"] span, [data-testid="stCheckbox"] p { color: var(--text) !important; }
+[data-testid="stCheckbox"] span, [data-testid="stCheckbox"] p { color: var(--ma-text) !important; }
 
+/* 欢迎页功能卡片：去掉阴影上浮，只用边框深浅表达悬停，跟finance-agent
+   全站"不做上浮/阴影动效"的克制原则一致。 */
 .feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 20px 0 12px; }
-.feature-card { background: var(--surface); border-radius: var(--radius); padding: 18px 16px; text-align: left; border: 1px solid var(--border); }
-.feature-card:hover { border-color: var(--accent); }
-.feature-title { font-size: 0.92rem; font-weight: 600; color: var(--text) !important; margin-bottom: 5px; }
-.feature-desc { font-size: 0.78rem; color: var(--text-muted) !important; line-height: 1.5; }
+.feature-card { background: transparent; border-radius: var(--ma-radius); padding: 18px 16px; text-align: left; border: 1px solid var(--ma-border); transition: border-color .15s ease; }
+.feature-card:hover { border-color: var(--ma-border-2); }
+.feature-title { font-size: 0.92rem; font-weight: 600; color: var(--ma-text) !important; margin-bottom: 5px; }
+.feature-desc { font-size: 0.78rem; color: var(--ma-muted) !important; line-height: 1.5; }
 
 button[kind="secondary"][data-testid*="wb_add"] {
-    font-size: 0.75rem !important; color: var(--text-muted) !important;
-    border-color: var(--border) !important; padding: 2px 10px !important;
+    font-size: 0.75rem !important; color: var(--ma-muted) !important;
+    border-color: var(--ma-border) !important; padding: 2px 10px !important;
     height: auto !important; min-height: 28px !important; border-radius: 14px !important; background: transparent !important;
 }
 
 .login-logo { text-align: center; padding: 60px 0 24px; }
 .login-logo-icon { font-size: 3rem; }
-.login-logo-title { font-size: 1.5rem; font-weight: 600; color: var(--text) !important; margin: 8px 0 4px; }
-.login-logo-sub { font-size: 0.85rem; color: var(--text-muted) !important; }
+.login-logo-title { font-size: 1.5rem; font-weight: 650; letter-spacing: -0.015em; color: var(--ma-text) !important; margin: 8px 0 4px; }
+.login-logo-sub { font-size: 0.85rem; color: var(--ma-muted) !important; }
 
 @media (max-width: 768px) {
     /* 隐藏 Streamlit 原生侧边栏折叠按钮 */
@@ -355,41 +461,41 @@ button[kind="secondary"][data-testid*="wb_add"] {
         transition: transform 0.26s cubic-bezier(.4,0,.2,1) !important;
         padding-top: 56px !important;
     }
-    [data-testid="stSidebar"].ma-sb-open { transform: translateX(0) !important; box-shadow: 6px 0 32px rgba(0,0,0,0.25) !important; }
+    [data-testid="stSidebar"].ma-sb-open { transform: translateX(0) !important; box-shadow: 6px 0 32px rgba(0,0,0,0.15) !important; }
 
-    /* 侧边栏内部紧凑化 */
     [data-testid="stSidebar"] .stButton button {
-        font-size: 0.82rem !important; padding: 6px 12px !important;
-        min-height: 34px !important; height: auto !important; border-radius: 8px !important;
+        font-size: 0.82rem !important; padding: 7px 4px !important;
+        min-height: 34px !important; height: auto !important;
     }
     [data-testid="stSidebar"] [data-testid="stExpander"] {
         margin-bottom: 6px !important;
     }
     [data-testid="stSidebar"] [data-testid="stExpander"] summary {
-        font-size: 0.84rem !important; padding: 8px 12px !important;
+        font-size: 0.84rem !important; padding: 8px 4px !important;
     }
     [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 6px !important; }
     [data-testid="stSidebar"] p { font-size: 0.8rem !important; margin: 0 !important; }
 
+    /* 汉堡按钮改成跟站内图标按钮同一种克制处理：发丝描边，不用重阴影浮块。 */
     #ma-hamburger {
         display: flex !important; position: fixed !important;
         top: 10px !important; left: 10px !important; z-index: 9999 !important;
         width: 40px !important; height: 40px !important;
-        background: rgba(255,255,255,0.95) !important; border: 1px solid var(--border) !important;
-        border-radius: 11px !important; align-items: center !important; justify-content: center !important;
-        cursor: pointer !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+        background: var(--ma-surface) !important; border: 1px solid var(--ma-border-2) !important;
+        border-radius: var(--ma-radius) !important; align-items: center !important; justify-content: center !important;
+        cursor: pointer !important; box-shadow: none !important;
         font-size: 1.2rem !important; user-select: none !important; -webkit-tap-highlight-color: transparent !important;
     }
     #ma-backdrop {
         display: none; position: fixed !important; inset: 0 !important;
-        background: rgba(0,0,0,0.45) !important; z-index: 9997 !important; -webkit-tap-highlight-color: transparent !important;
+        background: rgba(23,24,28,0.35) !important; z-index: 9997 !important; -webkit-tap-highlight-color: transparent !important;
     }
     #ma-backdrop.active { display: block !important; }
 
     [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 4px !important; }
     [data-testid="stColumn"] { min-width: 0 !important; flex-shrink: 1 !important; overflow: hidden !important; }
     .bubble-user { max-width: 80vw !important; font-size: 0.9rem !important; }
-    .bubble-asst-wrap { font-size: 0.9rem !important; }
+    [data-testid="stElementContainer"]:has(.asst-bubble-marker) + [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] { font-size: 0.9rem !important; }
     .greeting-main { font-size: 1.4rem !important; }
     .av { width: 28px !important; height: 28px !important; font-size: 0.9rem !important; }
     .app-header-title { font-size: 0.9rem !important; }
@@ -398,214 +504,5 @@ button[kind="secondary"][data-testid*="wb_add"] {
     .feature-title { font-size: 0.85rem !important; }
     .feature-desc { font-size: 0.72rem !important; }
 }
-</style>
-"""
-
-_DARK_CSS = """
-<style>
-:root {
-    --dm-bg:       #0D0D14;
-    --dm-surface:  #16162A;
-    --dm-sidebar:  #121224;
-    --dm-border:   #282845;
-    --dm-text:     #DEE1F5;
-    --dm-muted:    #6B6B95;
-    --dm-accent:   #5B8CFF;
-    --dm-user-bg:  #3B2A66;
-    --dm-user-text:#D9CCFF;
-    --dm-card:     #1E1E38;
-    --dm-card2:    #242448;
-}
-
-html, body { background: var(--dm-bg) !important; }
-.stApp, [data-testid="stAppViewContainer"],
-[data-testid="stMain"], [data-testid="stMainBlockContainer"],
-section.main, .main, .block-container, footer,
-[data-testid="stBottom"], .stBottom,
-[data-testid="stBottomBlockContainer"],
-[class*="bottom"], [class*="Bottom"] { background: var(--dm-bg) !important; }
-p, span, label, div, li, td, th, h1, h2, h3, h4, h5, h6 { color: var(--dm-text) !important; }
-
-header[data-testid="stHeader"] { background: var(--dm-surface) !important; border-bottom: 1px solid var(--dm-border) !important; }
-
-[data-testid="stSidebar"] { background: var(--dm-sidebar) !important; border-right: 1px solid var(--dm-border) !important; }
-[data-testid="stSidebar"] * { color: var(--dm-text) !important; }
-[data-testid="stSidebar"] .stButton button { background: var(--dm-card) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }
-[data-testid="stSidebar"] .stButton button:hover { background: var(--dm-card2) !important; color: #fff !important; border-color: var(--dm-accent) !important; }
-
-/* 手机端汉堡按钮（#ma-hamburger 在 _math_page.py 里用JS创建，浅色默认
-   样式见上面 @media(max-width:768px) 那段）。深色规则源码顺序排在浅色
-   规则后面，两条选择器特异度相同时源码靠后天然赢，不用跟其他脚本抢
-   DOM插入顺序或依赖JS探测主题再拿!important内联样式硬盖——之前那套
-   JS方案在每次rerun后就失效，按钮永远停在浅色样式。 */
-#ma-hamburger { background: rgba(24,24,42,0.95) !important; border-color: #32325a !important; color: #dde1f5 !important; }
-
-.course-banner { background: var(--dm-card) !important; color: var(--dm-muted) !important; border-color: var(--dm-border) !important; }
-[data-testid="stHorizontalBlock"] { background: transparent !important; }
-[data-testid="stColumn"] { background: transparent !important; }
-[data-testid="stElementContainer"] { background: transparent !important; }
-
-.bubble-user { background: var(--dm-user-bg) !important; color: var(--dm-user-text) !important; border-radius: 18px 4px 18px 18px !important; }
-
-.stMarkdown:has(.asst-bubble-marker) + .stMarkdown > div { background: var(--dm-card) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }
-.bubble-asst-wrap { background: var(--dm-card) !important; border: 1px solid var(--dm-border) !important; }
-.bubble-asst-wrap p, .bubble-asst-wrap li { color: var(--dm-text) !important; }
-
-pre, pre code, code { background: #0A0A1A !important; color: #B8C8E8 !important; border: 1px solid var(--dm-border) !important; }
-[data-testid="stCodeBlock"], [data-testid="stCode"],
-[data-testid="stCodeBlock"] > div, [data-testid="stCode"] > div,
-.stCodeBlock, .stCodeBlock > div { background: #0A0A1A !important; }
-[data-testid="stCodeBlock"] pre, [data-testid="stCode"] pre { background: #0A0A1A !important; }
-[data-testid="stCodeBlock"] button, [data-testid="stCode"] button { background: var(--dm-card) !important; color: var(--dm-muted) !important; border: 1px solid var(--dm-border) !important; }
-
-.stMarkdown img, [data-testid="stMarkdownContainer"] img { filter: brightness(0.88) contrast(1.05) !important; border-radius: 6px !important; }
-
-[data-testid="stVerticalBlock"] [data-testid="stButton"] button { background: var(--dm-surface) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; box-shadow: none !important; }
-[data-testid="stVerticalBlock"] [data-testid="stButton"] button:hover { background: var(--dm-card2) !important; border-color: var(--dm-accent) !important; color: #fff !important; }
-
-.feature-card { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
-.feature-card:hover { border-color: var(--dm-accent) !important; }
-.feature-title { color: var(--dm-text) !important; }
-.feature-desc { color: var(--dm-muted) !important; }
-.greeting-main, .welcome-title { color: var(--dm-text) !important; }
-.greeting-sub, .welcome-sub { color: var(--dm-muted) !important; }
-
-[data-testid="stBottom"],
-[data-testid="stBottomBlockContainer"],
-[data-testid="stBottom"] > div,
-[data-testid="stBottom"] > div > div {
-    background: var(--dm-bg) !important;
-    border: none !important; box-shadow: none !important;
-}
-[data-testid="stChatInput"] { background: var(--dm-surface) !important; border: 1.5px solid var(--dm-border) !important; border-radius: 24px !important; padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important; }
-[data-testid="stChatInput"]:focus-within { border-color: var(--dm-accent) !important; box-shadow: 0 0 0 3px rgba(91,140,255,0.15) !important; }
-[data-testid="stChatInput"] > div:first-child { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; }
-[data-testid="stChatInput"] div:has(> [data-testid="stChatInputTextArea"]),
-[data-testid="stChatInput"] div:has(> div > [data-testid="stChatInputTextArea"]) {
-    background: transparent !important; border: none !important; box-shadow: none !important;
-}
-[data-testid="stChatInputTextArea"] { background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; color: var(--dm-text) !important; padding: 2px 0 !important; }
-[data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; }
-[data-testid="stChatInputSubmitButton"],
-[data-testid="stChatInputSubmitButton"] button { background: var(--dm-accent) !important; }
-[data-testid="stChatInputSubmitButton"]:disabled,
-[data-testid="stChatInputSubmitButton"] button:disabled {
-    background: var(--dm-card) !important; border: 1px solid var(--dm-border) !important; opacity: 1 !important;
-}
-[data-testid="stChatInputSubmitButton"]:disabled svg,
-[data-testid="stChatInputSubmitButton"] button:disabled svg { fill: var(--dm-text) !important; }
-[data-testid="stChatInputFileUploadButton"] button,
-[data-testid="stChatInputMicButton"],
-[data-testid="stChatInputMicButton"] button {
-    color: var(--dm-text) !important; background: transparent !important;
-}
-[data-testid="stChatInputFileUploadButton"] svg,
-[data-testid="stChatInputMicButton"] svg { fill: var(--dm-text) !important; }
-[data-testid="stChatInputFileUploadButton"] button:hover,
-[data-testid="stChatInputMicButton"]:hover,
-[data-testid="stChatInputMicButton"] button:hover { color: var(--dm-accent) !important; }
-[data-testid="stChatInputFileUploadButton"] button:hover svg,
-[data-testid="stChatInputMicButton"]:hover svg,
-[data-testid="stChatInputMicButton"] button:hover svg { fill: var(--dm-accent) !important; }
-[data-testid="stChatInputApproveButton"],
-[data-testid="stChatInputApproveButton"] button { background: var(--dm-accent) !important; }
-[data-testid="stChatInputCancelButton"],
-[data-testid="stChatInputCancelButton"] button { color: var(--dm-muted) !important; }
-
-[data-testid="stFileUploaderDropzone"] button,
-[data-testid="stFileUploadDropzone"] button { background: var(--dm-surface) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }
-[data-testid="stFileUploaderDropzone"] button:hover,
-[data-testid="stFileUploadDropzone"] button:hover { background: var(--dm-card2) !important; border-color: var(--dm-accent) !important; }
-[data-testid="stFileUploaderFileName"] { color: var(--dm-text) !important; }
-/* 选中文件后显示的那张卡片（文件名+大小+删除按钮），testid 名字不固定，
-   用 stFileUploader 整个容器的通配子元素兜底，把默认的白底都盖掉 */
-[data-testid="stFileUploader"] * { background-color: var(--dm-surface) !important; }
-[data-testid="stFileUploader"] { color: var(--dm-text) !important; }
-[data-testid="stFileUploaderDropzone"], [data-testid="stFileUploadDropzone"] { background: transparent !important; }
-[data-testid="stFileUploaderDropzone"] *, [data-testid="stFileUploadDropzone"] * { background-color: transparent !important; }
-[data-testid="stFileUploaderDropzone"] button, [data-testid="stFileUploadDropzone"] button { background-color: var(--dm-surface) !important; }
-[data-testid="stFileUploaderDeleteBtn"] button, [data-testid="stFileUploader"] button[kind="icon"] {
-    background-color: transparent !important; color: var(--dm-muted) !important;
-}
-
-[data-testid="stSelectbox"] > div > div,
-[data-baseweb="select"] > div { background: var(--dm-surface) !important; border: 1px solid var(--dm-border) !important; color: var(--dm-text) !important; }
-[data-baseweb="popover"], [data-baseweb="menu"],
-[data-baseweb="menu"] ul, [data-baseweb="list"] { background: var(--dm-surface) !important; }
-[data-baseweb="menu"] li, [data-baseweb="option"] { color: var(--dm-text) !important; }
-[data-baseweb="menu"] li:hover, [data-baseweb="option"]:hover { background: var(--dm-card2) !important; }
-
-
-[data-testid="stAudioInput"],
-[data-testid="stAudioInput"] > div { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
-[data-testid="stAudioInput"] button { color: var(--dm-muted) !important; }
-
-[data-testid="stTextArea"] textarea { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
-
-.guide-chip { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-muted) !important; }
-.guide-chip.on { background: var(--dm-accent) !important; border-color: var(--dm-accent) !important; color: #fff !important; }
-
-[data-testid="stCheckbox"] span, [data-testid="stCheckbox"] p { color: var(--dm-text) !important; }
-[data-testid="stToggle"] { color: var(--dm-text) !important; }
-[data-testid="stAlert"] { background: var(--dm-card) !important; border-color: var(--dm-border) !important; }
-[data-testid="stAlert"] p { color: var(--dm-text) !important; }
-[data-testid="stExpander"] { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
-[data-testid="stExpander"] summary { color: var(--dm-text) !important; }
-details, details summary { background: var(--dm-surface) !important; color: var(--dm-text) !important; }
-
-[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
-    background: var(--dm-surface) !important;
-    border-color: var(--dm-border) !important;
-    color: var(--dm-text) !important;
-    outline: none !important;
-    box-shadow: none !important;
-}
-[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover,
-[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:focus {
-    background: var(--dm-card2) !important;
-    border-color: var(--dm-accent) !important;
-    color: var(--dm-accent) !important;
-    outline: none !important;
-    box-shadow: none !important;
-}
-
-hr { border-color: var(--dm-border) !important; }
-small, .caption { color: var(--dm-muted) !important; }
-
-.login-logo-title { color: var(--dm-text) !important; }
-.login-logo-sub { color: var(--dm-muted) !important; }
-
-div[data-testid="stButtonGroup"] > div > label > div,
-div[data-testid="stButtonGroup"] button,
-div[data-testid="stButtonGroup"] [role="radio"],
-div[data-testid="stButtonGroup"] [role="button"] { background: var(--dm-card) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
-div[data-testid="stButtonGroup"] > div > label > div:hover,
-div[data-testid="stButtonGroup"] button:hover,
-div[data-testid="stButtonGroup"] [role="radio"]:hover,
-div[data-testid="stButtonGroup"] button[aria-selected="true"],
-div[data-testid="stButtonGroup"] [aria-checked="true"],
-div[data-testid="stButtonGroup"] [aria-selected="true"] { background: var(--dm-accent) !important; color: #fff !important; border-color: var(--dm-accent) !important; }
-
-[data-testid="stStatusWidget"] { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
-
-.katex-display { background: transparent !important; color: var(--dm-text) !important; }
-.katex, .katex * { color: var(--dm-text) !important; background: transparent !important; }
-.katex .fbox, .katex .fbox > .katex-html { border-color: #7a7ab8 !important; background: transparent !important; }
-.katex .frac-line { background: var(--dm-text) !important; border-color: var(--dm-text) !important; }
-.katex svg path, .katex .svg-align path { fill: var(--dm-text) !important; stroke: var(--dm-text) !important; }
-.katex .delimsizing path, .katex .stretchy path { fill: var(--dm-text) !important; }
-
-mjx-container { background: transparent !important; color: var(--dm-text) !important; }
-mjx-container * { color: var(--dm-text) !important; background: transparent !important; }
-mjx-container svg, mjx-container svg * { fill: var(--dm-text) !important; }
-mjx-container[jax="CHTML"] { color: var(--dm-text) !important; }
-mjx-menclose { border-color: #7a7ab8 !important; }
-mjx-mfrac > mjx-frac > mjx-line { border-color: var(--dm-text) !important; }
-
-.MathJax_Display, .MathJax, .MJXc-display { background: transparent !important; color: var(--dm-text) !important; }
-.MathJax svg { fill: var(--dm-text) !important; }
-
-.stMarkdownContainer .math, .stMarkdown .math { background: transparent !important; }
-[data-testid="stMarkdownContainer"] > div { background: transparent !important; }
 </style>
 """

@@ -38,7 +38,7 @@ from components.auth import (
     _save_message, _load_recent_messages,
     check_and_bump_usage,
 )
-from components.ui_helpers import _BASE_CSS, _DARK_CSS
+from components.ui_helpers import _BASE_CSS
 from components.config import get_secret, DEFAULT_MODEL
 from components.sidebar import render_sidebar
 
@@ -154,9 +154,8 @@ try {
     if (!ov) {
         ov = doc.createElement('div');
         ov.id = '_ma_loader';
-        var isDark = !!doc.getElementById('_dm_override_css');
-        ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.35s;background:' + (isDark ? '#0D0D14' : '#F8F8FA');
-        ov.innerHTML = '<div style="width:36px;height:36px;border:3px solid #e0e0e8;border-top-color:#5B8CFF;border-radius:50%;animation:_ma_spin 0.8s linear infinite"></div><div style="font-size:0.9rem;color:#aaa;font-family:Inter,sans-serif;letter-spacing:.03em;margin-top:4px">加载中…</div><style>@keyframes _ma_spin{to{transform:rotate(360deg)}}</style>';
+        ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.35s;background:#FAFAFB';
+        ov.innerHTML = '<div style="width:26px;height:26px;border:2px solid #EAEAEF;border-top-color:#17181C;border-radius:50%;animation:_ma_spin 0.75s linear infinite"></div><div style="font-size:0.78rem;color:#A8ABB3;font-family:Inter,-apple-system,sans-serif;letter-spacing:.06em">加载中</div><style>@keyframes _ma_spin{to{transform:rotate(360deg)}}</style>';
         doc.body.appendChild(ov);
     }
     var _ovTries = 0;
@@ -256,18 +255,42 @@ _cv1.html("""
 (function() {
 try {
     var doc = window.parent.document;
-    if (doc.getElementById('ma-hamburger')) return;  // 避免重复注入
 
-    // ── 汉堡按钮 ──────────────────────────────────────────────────────────
-    var btn = doc.createElement('div');
-    btn.id = 'ma-hamburger';
-    btn.innerHTML = '&#9776;';  // ☰
-    doc.body.appendChild(btn);
+    // 2026-09实测修复：这里以前是"doc.getElementById('ma-hamburger')存在就
+    // return"，图省事避免重复插入按钮。问题是这个组件每次rerun都会整个
+    // 重新挂载一个新iframe执行这段脚本，而按钮/遮罩这两个DOM节点是插进
+    // *父页面*的，不会跟着旧iframe一起消失——于是后续每次rerun都在"按钮已
+    // 存在"上提前return，真正要绑的click监听器（闭包活在这次iframe的JS
+    // 上下文里）反而从来没重新挂上去，一旦承载第一次绑定的那个iframe被
+    // Streamlit回收，点击直接失效，点了没反应。实测复现：按钮点了没有任何
+    // 反应，直接在页面上手动dispatchEvent('click')到这个按钮上也没有效果，
+    // 但换一个全新绑的监听器立刻就能响应——说明按钮本身和事件派发都没问题，
+    // 唯独“原来那个监听器”没有真正生效。
+    // 改成：按钮/遮罩节点复用（不存在才创建），但监听器每次都用cloneNode
+    // 整体换掉重绑——cloneNode(true)产出的新节点不带任何旧监听器，天然
+    // 避免"每次rerun叠加一个新监听器"导致重复触发，同时保证监听器一定是
+    // 当前这次iframe上下文里活的那一份，不依赖上一次是否还活着。
+    var btn = doc.getElementById('ma-hamburger');
+    if (!btn) {
+        btn = doc.createElement('div');
+        btn.id = 'ma-hamburger';
+        doc.body.appendChild(btn);
+    }
+    btn.innerHTML = '&#9776;';  // ☰，每次都重置成关闭态图标，避免残留✕
+    var freshBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(freshBtn, btn);
+    btn = freshBtn;
 
-    // ── 半透明遮罩 ────────────────────────────────────────────────────────
-    var backdrop = doc.createElement('div');
-    backdrop.id = 'ma-backdrop';
-    doc.body.appendChild(backdrop);
+    var backdrop = doc.getElementById('ma-backdrop');
+    if (!backdrop) {
+        backdrop = doc.createElement('div');
+        backdrop.id = 'ma-backdrop';
+        doc.body.appendChild(backdrop);
+    }
+    var freshBackdrop = backdrop.cloneNode(true);
+    backdrop.parentNode.replaceChild(freshBackdrop, backdrop);
+    backdrop = freshBackdrop;
+    backdrop.classList.remove('active');
 
     function getSidebar() {
         return doc.querySelector('[data-testid="stSidebar"]');
@@ -311,26 +334,26 @@ try {
     // 点遮罩关闭
     backdrop.addEventListener('click', closeSidebar);
 
-    // 点侧边栏里的按钮后延迟关闭（给 Streamlit 时间处理点击）
-    doc.addEventListener('click', function(e) {
+    // 点侧边栏里的按钮后延迟关闭（给 Streamlit 时间处理点击）——绑在doc
+    // 上的这个监听器每次也用命名空间事件重新绑一遍，避免重复：先移除
+    // 同名旧监听器（存在doc上做标记），再绑新的。
+    if (doc.__maSidebarAutoClose) {
+        doc.removeEventListener('click', doc.__maSidebarAutoClose);
+    }
+    doc.__maSidebarAutoClose = function(e) {
         var sb = getSidebar();
         if (!sb || !sb.classList.contains('ma-sb-open')) return;
         if (e.target === btn) return;
         if (sb.contains(e.target)) {
             setTimeout(closeSidebar, 200);
         }
-    });
+    };
+    doc.addEventListener('click', doc.__maSidebarAutoClose);
 
-    // 暗色模式下汉堡按钮样式：原来这里用JS给按钮设内联样式+MutationObserver
-    // 监听切换。两个问题：1) isDark判断条件（data-theme属性/固定颜色字符串）
-    // 从来没成立过；2) 就算判断对了，这个组件iframe在每次rerun时会被整个
-    // 重新挂载，"按钮已存在就return"的判重逻辑导致新iframe里的observer从来
-    //没重新建立起来，而且内联style一旦用!important设过一次，会永久盖住
-    // 后面任何CSS规则（哪怕CSS也是!important），后续没法再靠CSS纠正。
-    // 改成完全交给CSS控制：浅色默认样式和深色覆盖样式都放在 ui_helpers.py
-    // 的 _BASE_CSS/_DARK_CSS 里（同一个 style 标签内，深色规则源码顺序
-    // 排在浅色规则后面，源码靠后天然赢，不用跟其他脚本抢DOM插入顺序），
-    // 不依赖客户端探测，不会有陈旧内联样式卡住的问题。
+    // 汉堡按钮样式完全交给CSS控制（ui_helpers.py 的 _BASE_CSS），不在这里
+    // 用JS设内联样式——内联style一旦用!important设过一次，会永久盖住
+    // 后面任何CSS规则，没法再靠CSS纠正。styling全部走CSS选择器，不依赖
+    // 客户端判断。
 
 } catch(e) {}
 })();
@@ -739,132 +762,6 @@ if "example_set" not in st.session_state:
     st.session_state.example_set = _get_examples()
 if "guide_mode" not in st.session_state:
     st.session_state.guide_mode = False
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = False
-
-# ── 暗色模式 CSS 覆盖 ─────────────────────────────────────────────────────────
-if st.session_state.dark_mode:
-    st.markdown(_DARK_CSS, unsafe_allow_html=True)
-
-# 始终注入：暗色时写入覆盖样式+MutationObserver，日间时清除
-_dm_js_flag = "true" if st.session_state.dark_mode else "false"
-_cv1.html(f"""<script>
-(function(){{
-try{{
-    var dark = {_dm_js_flag};
-    var doc  = window.parent.document;
-    var SID  = '_dm_override_css';
-    var el   = doc.getElementById(SID);
-    if (!dark) {{
-        if (el) el.remove();
-        // disconnect() 只挡未来的通知，挡不住"切换前一瞬间"那次mutation
-        // 已经排进去的 setTimeout(applyInline, 30) ——那个定时器跟observer
-        // 断没断连没关系，照样会在30ms后独立触发，把#16162A重新描回来，
-        // 覆盖掉下面cleanup()刚清完的白色。必须在置空引用前先显式取消它。
-        if (doc._dmObs) {{
-            if (doc._dmObs._t) clearTimeout(doc._dmObs._t);
-            doc._dmObs.disconnect();
-            doc._dmObs = null;
-        }}
-        function cleanup() {{
-            var inp = doc.querySelector('[data-testid="stChatInput"]');
-            if (inp) {{
-                ['background','border','border-top','border-radius','box-shadow'].forEach(function(p){{ inp.style.removeProperty(p); }});
-                inp.querySelectorAll('*').forEach(function(d){{ d.style.removeProperty('background'); }});
-                inp.querySelectorAll('textarea,input').forEach(function(t){{
-                    ['color','background','-webkit-text-fill-color','caret-color'].forEach(function(p){{ t.style.removeProperty(p); }});
-                }});
-            }}
-            doc.querySelectorAll('[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]').forEach(function(bt){{
-                ['background','border','box-shadow'].forEach(function(p){{ bt.style.removeProperty(p); }});
-                bt.querySelectorAll('*').forEach(function(el2){{ el2.style.removeProperty('background'); }});
-            }});
-        }}
-        // chat_input 在切换主题触发的 rerun 里可能稍晚才挂载完成（Streamlit 的
-        // 异步渲染跟这段 JS 不是同步的），只清一次可能清早了、清了个寂寞——
-        // 残留的内联样式是我们自己用JS硬设的，React 不会主动清掉，所以要多试几次。
-        cleanup();
-        setTimeout(cleanup, 60);
-        setTimeout(cleanup, 250);
-        setTimeout(cleanup, 600);
-        return;
-    }}
-    var s = el || doc.createElement('style');
-    if (!el) {{ s.id = SID; doc.head.appendChild(s); }}
-    var CSS =
-        ':root{{--background-color:#0D0D14!important;--secondary-background-color:#16162A!important;--text-color:#DEE1F5!important}}' +
-        'body,html,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"]{{background:#0D0D14!important}}' +
-        '[data-testid="stSidebar"] *,[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] *{{color:#DEE1F5!important}}' +
-        '[data-testid="stSidebar"] .stButton button{{font-size:0.78rem!important;white-space:normal!important;line-height:1.3!important}}' +
-        '[data-testid="stSidebarCollapseButton"] svg,[data-testid="stSidebarCollapseButton"] path{{fill:#DEE1F5!important;color:#DEE1F5!important}}' +
-        'button[data-testid="stSidebarCollapseButton"]{{background:transparent!important}}' +
-        '[data-testid="stSidebarCollapseButton"]:hover{{background:rgba(255,255,255,0.1)!important}}' +
-        '[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]{{background:#0D0D14!important}}' +
-        '[data-testid="stBottom"]>div,[data-testid="stBottom"]>div>div{{background:#0D0D14!important}}' +
-        '[data-testid="stChatInput"]{{background:#16162A!important;border:1.5px solid #282845!important;border-radius:24px!important;box-shadow:none!important}}' +
-        '[data-testid="stChatInput"]>div,[data-testid="stChatInput"]>div>div{{background:#16162A!important}}' +
-        '[data-testid="stChatInput"]{{background:#16162A!important}}' +
-        '[data-testid="stChatInputTextArea"]{{background:#16162A!important;border:none!important;box-shadow:none!important;color:#DEE1F5!important;-webkit-text-fill-color:#DEE1F5!important;caret-color:#DEE1F5!important}}' +
-        '[data-testid="stChatInputTextArea"]::placeholder{{color:#6B6B95!important}}' +
-        '[data-testid="stChatInputSubmitButton"],[data-testid="stChatInputSubmitButton"] button{{background:#5B8CFF!important}}' +
-        /* 下拉框弹出层（Streamlit 渲染在 document 根部的 portal） */
-        '[data-baseweb="popover"],[data-baseweb="menu"],[data-baseweb="list"]{{background:#1E1E35!important;border:1px solid #2E2E50!important}}' +
-        '[data-baseweb="option"]{{background:#1E1E35!important;color:#DEE1F5!important}}' +
-        '[data-baseweb="option"]:hover,[data-baseweb="option"][aria-selected="true"]{{background:#2A2A4A!important}}' +
-        '[role="option"]{{background:#1E1E35!important;color:#DEE1F5!important}}' +
-        '[role="listbox"]{{background:#1E1E35!important}}' +
-        '[data-testid="stSelectboxVirtualDropdown"]{{background:#1E1E35!important}}' +
-        /* Pills — 未选中深色，选中蓝色 */
-        '[data-testid="stButtonGroup"]>div>label>div,[data-testid="stButtonGroup"] button,[data-testid="stButtonGroup"] [role="radio"],[data-testid="stButtonGroup"] [role="button"]{{background:#1E1E38!important;border-color:#282845!important;color:#DEE1F5!important}}' +
-        '[data-testid="stButtonGroup"] [aria-checked="true"],[data-testid="stButtonGroup"] [aria-selected="true"],[data-testid="stButtonGroup"] button[aria-selected="true"]{{background:#5B8CFF!important;color:#fff!important;border-color:#5B8CFF!important}}';
-    function applyPills(doc) {{
-        doc.querySelectorAll('[data-testid="stButtonGroup"] button,[data-testid="stButtonGroup"] [role="radio"],[data-testid="stButtonGroup"]>div>label>div').forEach(function(p){{
-            var sel = p.getAttribute('aria-checked')==='true'||p.getAttribute('aria-selected')==='true';
-            p.style.setProperty('background', sel?'#5B8CFF':'#1E1E38','important');
-            p.style.setProperty('border-color', sel?'#5B8CFF':'#282845','important');
-            p.style.setProperty('color', sel?'#ffffff':'#DEE1F5','important');
-        }});
-    }}
-    function applyInline() {{
-        /* 输入框容器 */
-        var inp = doc.querySelector('[data-testid="stChatInput"]');
-        if (inp) {{
-            inp.style.setProperty('background','#16162A','important');
-            inp.style.setProperty('border','1.5px solid #282845','important');
-            inp.style.setProperty('border-radius','24px','important');
-            inp.style.setProperty('box-shadow','none','important');
-            inp.querySelectorAll('*').forEach(function(d){{
-                d.style.setProperty('background','#16162A','important');
-            }});
-            inp.querySelectorAll('textarea,input').forEach(function(t){{
-                t.style.setProperty('color','#DEE1F5','important');
-                t.style.setProperty('background','#16162A','important');
-                t.style.setProperty('-webkit-text-fill-color','#DEE1F5','important');
-                t.style.setProperty('caret-color','#DEE1F5','important');
-            }});
-        }}
-        doc.querySelectorAll('[data-testid="stBottom"],[data-testid="stBottomBlockContainer"]').forEach(function(bt){{
-            bt.style.setProperty('background','#0D0D14','important');
-            bt.querySelectorAll('*').forEach(function(el2){{
-                el2.style.setProperty('background','#0D0D14','important');
-            }});
-        }});
-        applyPills(doc);
-    }}
-    function apply() {{ s.textContent = CSS; applyInline(); }}
-    apply();
-    if (!doc._dmObs) {{
-        doc._dmObs = new MutationObserver(function(muts) {{
-            var hasNew = muts.some(function(m){{return m.addedNodes.length>0;}});
-            if (!hasNew) return;
-            clearTimeout(doc._dmObs._t);
-            doc._dmObs._t = setTimeout(applyInline, 30);
-        }});
-        doc._dmObs.observe(doc.body, {{childList:true, subtree:true}});
-    }}
-}} catch(e) {{}}
-}})();
-</script>""", height=1)
 
 
 # ── 侧边栏 ────────────────────────────────────────────────────────────────────
@@ -1457,6 +1354,13 @@ if user_input:
                     _last_render = 0.0
                     _RENDER_INTERVAL = 0.08  # 秒，人眼看不出跟逐字刷新的观感差异
                     for chunk in stream:
+                        # 部分OpenAI兼容网关会在流末尾发一条只带usage统计、
+                        # choices为空列表的心跳/收尾chunk（不是所有provider都发，
+                        # 但只要遇到一次不判空直接[0]索引就会IndexError："list
+                        # index out of range"，导致这次回答直接判定成"流式输出
+                        # 出错"整段作废——实测每次提问都复现，不是偶发。
+                        if not chunk.choices:
+                            continue
                         delta = chunk.choices[0].delta.content
                         if delta:
                             collected.append(delta)

@@ -28,31 +28,29 @@ def render_sidebar() -> None:
 
     # ── 用户信息 + 退出 ──────────────────────────────────────────────────────
     st.markdown(
-        f'<p class="sb-email" style="font-size:0.75rem;color:var(--text-muted);margin:10px 0 10px">{_uemail_safe}</p>',
+        f'<p class="sb-email" style="font-size:0.75rem;color:var(--text-muted);margin:10px 0 4px">{_uemail_safe}</p>',
         unsafe_allow_html=True,
     )
-    _sb_top_left, _sb_top_right = st.columns([2, 1])
-    with _sb_top_left:
-        if st.button("退出登录", key="logout_btn", use_container_width=True):
-            _tok = st.session_state.pop("_token", None)
-            if _tok:
-                _invalidate_token(_tok)
-            try:
-                del st.query_params["_auth"]
-            except Exception:
-                pass
-            _cv1.html(
-                '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");window.parent.document.cookie="ma_auth_tok=; max-age=0; path=/";}catch(e){}</script>',
-                height=1,
-            )
-            st.session_state["logged_in"] = False
-            st.session_state.pop("user_email", None)
-            st.rerun()
-    with _sb_top_right:
-        _dm_label = "浅色" if st.session_state.dark_mode else "深色"
-        if st.button(_dm_label, key="dark_mode_btn", use_container_width=True, help="切换深色/浅色模式"):
-            st.session_state.dark_mode = not st.session_state.dark_mode
-            st.rerun()
+    # 深色模式开关已撤掉（跟finance-agent一样撤，见ui_helpers.py顶部说明），
+    # 退出登录不再需要跟它分两列摆，改回单列。
+    if st.button("退出登录", key="logout_btn"):
+        _tok = st.session_state.pop("_token", None)
+        if _tok:
+            _invalidate_token(_tok)
+        try:
+            del st.query_params["_auth"]
+        except Exception:
+            pass
+        # 同时清localStorage和Cookie两条腿——登录持久化现在主要靠Cookie
+        # （见_math_page.py"记住登录"那段），只清localStorage会漏掉Cookie
+        # 那份，退出登录后刷新页面又通过Cookie自动登回去。
+        _cv1.html(
+            '<script>try{window.parent.localStorage.removeItem("ma_auth_tok");window.parent.document.cookie="ma_auth_tok=; max-age=0; path=/";}catch(e){}</script>',
+            height=1,
+        )
+        st.session_state["logged_in"] = False
+        st.session_state.pop("user_email", None)
+        st.rerun()
 
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
     st.page_link("pages/2_知识库问答.py", label="知识库问答 →", use_container_width=True)

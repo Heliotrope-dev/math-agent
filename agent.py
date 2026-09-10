@@ -640,6 +640,13 @@ class MathAgent:
             content_acc = ""
             tool_calls_acc: dict[int, dict] = {}
             for chunk in _iter_with_timeout(stream):
+                # 部分OpenAI兼容网关会在流末尾发一条只带usage统计、choices为
+                # 空列表的心跳/收尾chunk，不是所有provider都发；这里是每个
+                # chunk第一次被索引的地方，不判空会在这里直接IndexError，
+                # 顺着生成器一路冒泡到_math_page.py的except，表现成每次提问
+                # 都"流式输出出错：list index out of range"（实测复现）。
+                if not chunk.choices:
+                    continue
                 delta = chunk.choices[0].delta
                 if getattr(delta, "content", None):
                     content_acc += delta.content
