@@ -12,33 +12,32 @@
 
 _BASE_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@500;600&display=swap');
 
 [data-testid="stSidebarNav"] { display: none !important; }
 
 :root {
     /* 画布：只有三层——底、卡面、更浅的填充块。跟finance-agent同一套数值。 */
-    --ma-bg:        #FAFAFB;
+    --ma-bg:        #FBFBF9;
     --ma-surface:   #FFFFFF;
-    --ma-fill:      #F3F4F6;
-    --ma-border:    #EAEAEF;
-    --ma-border-2:  #DBDCE3;
+    --ma-fill:      #F5F5F2;
+    --ma-border:    #E5E5E0;
+    --ma-border-2:  #D7D7D1;
 
     /* 文字：四级 */
-    --ma-text:      #17181C;
-    --ma-text-2:    #494C55;
-    --ma-muted:     #82858E;
-    --ma-faint:     #A8ABB3;
+    --ma-text:      #2A2C30;
+    --ma-text-2:    #55585D;
+    --ma-muted:     #858887;
+    --ma-faint:     #AAACAA;
 
     /* 界面强调色用墨色，不用彩色——跟finance-agent同一条原则，主色调黑白灰。
        全站唯一允许出现的饱和色是破坏性操作（删除/取消）悬停时的红色提示，
        跟finance-agent的删除图标同一个色号，只用在真正需要强调的地方。 */
-    --ma-ink:       #5A5D66;
+    --ma-ink:       #62666C;
     --ma-danger:    #D0342C;
 
-    --ma-radius:    10px;
-    --ma-radius-sm: 7px;
+    --ma-radius:    8px;
+    --ma-radius-sm: 6px;
 }
 
 /* ── 排版基线 ─────────────────────────────────────────────────────────── */
@@ -87,10 +86,10 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !imp
 .app-header-title { font-size: 1rem; font-weight: 600; color: var(--ma-text-2) !important; }
 
 .welcome-wrap { text-align: center; padding: 2.5rem 0 1.5rem; }
-.welcome-title { font-size: 1.8rem; font-weight: 650; letter-spacing: -0.018em; color: var(--ma-text) !important; margin-bottom: 0.5rem; }
+.welcome-title { font-family: 'Source Serif 4', 'Songti SC', STSong, serif !important; font-size: 1.85rem; font-weight: 600; letter-spacing: -0.012em; color: var(--ma-text) !important; margin-bottom: 0.5rem; }
 .welcome-sub { font-size: 0.88rem; color: var(--ma-muted) !important; margin-bottom: 2rem; }
 .greeting-wrap { text-align: center; padding: 4rem 0 2rem; }
-.greeting-main { font-size: 2rem; font-weight: 650; letter-spacing: -0.02em; color: var(--ma-text) !important; margin-bottom: 0.4rem; }
+.greeting-main { font-family: 'Source Serif 4', 'Songti SC', STSong, serif !important; font-size: 2rem; font-weight: 600; letter-spacing: -0.012em; color: var(--ma-text) !important; margin-bottom: 0.4rem; }
 .greeting-sub { font-size: 0.9rem; color: var(--ma-muted) !important; }
 
 /* 欢迎页大按钮（点开始学习之类）：跟finance-agent的次要按钮同一套描边，
@@ -121,12 +120,12 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !imp
 [data-testid="stSidebar"] {
     background: var(--ma-fill) !important;
     border-right: 1px solid var(--ma-border) !important;
-    min-width: 272px !important;
-    max-width: 272px !important;
+    min-width: 264px !important;
+    max-width: 264px !important;
 }
 [data-testid="stSidebar"] > div:first-child {
-    width: 272px !important;
-    padding: 22px 16px 18px !important;
+    width: 264px !important;
+    padding: 20px 16px 18px !important;
 }
 [data-testid="stSidebar"] * { color: var(--ma-text) !important; }
 [data-testid="stSidebar"] .stButton button {
@@ -196,11 +195,11 @@ a[data-testid="stPageLink-NavLink"]:focus {
 /* 侧栏不是第二个内容页：用小型分组标题建立层级，避免连续的横线把所有
    功能挤成同一种列表项。 */
 [data-testid="stSidebar"] .sb-section {
-    margin: 20px 0 5px !important;
+    margin: 22px 0 6px !important;
     color: var(--ma-muted) !important;
     font-size: 0.70rem !important;
     font-weight: 600 !important;
-    letter-spacing: 0.06em !important;
+    letter-spacing: 0.09em !important;
 }
 [data-testid="stSidebar"] .sb-section:first-of-type { margin-top: 16px !important; }
 
@@ -215,8 +214,8 @@ a[data-testid="stPageLink-NavLink"]:focus {
 .bubble-user {
     background: var(--ma-ink) !important;
     color: #fff !important;
-    border-radius: 16px !important;
-    padding: 10px 14px; word-break: break-word; line-height: 1.6;
+    border-radius: 12px !important;
+    padding: 9px 13px; word-break: break-word; line-height: 1.6;
     font-size: 0.95rem; display: inline-block; max-width: 72%;
 }
 
@@ -226,8 +225,8 @@ a[data-testid="stPageLink-NavLink"]:focus {
    兄弟节点，.stMarkdown 本身互相并不相邻（各自套在自己的 stElementContainer
    里），选错这一层选择器完全不会命中，一开始就是这么踩的坑。 */
 [data-testid="stElementContainer"]:has(.asst-bubble-marker) + [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] {
-    font-family: 'LXGW WenKai', 'KaiTi', 'STKaiti', serif;
-    font-size: 1rem; line-height: 1.85; padding: 6px 0 20px;
+    font-family: 'Source Serif 4', 'Songti SC', STSong, serif !important;
+    font-size: 1rem; line-height: 1.9; padding: 8px 0 22px;
     border-bottom: 1px solid var(--ma-border);
     margin-bottom: 14px;
 }
@@ -258,8 +257,8 @@ a[data-testid="stPageLink-NavLink"]:focus {
 [data-testid="stChatInput"] {
     background: var(--ma-surface) !important;
     border: 1.5px solid var(--ma-border-2) !important;
-    border-radius: 24px !important;
-    padding: 8px 14px !important; margin: 0 0 10px !important; box-shadow: none !important;
+    border-radius: 18px !important;
+    padding: 8px 14px !important; margin: 0 0 12px !important; box-shadow: none !important;
 }
 [data-testid="stChatInput"]:focus-within {
     border-color: var(--ma-ink) !important;
@@ -280,7 +279,7 @@ a[data-testid="stPageLink-NavLink"]:focus {
 }
 [data-testid="stChatInputTextArea"]:focus { box-shadow: none !important; border: none !important; outline: none !important; }
 [data-testid="stChatInputSubmitButton"],
-[data-testid="stChatInputSubmitButton"] button { background: var(--ma-ink) !important; border-radius: 50% !important; }
+[data-testid="stChatInputSubmitButton"] button { background: var(--ma-ink) !important; border-radius: var(--ma-radius-sm) !important; }
 [data-testid="stChatInputSubmitButton"] svg { fill: #fff !important; }
 [data-testid="stChatInputSubmitButton"]:disabled,
 [data-testid="stChatInputSubmitButton"] button:disabled {
@@ -365,7 +364,7 @@ div[data-testid="stButtonGroup"] span { color: inherit !important; background: t
 [data-testid="stFormSubmitButton"] button[kind="primary"] div,
 [data-testid="stFormSubmitButton"] button[kind="primary"] span { color: #fff !important; }
 .stButton button[kind="primary"]:hover,
-[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { background: #4B4E57 !important; border-color: #4B4E57 !important; }
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { background: #55595F !important; border-color: #55595F !important; }
 .stButton button[kind="tertiary"], .stButton button[data-testid="stBaseButton-tertiary"] {
     background: transparent !important; border: 1px solid transparent !important; color: var(--ma-muted) !important;
 }
@@ -466,7 +465,7 @@ button[kind="secondary"][data-testid*="wb_add"] {
 
 .login-logo { text-align: center; padding: 60px 0 24px; }
 .login-logo-icon { font-size: 3rem; }
-.login-logo-title { font-size: 1.5rem; font-weight: 650; letter-spacing: -0.015em; color: var(--ma-text) !important; margin: 8px 0 4px; }
+.login-logo-title { font-family: 'Source Serif 4', 'Songti SC', STSong, serif !important; font-size: 1.55rem; font-weight: 600; letter-spacing: -0.012em; color: var(--ma-text) !important; margin: 8px 0 4px; }
 .login-logo-sub { font-size: 0.85rem; color: var(--ma-muted) !important; }
 
 @media (max-width: 768px) {

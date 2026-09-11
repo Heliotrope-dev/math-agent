@@ -226,7 +226,7 @@ def render_sidebar() -> None:
 """)
 
     # ── 课程入口 ──────────────────────────────────────────────────────────────
-    with st.expander("课程入口", expanded=True):
+    with st.expander("课程入口", expanded=False):
         _btn_idx = 0
         for _grade, _courses in _ALL_COURSES:
             st.caption(_grade)

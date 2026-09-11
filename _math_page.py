@@ -154,8 +154,8 @@ try {
     if (!ov) {
         ov = doc.createElement('div');
         ov.id = '_ma_loader';
-        ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.35s;background:#FAFAFB';
-        ov.innerHTML = '<div style="width:26px;height:26px;border:2px solid #EAEAEF;border-top-color:#17181C;border-radius:50%;animation:_ma_spin 0.75s linear infinite"></div><div style="font-size:0.78rem;color:#A8ABB3;font-family:Inter,-apple-system,sans-serif;letter-spacing:.06em">加载中</div><style>@keyframes _ma_spin{to{transform:rotate(360deg)}}</style>';
+        ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity 0.35s;background:#FBFBF9';
+        ov.innerHTML = '<div style="width:26px;height:26px;border:2px solid #E5E5E0;border-top-color:#62666C;border-radius:50%;animation:_ma_spin 0.75s linear infinite"></div><div style="font-size:0.78rem;color:#AAACAA;font-family:Inter,-apple-system,sans-serif;letter-spacing:.06em">加载中</div><style>@keyframes _ma_spin{to{transform:rotate(360deg)}}</style>';
         doc.body.appendChild(ov);
     }
     var _ovTries = 0;
