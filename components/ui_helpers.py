@@ -34,7 +34,7 @@ _BASE_CSS = """
     /* 界面强调色用墨色，不用彩色——跟finance-agent同一条原则，主色调黑白灰。
        全站唯一允许出现的饱和色是破坏性操作（删除/取消）悬停时的红色提示，
        跟finance-agent的删除图标同一个色号，只用在真正需要强调的地方。 */
-    --ma-ink:       #17181C;
+    --ma-ink:       #3A3C43;
     --ma-danger:    #D0342C;
 
     --ma-radius:    10px;
@@ -121,6 +121,12 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !imp
 [data-testid="stSidebar"] {
     background: var(--ma-fill) !important;
     border-right: 1px solid var(--ma-border) !important;
+    min-width: 272px !important;
+    max-width: 272px !important;
+}
+[data-testid="stSidebar"] > div:first-child {
+    width: 272px !important;
+    padding: 22px 16px 18px !important;
 }
 [data-testid="stSidebar"] * { color: var(--ma-text) !important; }
 [data-testid="stSidebar"] .stButton button {
@@ -134,8 +140,13 @@ header[data-testid="stHeader"] [data-testid="stDecoration"] { display: none !imp
     padding: 7px 4px !important;
     height: auto !important; min-height: 32px !important;
     white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
-    display: block !important;
+    display: flex !important;
+    justify-content: flex-start !important;
     box-shadow: none !important;
+}
+[data-testid="stSidebar"] .stButton button p,
+[data-testid="stSidebar"] .stButton button span {
+    text-align: left !important;
 }
 [data-testid="stSidebar"] .stButton button:hover {
     background: rgba(23,24,28,0.03) !important; color: var(--ma-text) !important;
@@ -181,6 +192,17 @@ a[data-testid="stPageLink-NavLink"]:focus {
     outline: none !important;
     box-shadow: none !important;
 }
+
+/* 侧栏不是第二个内容页：用小型分组标题建立层级，避免连续的横线把所有
+   功能挤成同一种列表项。 */
+[data-testid="stSidebar"] .sb-section {
+    margin: 20px 0 5px !important;
+    color: var(--ma-muted) !important;
+    font-size: 0.70rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.06em !important;
+}
+[data-testid="stSidebar"] .sb-section:first-of-type { margin-top: 16px !important; }
 
 /* ── 消息：用户提问是三言两语，靠右墨色实底白字气泡，符合"这是一条消息"
    的直觉。AI的回答通常是好几段带公式的完整解题过程，不是三言两语——套用
@@ -343,7 +365,7 @@ div[data-testid="stButtonGroup"] span { color: inherit !important; background: t
 [data-testid="stFormSubmitButton"] button[kind="primary"] div,
 [data-testid="stFormSubmitButton"] button[kind="primary"] span { color: #fff !important; }
 .stButton button[kind="primary"]:hover,
-[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { background: #000 !important; border-color: #000 !important; }
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { background: #2E3037 !important; border-color: #2E3037 !important; }
 .stButton button[kind="tertiary"], .stButton button[data-testid="stBaseButton-tertiary"] {
     background: transparent !important; border: 1px solid transparent !important; color: var(--ma-muted) !important;
 }
@@ -460,7 +482,10 @@ button[kind="secondary"][data-testid*="wb_add"] {
         transform: translateX(-110%) !important;
         transition: transform 0.26s cubic-bezier(.4,0,.2,1) !important;
         padding-top: 56px !important;
+        min-width: 0 !important;
+        max-width: 300px !important;
     }
+    [data-testid="stSidebar"] > div:first-child { width: auto !important; padding: 6px 12px 12px !important; }
     [data-testid="stSidebar"].ma-sb-open { transform: translateX(0) !important; box-shadow: 6px 0 32px rgba(0,0,0,0.15) !important; }
 
     [data-testid="stSidebar"] .stButton button {

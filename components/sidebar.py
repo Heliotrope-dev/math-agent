@@ -52,9 +52,8 @@ def render_sidebar() -> None:
         st.session_state.pop("user_email", None)
         st.rerun()
 
-    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-section">学习工具</div>', unsafe_allow_html=True)
     st.page_link("pages/2_知识库问答.py", label="知识库问答 →", use_container_width=True)
-    st.divider()
 
     # ── 错题本 ────────────────────────────────────────────────────────────────
     wrong_book = st.session_state.wrong_book
@@ -162,7 +161,7 @@ def render_sidebar() -> None:
                     st.markdown(f"- {_r.get('course','')} · **{_r['topic']}**",
                                 unsafe_allow_html=False)
 
-    st.divider()
+    st.markdown('<div class="sb-section">课程与设置</div>', unsafe_allow_html=True)
 
     # ── 使用手册 ──────────────────────────────────────────────────────────────
     with st.expander("使用手册", expanded=False):
@@ -226,8 +225,6 @@ def render_sidebar() -> None:
 - 拍题时建议补充文字说明具体问哪部分
 """)
 
-    st.divider()
-
     # ── 课程入口 ──────────────────────────────────────────────────────────────
     with st.expander("课程入口", expanded=True):
         _btn_idx = 0
@@ -248,7 +245,6 @@ def render_sidebar() -> None:
                 _btn_idx += 1
 
     # ── 清空对话 ──────────────────────────────────────────────────────────────
-    st.divider()
     if st.button("清空对话", use_container_width=True):
         st.session_state["_confirm_clear"] = True
         st.rerun()
