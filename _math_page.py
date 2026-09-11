@@ -1072,7 +1072,7 @@ _direct_input = st.session_state.pop("_direct_input", None)
 _direct_image = st.session_state.pop("_direct_image", None)
 
 typed = st.chat_input(
-    "输入数学题，支持 LaTeX 符号…",
+    "把题目写在这里",
     accept_file="multiple",
     file_type=["jpg", "jpeg", "png", "webp", "heic", "txt", "md"],
     accept_audio=True,
