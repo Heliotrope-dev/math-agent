@@ -56,18 +56,6 @@ def render_sidebar() -> None:
     st.page_link("pages/2_知识库问答.py", label="知识库问答 →", use_container_width=True)
     st.divider()
 
-    # ── 最近问题（最多显示20条）─────────────────────────────────────────────
-    _user_msgs = [m.get("display", m["content"]) for m in st.session_state.messages if m["role"] == "user"]
-    if _user_msgs:
-        st.markdown('<p class="sb-label" style="font-size:0.75rem;color:var(--text-muted);margin:0 0 6px">最近问题</p>',
-                    unsafe_allow_html=True)
-        for _qi, _q in enumerate(_user_msgs[-20:]):
-            _q_short = _q[:28] + "…" if len(_q) > 28 else _q
-            if st.button(_q_short, key=f"hist_{_qi}", use_container_width=True):
-                st.session_state["prefill"] = _q
-                st.rerun()
-        st.divider()
-
     # ── 错题本 ────────────────────────────────────────────────────────────────
     wrong_book = st.session_state.wrong_book
     with st.expander(f"错题本（{len(wrong_book)}）", expanded=False):
