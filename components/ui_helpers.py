@@ -34,7 +34,7 @@ _BASE_CSS = """
     /* 界面强调色用墨色，不用彩色——跟finance-agent同一条原则，主色调黑白灰。
        全站唯一允许出现的饱和色是破坏性操作（删除/取消）悬停时的红色提示，
        跟finance-agent的删除图标同一个色号，只用在真正需要强调的地方。 */
-    --ma-ink:       #3A3C43;
+    --ma-ink:       #5A5D66;
     --ma-danger:    #D0342C;
 
     --ma-radius:    10px;
@@ -365,7 +365,7 @@ div[data-testid="stButtonGroup"] span { color: inherit !important; background: t
 [data-testid="stFormSubmitButton"] button[kind="primary"] div,
 [data-testid="stFormSubmitButton"] button[kind="primary"] span { color: #fff !important; }
 .stButton button[kind="primary"]:hover,
-[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { background: #2E3037 !important; border-color: #2E3037 !important; }
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { background: #4B4E57 !important; border-color: #4B4E57 !important; }
 .stButton button[kind="tertiary"], .stButton button[data-testid="stBaseButton-tertiary"] {
     background: transparent !important; border: 1px solid transparent !important; color: var(--ma-muted) !important;
 }
