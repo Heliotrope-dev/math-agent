@@ -2,14 +2,6 @@ import os
 import streamlit as st
 from openai import OpenAI
 
-# ── SiliconFlow ───────────────────────────────────────────────────────────────
-# 2026-09-14起只剩向量嵌入(BAAI/bge-m3)还在用SiliconFlow：文字/拍题/语音/
-# 通用OCR全部切到Gemini之后，SILICONFLOW_API_KEY这把key现在只被
-# rag_engine.py的embed_texts()用到。嵌入模型没有一起切——现有chroma_db
-# 里的向量是bge-m3算出来的，换嵌入模型意味着要把所有已入库文档重新嵌入
-# 一遍，是数据迁移，不是简单换个key，先留着没动。
-SILICONFLOW_BASE = "https://api.siliconflow.cn"
-
 # ── 默认模型 ──────────────────────────────────────────────────────────────────
 # 2026-09-14从千问切到Gemini：跟finance-agent/OpenClaw统一成同一条
 # 免费档→付费档故障转移链，避免三个项目各管一套供应商key。这个
@@ -19,6 +11,11 @@ SILICONFLOW_BASE = "https://api.siliconflow.cn"
 # 不能漏改。
 GEMINI_BASE   = "https://generativelanguage.googleapis.com/v1beta/openai/"
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
+
+# 向量嵌入：同一天从 SiliconFlow bge-m3 切到 Gemini gemini-embedding-001
+# （3072 维，bge-m3 是 1024 维）。knowledge base 当时是空的（count=0），
+# 不用管旧向量兼容问题，直接换。
+GEMINI_EMBED_MODEL = "gemini-embedding-001"
 
 
 def get_secret(key: str) -> str:
@@ -59,10 +56,27 @@ class _FailoverChat:
         self.completions = _FailoverCompletions(primary, fallback)
 
 
+class _FailoverEmbeddings:
+    def __init__(self, primary, fallback):
+        self._primary = primary
+        self._fallback = fallback
+
+    def create(self, **kwargs):
+        if self._primary is None:
+            return self._fallback.embeddings.create(**kwargs)
+        try:
+            return self._primary.embeddings.create(**kwargs)
+        except Exception as e:
+            if self._fallback is not None and _is_gemini_quota_error(e):
+                return self._fallback.embeddings.create(**kwargs)
+            raise
+
+
 class GeminiFailoverClient:
     """Gemini 免费档→付费档故障转移。对外接口跟 openai.OpenAI 保持一致
-    （.chat.completions.create() / .close()），调用方不用改代码，也不支持
-    流式（跟 finance-agent 的 chat_with_failover 一样，流式场景各自处理）。
+    （.chat.completions.create() / .embeddings.create() / .close()），调用方
+    不用改代码；.chat 不支持流式（跟 finance-agent 的 chat_with_failover
+    一样，流式场景各自处理）。
 
     两把key的关系：GEMINI_FREE_API_KEY（免费项目，太平洋时间午夜重置额度）
     打头，GEMINI_API_KEY（付费项目，充值余额）兜底。只配一把也能用，行为
@@ -81,6 +95,7 @@ class GeminiFailoverClient:
         self._clients = [c for c in (free_c, paid_c) if c is not None]
         fallback = self._clients[1] if len(self._clients) > 1 else None
         self.chat = _FailoverChat(self._clients[0], fallback)
+        self.embeddings = _FailoverEmbeddings(self._clients[0], fallback)
 
     def close(self) -> None:
         for c in self._clients:

@@ -20,7 +20,7 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-for _k in ("GEMINI_API_KEY", "GEMINI_FREE_API_KEY", "SILICONFLOW_API_KEY",
+for _k in ("GEMINI_API_KEY", "GEMINI_FREE_API_KEY",
            "OLLAMA_BASE_URL", "SUPABASE_URL", "SUPABASE_KEY"):
     if _k not in os.environ:
         try:
@@ -110,13 +110,12 @@ def _show_login_page():
                             except Exception as _e:
                                 st.error(f"注册失败：{_e}")
 
-# ── 启动环境校验：至少配置一个云端 API Key，否则友好提示而非运行时崩溃 ────────
-if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_FREE_API_KEY")
-        or os.environ.get("SILICONFLOW_API_KEY")):
+# ── 启动环境校验：没配 API Key 就友好提示而非运行时崩溃 ────────────────────────
+if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_FREE_API_KEY")):
     st.error(
         "未检测到可用的模型 API Key。\n\n"
         "请配置环境变量（或 Streamlit Secrets）中的 **GEMINI_API_KEY** "
-        "（文字解题）或 **SILICONFLOW_API_KEY**（拍题/语音）至少一个，然后刷新页面。"
+        "或 **GEMINI_FREE_API_KEY**，然后刷新页面。"
     )
     st.stop()
 

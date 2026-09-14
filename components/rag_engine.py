@@ -5,18 +5,15 @@ import os
 from pathlib import Path
 
 import chromadb
-import httpx
 from openai import OpenAI
 
-from components.config import DEFAULT_MODEL, SILICONFLOW_BASE, get_secret, build_gemini_failover_client
+from components.config import DEFAULT_MODEL, GEMINI_EMBED_MODEL, get_secret, build_gemini_failover_client
 
 _log = logging.getLogger(__name__)
 
 _CHROMA_DIR    = str(Path(__file__).parent.parent / "data" / "chroma_db")
 _COLLECTION    = "rag_knowledge_base"
-_EMBED_MODEL   = "BAAI/bge-m3"
 _EMBED_BATCH   = 16
-_EMBED_TIMEOUT = 30
 _TOP_K         = 4
 _MAX_HIST      = 5
 
@@ -48,29 +45,24 @@ class RAGEngine:
         return self._llm
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        key = get_secret("SILICONFLOW_API_KEY")
-        if not key:
-            raise RuntimeError("未配置 SILICONFLOW_API_KEY，无法生成向量。")
+        """2026-09-14从SiliconFlow bge-m3切到Gemini gemini-embedding-001：
+        knowledge base当时是空的，没有旧向量兼容问题，直接换，不用数据迁移。
+        复用文字/拍题/语音那同一个GeminiFailoverClient。
+        """
+        if not (get_secret("GEMINI_API_KEY") or get_secret("GEMINI_FREE_API_KEY")):
+            raise RuntimeError("未配置 GEMINI_API_KEY，无法生成向量。")
+        client = self._client()
         vectors: list[list[float]] = []
         for i in range(0, len(texts), _EMBED_BATCH):
             batch = texts[i: i + _EMBED_BATCH]
             try:
-                resp = httpx.post(
-                    f"{SILICONFLOW_BASE}/v1/embeddings",
-                    headers={"Authorization": f"Bearer {key}"},
-                    json={"model": _EMBED_MODEL, "input": batch},
-                    timeout=_EMBED_TIMEOUT,
-                )
-                resp.raise_for_status()
-                data = resp.json()["data"]
-            except httpx.TimeoutException as e:
-                raise RuntimeError(f"向量化请求超时（第 {i // _EMBED_BATCH + 1} 批）。") from e
-            except httpx.HTTPStatusError as e:
-                raise RuntimeError(
-                    f"向量化接口错误 {e.response.status_code}：{e.response.text[:200]}"
-                ) from e
-            data.sort(key=lambda d: d["index"])
-            vectors.extend(d["embedding"] for d in data)
+                resp = client.embeddings.create(model=GEMINI_EMBED_MODEL, input=batch)
+            except Exception as e:
+                raise RuntimeError(f"向量化失败（第 {i // _EMBED_BATCH + 1} 批）：{e}") from e
+            # 实测Gemini这个接口batch请求返回的第一条index是None（其余正常
+            # 从1开始），不能像OpenAI那样按index排序——直接信任列表顺序等于
+            # 输入顺序（embeddings接口的通行约定，也是实测观察到的行为）。
+            vectors.extend(d.embedding for d in resp.data)
         return vectors
 
     def add_documents(self, chunks: list[dict], source_name: str, user: str) -> int:
