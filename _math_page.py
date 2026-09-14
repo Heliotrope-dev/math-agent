@@ -20,7 +20,7 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-for _k in ("QWEN_API_KEY", "SILICONFLOW_API_KEY",
+for _k in ("GEMINI_API_KEY", "GEMINI_FREE_API_KEY", "SILICONFLOW_API_KEY",
            "OLLAMA_BASE_URL", "SUPABASE_URL", "SUPABASE_KEY"):
     if _k not in os.environ:
         try:
@@ -111,11 +111,12 @@ def _show_login_page():
                                 st.error(f"注册失败：{_e}")
 
 # ── 启动环境校验：至少配置一个云端 API Key，否则友好提示而非运行时崩溃 ────────
-if not (os.environ.get("QWEN_API_KEY") or os.environ.get("SILICONFLOW_API_KEY")):
+if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_FREE_API_KEY")
+        or os.environ.get("SILICONFLOW_API_KEY")):
     st.error(
         "未检测到可用的模型 API Key。\n\n"
-        "请配置环境变量（或 Streamlit Secrets）中的 **QWEN_API_KEY** "
-        "或 **SILICONFLOW_API_KEY** 至少一个，然后刷新页面。"
+        "请配置环境变量（或 Streamlit Secrets）中的 **GEMINI_API_KEY** "
+        "（文字解题）或 **SILICONFLOW_API_KEY**（拍题/语音）至少一个，然后刷新页面。"
     )
     st.stop()
 
@@ -652,25 +653,18 @@ def _summarize_wrongbook_entry(question: str, answer: str, email: str = "") -> s
     $$ 包裹最终答案），跟这里要的"只输出一行摘要"完全对不上（实测输出会
     带解题格式和多余换行）。这里直接调 API，不带那层系统提示词。
     """
-    key = get_secret("QWEN_API_KEY")
-    if not key:
+    if not get_secret("GEMINI_FREE_API_KEY") and not get_secret("GEMINI_API_KEY"):
         return question
     # 之前这里完全绕开了每日调用配额——check_and_bump_usage 存在的目的就是
     # 防止无限制调用按量计费的 API，这里没接等于配额形同虚设：反复点"存入
     # 错题本"可以无限次触发付费调用。超额时直接退化成用原始 question（跟
-    # 没配置 QWEN_API_KEY 时的降级行为一致），不阻断"存错题本"这个操作本身。
+    # 没配置 Gemini key 时的降级行为一致），不阻断"存错题本"这个操作本身。
     _quota_ok, _ = check_and_bump_usage(email)
     if not _quota_ok:
         return question
     try:
-        import httpx
-        from openai import OpenAI
-        client = OpenAI(
-            api_key=key,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            http_client=httpx.Client(trust_env=False, verify=True,
-                                      timeout=httpx.Timeout(30.0, connect=10.0)),
-        )
+        from components.config import build_gemini_failover_client
+        client = build_gemini_failover_client(timeout=30.0, max_retries=2)
         resp = client.chat.completions.create(
             model=DEFAULT_MODEL,
             messages=[{
@@ -697,53 +691,57 @@ def _summarize_wrongbook_entry(question: str, answer: str, email: str = "") -> s
 
 
 def transcribe_audio(audio_file) -> tuple[str, str]:
-    """语音转文字，使用 SiliconFlow SenseVoiceSmall（中英文优化）。"""
-    sf_key = get_secret("SILICONFLOW_API_KEY")
-    if not sf_key:
-        return "", "未配置 SILICONFLOW_API_KEY，请在 .streamlit/secrets.toml 添加"
+    """语音转文字，走 Gemini（chat.completions + input_audio content part）。
+
+    2026-09-14从SiliconFlow SenseVoice切过来：SiliconFlow账号欠费，这条
+    链路当时已经在生产环境里报错。Gemini原生支持音频输入，直接复用文字
+    解题那同一个 GeminiFailoverClient，不用再单独接一家供应商。
+    """
+    if not (get_secret("GEMINI_API_KEY") or get_secret("GEMINI_FREE_API_KEY")):
+        return "", "未配置 GEMINI_API_KEY，请在 .streamlit/secrets.toml 添加"
 
     raw = audio_file.read()
     if len(raw) < 1000:
         return "", "录音太短，请说话后再松开（至少1秒）"
 
-    # 优先用 UploadedFile 自带的 MIME type，避免 magic bytes 猜错
+    # 优先用 UploadedFile 自带的 MIME type，避免 magic bytes 猜错；
+    # input_audio 的 format 字段只要扩展名，不要完整 mime type。
     browser_mime = getattr(audio_file, "type", "") or ""
     if browser_mime and "/" in browser_mime:
-        mime = browser_mime
         raw_ext = browser_mime.split("/")[-1].split(";")[0]  # 去掉 codec 参数
         ext = {"mpeg": "mp3", "ogg": "ogg", "mp4": "m4a", "x-m4a": "m4a"}.get(raw_ext, raw_ext)
     elif raw[:4] == b"RIFF":
-        mime, ext = "audio/wav", "wav"
+        ext = "wav"
     elif raw[:3] == b"ID3" or raw[:2] == b"\xff\xfb":
-        mime, ext = "audio/mpeg", "mp3"
+        ext = "mp3"
     elif len(raw) > 8 and raw[4:8] == b"ftyp":
-        mime, ext = "audio/mp4", "m4a"
+        ext = "m4a"
     elif raw[:4] == b"OggS":
-        mime, ext = "audio/ogg", "ogg"
+        ext = "ogg"
     elif raw[:4] == b"\x1a\x45\xdf\xa3":
-        mime, ext = "audio/webm", "webm"
+        ext = "webm"
     else:
-        mime, ext = "audio/webm", "webm"
+        ext = "webm"
 
     try:
-        resp = requests.post(
-            "https://api.siliconflow.cn/v1/audio/transcriptions",
-            headers={"Authorization": f"Bearer {sf_key}"},
-            files={"file": (f"recording.{ext}", raw, mime)},
-            data={"model": "FunAudioLLM/SenseVoiceSmall"},
-            timeout=30,
+        import base64 as _base64
+        from components.config import build_gemini_failover_client
+        client = build_gemini_failover_client(timeout=30.0, max_retries=2)
+        resp = client.chat.completions.create(
+            model="gemini-3.5-flash-lite",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "请把这段语音转写成文字，只输出转写文本，不要加任何说明或标点之外的内容。"},
+                    {"type": "input_audio", "input_audio": {"data": _base64.b64encode(raw).decode(), "format": ext}},
+                ],
+            }],
+            max_tokens=500,
         )
-        if not resp.ok:
-            return "", f"API 错误 {resp.status_code}：{resp.text[:200]}"
-        data = resp.json()
-        if "error" in data:
-            return "", f"识别失败：{data['error']}"
-        text = data.get("text", "").strip()
+        text = (resp.choices[0].message.content or "").strip()
         if not text:
             return "", f"未识别到语音（格式:{ext}，大小:{len(raw)}B），请靠近麦克风或说长一点"
         return text, ""
-    except requests.Timeout:
-        return "", "识别超时（30s），请检查网络后重试"
     except Exception as e:
         return "", f"识别出错：{e}"
 
@@ -1283,11 +1281,12 @@ if user_input:
                 _solve_model = selected_model
                 _solve_local = False
                 _use_guide = guide_mode and not _img_bytes and not _sim_data
-                if _img_bytes and not get_secret("SILICONFLOW_API_KEY"):
-                    # ocr_math_image 本身也要用 SILICONFLOW_API_KEY 的视觉模型做识别，
-                    # 这个key不存在时它注定识别失败——之前这里会先摆出"识别图片内容…"
-                    # 的假动作，识别必然失败后又静默把图片丢掉，模型拿着空气瞎猜，
-                    # 用户完全不知道发生了什么。改成直接告诉模型如实说明情况。
+                if _img_bytes and not (get_secret("GEMINI_API_KEY") or get_secret("GEMINI_FREE_API_KEY")):
+                    # 拍题识别现在统一用 Gemini（gemini-3.5-flash-lite 原生多模态，
+                    # 2026-09-14从SiliconFlow Qwen3-VL切过来），这把key不存在时
+                    # 识别注定失败——之前这里会先摆出"识别图片内容…"的假动作，
+                    # 识别必然失败后又静默把图片丢掉，模型拿着空气瞎猜，用户完全
+                    # 不知道发生了什么。改成直接告诉模型如实说明情况。
                     status.update(label="未配置图片识别能力")
                     solve_input = (
                         "（用户上传了一张图片，但当前环境未配置图片识别所需的 API Key，"

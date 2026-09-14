@@ -1,4 +1,4 @@
-"""RAG 核心引擎 — 向量检索 + 千问生成。"""
+"""RAG 核心引擎 — 向量检索 + Gemini 生成。"""
 
 import logging
 import os
@@ -8,7 +8,7 @@ import chromadb
 import httpx
 from openai import OpenAI
 
-from components.config import DEFAULT_MODEL, SILICONFLOW_BASE, get_secret
+from components.config import DEFAULT_MODEL, SILICONFLOW_BASE, get_secret, build_gemini_failover_client
 
 _log = logging.getLogger(__name__)
 
@@ -19,7 +19,6 @@ _EMBED_BATCH   = 16
 _EMBED_TIMEOUT = 30
 _TOP_K         = 4
 _MAX_HIST      = 5
-_QWEN_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 _SYSTEM = """你是知识库助手，只根据提供的参考资料回答问题。
 如果资料中找不到相关信息，直接说"文档中未找到相关内容"，不要编造。
@@ -38,14 +37,14 @@ class RAGEngine:
             name=_COLLECTION,
             metadata={"hnsw:space": "cosine"},
         )
-        self._llm: OpenAI | None = None
-        self._llm_key = ""
+        self._llm = None
 
-    def _client(self) -> OpenAI:
-        key = get_secret("QWEN_API_KEY")
-        if self._llm is None or key != self._llm_key:
-            self._llm = OpenAI(api_key=key, base_url=_QWEN_BASE, max_retries=2)
-            self._llm_key = key
+    def _client(self):
+        # Gemini 免费→付费故障转移，两把key打包在一个客户端里，不用再
+        # 靠"key变了就重建"这种脏检查（GeminiFailoverClient内部自己处理
+        # 两把key的切换）。
+        if self._llm is None:
+            self._llm = build_gemini_failover_client(max_retries=2)
         return self._llm
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
@@ -137,8 +136,8 @@ class RAGEngine:
         return chunks
 
     def generate_answer(self, question: str, chunks: list[dict], history: list) -> str:
-        if not get_secret("QWEN_API_KEY"):
-            raise RuntimeError("未配置 QWEN_API_KEY。")
+        if not get_secret("GEMINI_FREE_API_KEY") and not get_secret("GEMINI_API_KEY"):
+            raise RuntimeError("未配置 GEMINI_FREE_API_KEY / GEMINI_API_KEY。")
         context_lines = []
         for i, c in enumerate(chunks, 1):
             context_lines.append(f"【资料{i}】（来源：{c['source']} 第{c['page']}页）\n{c['text']}")

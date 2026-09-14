@@ -2,7 +2,7 @@
 main.py — CLI entry point
 
 Usage:
-  Qwen mode:     export QWEN_API_KEY="sk-..."  &&  python main.py
+  Gemini mode:   export GEMINI_API_KEY="..."  &&  python main.py
   Local Ollama:  python main.py --local             (no API Key needed)
 """
 
@@ -33,7 +33,7 @@ _EXAMPLES = """
 def main() -> None:
     use_local = "--local" in sys.argv or "-l" in sys.argv
     agent = MathAgent(use_local=use_local)
-    mode = "本地 qwen3.5:9b（离线）" if use_local else "DeepSeek API"
+    mode = "本地 qwen3.5:9b（离线）" if use_local else "Gemini API"
     print(_BANNER)
     print(f"  模式：{mode}")
     print("  命令：help 查看示例，quit / exit / q 退出，clear 清空对话历史\n")

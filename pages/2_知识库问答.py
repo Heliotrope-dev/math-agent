@@ -1,4 +1,4 @@
-"""知识库问答页 — RAG 语义检索 + 千问生成。"""
+"""知识库问答页 — RAG 语义检索 + Gemini 生成。"""
 
 import logging
 import os
@@ -7,7 +7,7 @@ import streamlit as st
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-for _k in ("QWEN_API_KEY", "SILICONFLOW_API_KEY"):
+for _k in ("GEMINI_API_KEY", "GEMINI_FREE_API_KEY", "SILICONFLOW_API_KEY"):
     if _k not in os.environ:
         try:
             os.environ[_k] = st.secrets[_k]
@@ -72,9 +72,10 @@ def render_sidebar(engine: RAGEngine, user: str) -> None:
         st.divider()
         st.subheader("知识库管理")
 
-        missing = [k for k in ("QWEN_API_KEY", "SILICONFLOW_API_KEY") if not get_secret(k)]
-        if missing:
-            st.error("缺少配置：" + "、".join(missing))
+        if not (get_secret("GEMINI_API_KEY") or get_secret("GEMINI_FREE_API_KEY")):
+            st.error("缺少配置：GEMINI_API_KEY / GEMINI_FREE_API_KEY")
+        if not get_secret("SILICONFLOW_API_KEY"):
+            st.error("缺少配置：SILICONFLOW_API_KEY")
 
         _uploader_key = f"doc_uploader_{st.session_state.get('_uploader_gen', 0)}"
         uploaded_files = st.file_uploader(

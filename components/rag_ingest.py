@@ -4,7 +4,7 @@ import re
 
 import fitz
 
-from components.config import OCR_MODEL, get_secret
+from components.config import get_secret
 
 _MAX_OCR_PAGES = 30  # 扫描版 PDF 逐页跑视觉模型 OCR，封顶页数防止超大文件耗时/费用失控
 
@@ -15,22 +15,19 @@ def _ocr_page_text(image_bytes: bytes) -> str:
     不走 MathAgent.solve()——它固定带着"你是数学助教"的系统提示词，会把任何图片
     都往"找数学题"上带偏（实测：喂一张简历图片进去，模型会回复"未找到数学题"，
     完全无视了要求它做通用文字识别的用户指令）。这里直接调 API，不带那层系统提示词。
+
+    2026-09-14从SiliconFlow Qwen3-VL切到Gemini：SiliconFlow账号欠费，
+    复用文字/拍题解题那同一个 GeminiFailoverClient。
     """
     import base64
-    import httpx
-    from openai import OpenAI
+    from components.config import build_gemini_failover_client
     from tools import compress_image
 
-    key = get_secret("SILICONFLOW_API_KEY")
     image_bytes = compress_image(image_bytes, max_size=1600, quality=85)
     b64 = base64.b64encode(image_bytes).decode()
-    client = OpenAI(
-        api_key=key,
-        base_url="https://api.siliconflow.cn/v1",
-        http_client=httpx.Client(trust_env=False, verify=True, timeout=httpx.Timeout(60.0, connect=15.0)),
-    )
+    client = build_gemini_failover_client(timeout=60.0, max_retries=2)
     resp = client.chat.completions.create(
-        model=OCR_MODEL,
+        model="gemini-3.5-flash-lite",
         messages=[{
             "role": "user",
             "content": [
@@ -63,10 +60,10 @@ def parse_pdf(file_bytes: bytes, filename: str) -> list[dict]:
         if not docs:
             # 没有可提取的文字层——大概率是扫描版，或文字被设计工具拍平成图片/轮廓。
             # 逐页渲染成图片，走视觉模型 OCR 兜底。
-            if not get_secret("SILICONFLOW_API_KEY"):
+            if not (get_secret("GEMINI_API_KEY") or get_secret("GEMINI_FREE_API_KEY")):
                 raise ValueError(
                     f"「{filename}」没有可提取的文本，可能是扫描版 PDF；"
-                    "OCR 兜底识别需要配置 SILICONFLOW_API_KEY，当前未配置。"
+                    "OCR 兜底识别需要配置 GEMINI_API_KEY，当前未配置。"
                 )
             n_pages = min(pdf.page_count, _MAX_OCR_PAGES)
             for page_no in range(n_pages):

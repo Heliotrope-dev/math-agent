@@ -2,7 +2,7 @@
 agent.py — Core Agent Loop
 
 Two modes:
-  Qwen (default): requires QWEN_API_KEY env var
+  Gemini (default): requires GEMINI_API_KEY env var
   Ollama local: set USE_LOCAL=1 or pass use_local=True, uses local qwen3.5:9b
 """
 
@@ -160,39 +160,29 @@ _GUIDE_SYSTEM = """你是一位耐心的数学家教，使用苏格拉底式引�
 知识点：知识点1 · 知识点2 · 知识点3"""
 
 
-VISION_MODELS = {
-    "Qwen/Qwen3-VL-32B-Instruct", "Qwen/Qwen3-VL-32B-Thinking",
-    "Qwen/Qwen3-VL-30B-A3B-Instruct",
-    "Qwen/Qwen3-VL-8B-Instruct",
-}
+# 2026-09-14：文字解题从千问切到 Gemini；同一天原本给拍题用的 SiliconFlow
+# （Qwen3-VL 视觉 + SenseVoice 语音）账号欠费，两条链路一起坏了，索性把
+# 文字/视觉/语音三路全部统一到 Gemini 一家——gemini-3.5-flash-lite 本身
+# 是原生多模态模型，同一个模型、同一把key、同一个 GeminiFailoverClient
+# 就能同时覆盖三种输入，不用再单独维护一个视觉专用模型或独立的供应商。
+# 语音转写见 _math_page.py 的 transcribe_audio()，走同一个 client 的
+# chat.completions + input_audio content part，不再调用 SiliconFlow
+# 的 /audio/transcriptions。
+GEMINI_TEXT_MODEL = "gemini-3.5-flash-lite"
+
+VISION_MODELS = {GEMINI_TEXT_MODEL}
 
 LOCAL_MODELS = ["phi4-mini", "phi4"]
 DEFAULT_LOCAL_MODEL = os.environ.get("MATH_AGENT_MODEL", "qwen3.5:9b")
 
-CLOUD_PROVIDERS = {
-    # 硅基流动视觉模型（拍题用）
-    "Qwen/Qwen3-VL-30B-A3B-Instruct": ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
-    "Qwen/Qwen3-VL-32B-Instruct":     ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
-    "Qwen/Qwen3-VL-32B-Thinking":     ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
-    "Qwen/Qwen3-VL-8B-Instruct":      ("siliconflow", "https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
-    # 千问（文字解题）——2026-08-26从DeepSeek切过来：finance-agent那边
-    # 2026-08-22已经做过五维度真实同题对比（金融判断/数学推理/代码/严格
-    # 指令遵循/中文表达），千问全面不输、数学推理这一项还更强（DeepSeek
-    # 当时在预算内被截断算不完），价格只有DeepSeek的一半不到，详细记录见
-    # finance-agent仓库advisor.py同一处改动的注释。这次切换的直接导火索
-    # 是DeepSeek账号（math-agent/finance-agent共用同一个key）被math-agent
-    # 的日常调用耗光余额，finance-agent那边新加的功能想用都用不了。
-    "qwen3.7-flash":                  ("qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", "QWEN_API_KEY"),
-}
+# 云端目前只有 Gemini 一家，这个字典留空只是为了 MathAgent.__init__ 里
+# "未知模型名"的报错路径还有个容器可以查——不再有 SiliconFlow/千问条目。
+CLOUD_PROVIDERS: dict[str, tuple[str, str, str]] = {}
 
 # ── 智能模型路由 ──────────────────────────────────────────────────────────────
-_DEFAULT_VISION_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 def route_model(problem: str, image_bytes: Optional[bytes] = None,
-                default: str = "qwen3.7-flash") -> str:
-    """有图 → 视觉模型；纯文字 → qwen3.7-flash。"""
-    has_sf = bool(os.environ.get("SILICONFLOW_API_KEY"))
-    if image_bytes:
-        return _DEFAULT_VISION_MODEL if has_sf else default
+                default: str = GEMINI_TEXT_MODEL) -> str:
+    """文字/有图统一走同一个 Gemini 模型，它原生支持多模态。"""
     return default
 
 
@@ -224,23 +214,19 @@ class MathAgent:
             )
             self.model = model or DEFAULT_LOCAL_MODEL
         else:
-            self.model = model or "qwen3.7-flash"
-            _, base_url, env_key = CLOUD_PROVIDERS.get(
-                self.model, ("", "https://dashscope.aliyuncs.com/compatible-mode/v1", "QWEN_API_KEY")
-            )
-            api_key = os.environ.get(env_key, "")
-            if not api_key:
-                raise RuntimeError(f"环境变量 {env_key} 未设置，无法初始化模型 {self.model}")
-            self.client = OpenAI(
-                api_key=api_key,
-                base_url=base_url,
-                http_client=httpx.Client(
-                    trust_env=False,
-                    verify=True,
-                    timeout=httpx.Timeout(60.0, connect=15.0),
-                    limits=httpx.Limits(max_keepalive_connections=3, max_connections=50),
-                ),
-            )
+            self.model = model or GEMINI_TEXT_MODEL
+            if self.model != GEMINI_TEXT_MODEL:
+                # 云端目前只有 Gemini 一家（文字/视觉/语音统一），SiliconFlow
+                # （Qwen3-VL/SenseVoice）欠费下线后没有再保留其它选项。
+                raise RuntimeError(
+                    f"未知模型 {self.model}：云端目前只支持 {GEMINI_TEXT_MODEL}，"
+                    f"其余供应商（千问/SiliconFlow）已下线。"
+                )
+            # 对外接口跟 openai.OpenAI 一致（chat.completions.create），
+            # 下面 solve() 里那几处调用不用改；只配一把key时就是单一供应商，
+            # 配两把（GEMINI_FREE_API_KEY+GEMINI_API_KEY）才有免费→付费转移。
+            from components.config import build_gemini_failover_client
+            self.client = build_gemini_failover_client(timeout=60.0, max_retries=2)
 
     @property
     def supports_vision(self) -> bool:
