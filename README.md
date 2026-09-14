@@ -39,7 +39,7 @@ data/chroma_db/               # ChromaDB 本地持久化向量库
 
 ## 关键设计
 
-- **手写 ReAct Agent，不用 LangChain**：`agent.py` 里一个显式 for 循环控制工具调用与终止，中间文字用 `_accumulated` 攒起来避免被下一轮覆盖。
+- **手写 ReAct 循环**：`agent.py` 里一个显式 for 循环控制工具调用与终止，中间文字用 `_accumulated` 攒起来避免被下一轮覆盖，对工具调用协议、状态管理这些 Agent 框架底层机制有第一手的实现经验。
 - **答案自纠错**：每轮 `calculator` 结果收进"值池"，最终答案用 SymPy 做符号等价+数值容差比对，不一致触发一次重新核对（非无限重试），UI 显示验证状态。`eval/run_verification_eval.py` 用独立于被测代码的 SymPy oracle 跑 15 题 A/B 对比量化效果，也靠这个评测揪出过 `\boxed{}`/`\[...\]` 等格式的解析盲区。
 - **对话历史压缩**：近 10 轮保留原文，更早的压缩成一条摘要 system 消息，零额外 LLM 调用。
 - **五工具架构**：`calculator`（SymPy，白名单正则+黑名单拦截注入，独立进程池 15 秒超时防挂死）、`formula_lookup`（本地 embedding 语义检索）、`step_decomposer`（解题路线图）、`plot_function`（函数画图）、`draw_mindmap`（知识导图）。其中前三个不依赖 Streamlit session state，另外单独封装成了 `mcp_server.py`，可被 Claude Code / Claude Desktop 等任意 MCP host 直接调用；后两个要往页面里塞图/导图数据，暂不适合搬进通用 MCP 调用。
