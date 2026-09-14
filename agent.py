@@ -640,13 +640,24 @@ class MathAgent:
                     yield chunk
                 if getattr(delta, "tool_calls", None):
                     for tcd in delta.tool_calls:
-                        slot = tool_calls_acc.setdefault(tcd.index, {"id": None, "name": "", "arguments": ""})
+                        # Gemini 的 tool_call delta 不像 OpenAI 那样按 index 递增分片——
+                        # 一次性整个发完，且 index 恒为 None；同一轮如果真有并行工具调用，
+                        # 拿 None 当 key 会把它们错误合并成一个槽位，改用 id 兜底区分。
+                        key = tcd.index if tcd.index is not None else (tcd.id or 0)
+                        slot = tool_calls_acc.setdefault(key, {"id": None, "name": "", "arguments": "", "extra_content": None})
                         if tcd.id:
                             slot["id"] = tcd.id
                         if tcd.function and tcd.function.name:
                             slot["name"] += tcd.function.name
                         if tcd.function and tcd.function.arguments:
                             slot["arguments"] += tcd.function.arguments
+                        # Gemini 专有字段：function call 必须带着它原样传回去，否则下一轮
+                        # 请求会报 400 INVALID_ARGUMENT "missing a thought_signature"——
+                        # 这是"思考"模型的要求，标准 OpenAI 协议里没有这个概念，SDK 的
+                        # ChoiceDeltaToolCall 类型也没声明这个字段，只能从 model_extra 里挖。
+                        _extra = tcd.model_extra or {}
+                        if "extra_content" in _extra and _extra["extra_content"]:
+                            slot["extra_content"] = _extra["extra_content"]
 
             if not tool_calls_acc:
                 # 这一轮没有工具调用，说明模型写完了最终回答——全程已经实时流式吐给用户了
@@ -687,15 +698,21 @@ class MathAgent:
                 return
 
             # 这一轮有工具调用：静默重建调用参数，实际执行，回填结果，继续循环
+            def _build_tc(slot: dict) -> dict:
+                tc = {
+                    "id": slot["id"],
+                    "type": "function",
+                    "function": {"name": slot["name"], "arguments": slot["arguments"]},
+                }
+                if slot.get("extra_content"):
+                    tc["extra_content"] = slot["extra_content"]  # 见上：Gemini thought_signature 原样带回
+                return tc
+
             _tc_msg = {
                 "role": "assistant",
                 "content": content_acc or None,
                 "tool_calls": [
-                    {
-                        "id": slot["id"],
-                        "type": "function",
-                        "function": {"name": slot["name"], "arguments": slot["arguments"]},
-                    }
+                    _build_tc(slot)
                     for slot in tool_calls_acc.values()
                 ],
             }
